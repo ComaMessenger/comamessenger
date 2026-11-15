@@ -30,11 +30,16 @@ import {
   pinnedChatLimit,
   type AgentStatusState,
   type ChatFolder,
+  type OrgStructure,
 } from "@comamessenger/core";
 import { setLocale } from "@/i18n";
 import { applyThemePreference } from "@/lib/theme";
 import { createAppStore } from "./appStore";
-import { checkpointStorage, outboxStorage } from "@/lib/database";
+import {
+  cacheStorage,
+  checkpointStorage,
+  outboxStorage,
+} from "@/lib/database";
 import { hydrateDrafts } from "@/lib/drafts";
 import { reactionsKey } from "@/conversation/reactions";
 import { invalidateChatDetails } from "@/chatinfo/queries";
@@ -168,8 +173,12 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
         (url) => new WebSocket(url),
         {
           state: store.getState().setRealtime,
-          // «Запрос» and «Напомнить мне» show only when the server has them.
-          features: (list) => store.getState().setFeatures(list),
+          // «Запрос», «Напомнить мне» and the org structure show only when
+          // the server has them; kept for an offline start.
+          features: (list) => {
+            store.getState().setFeatures(list);
+            void cacheStorage.set("features", list).catch(() => undefined);
+          },
           event: (event) => {
             const applied = store.getState().apply(event);
             // The org structure changed: read GET /org again (ETag).
@@ -378,8 +387,27 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
         setChatLoading(false);
       })
       .catch(() => undefined);
+    // Offline start: what the server announced last time and the org
+    // structure it gave, until hello and GET /org answer again.
+    void Promise.all([
+      cacheStorage.get<string[]>("features"),
+      cacheStorage.get<OrgStructure>("org"),
+    ])
+      .then(([features, structure]) => {
+        if (features && !store.getState().features.length)
+          store.getState().setFeatures(features);
+        if (structure && !queryClient.getQueryData(orgKeys.all)) {
+          queryClient.setQueryData(orgKeys.all, structure);
+          // Stale at once: the first screen reads it again (304 if same).
+          void queryClient.invalidateQueries({
+            queryKey: orgKeys.all,
+            refetchType: "none",
+          });
+        }
+      })
+      .catch(() => undefined);
     return persistMessages(store);
-  }, [store]);
+  }, [queryClient, store]);
 
   // After an offline start the account is refreshed once the server answers.
   const liveOnce = useRef(false);

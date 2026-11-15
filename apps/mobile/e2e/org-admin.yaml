@@ -1,0 +1,207 @@
+# Phase 6.5 wave 2: «Настройки → Пространство → Оргструктура» as the owner:
+# «+ Отдел» with «Входит в», members and the lead; a position; «Без отдела»
+# → «Назначить отдел»; deleting the department with moving its people; the
+# member permissions of «Участники».
+# Seed first, then run after sign-in.yaml:
+#   COMA_API=… node e2e/seed-org.mjs && maestro test -e THEME=light e2e/org-admin.yaml
+appId: com.comamessenger.app
+---
+- runScript: scripts/login.js
+- runScript: scripts/create-member.js
+- runFlow: open-app.yaml
+- runFlow:
+    file: tabs.yaml
+    env:
+      TAB: more
+- tapOn:
+    id: open-settings
+- scrollUntilVisible:
+    element:
+      id: settings-workspace-org
+    direction: DOWN
+- tapOn:
+    id: settings-workspace-org
+- extendedWaitUntil:
+    visible:
+      id: org-settings-add-department
+    timeout: 15000
+- assertVisible: Медицинская служба
+- takeScreenshot: org-admin-${THEME}
+
+# A new department inside «Реабилитация» with Нина Ковалёва as its lead.
+- tapOn:
+    id: org-settings-add-department
+- extendedWaitUntil:
+    visible:
+      id: department-editor-name
+    timeout: 5000
+- tapOn:
+    id: department-editor-name
+- inputText: E2E Массаж ${output.memberTag}
+- tapOn:
+    id: department-editor-parent
+- extendedWaitUntil:
+    visible:
+      id: department-parent-picker
+    timeout: 5000
+- tapOn: Реабилитация
+- tapOn:
+    id: department-editor-add-people
+- extendedWaitUntil:
+    visible:
+      id: department-people-picker
+    timeout: 5000
+- tapOn:
+    id: department-people-picker-search
+- inputText: Нина
+- extendedWaitUntil:
+    visible:
+      id: department-people-picker-person-0
+    timeout: 5000
+- tapOn:
+    id: department-people-picker-person-0
+- tapOn:
+    id: department-people-picker-done
+- extendedWaitUntil:
+    visible: Нина Ковалёва
+    timeout: 5000
+- scrollUntilVisible:
+    element:
+      id: department-editor-lead-0
+    direction: DOWN
+- tapOn:
+    id: department-editor-lead-0
+- takeScreenshot: org-admin-editor-${THEME}
+- tapOn:
+    id: department-editor-save
+- extendedWaitUntil:
+    visible: E2E Массаж ${output.memberTag}
+    timeout: 10000
+- takeScreenshot: org-admin-created-${THEME}
+
+# A position.
+- scrollUntilVisible:
+    element:
+      id: org-settings-positions
+    direction: DOWN
+- tapOn:
+    id: org-settings-positions
+- extendedWaitUntil:
+    visible:
+      id: org-position-add
+    timeout: 10000
+- assertVisible: Инструктор
+- tapOn:
+    id: org-position-add
+- extendedWaitUntil:
+    visible:
+      id: org-position-name
+    timeout: 5000
+- inputText: E2E Массажист ${output.memberTag}
+- tapOn:
+    id: org-position-save
+- extendedWaitUntil:
+    visible: E2E Массажист ${output.memberTag}
+    timeout: 10000
+- takeScreenshot: org-admin-positions-${THEME}
+- tapOn:
+    id: org-title-suggestions
+- extendedWaitUntil:
+    visible:
+      id: org-title-suggestions-sheet
+    timeout: 5000
+- takeScreenshot: org-admin-titles-${THEME}
+- tapOn: Закрыть
+- tapOn: Назад
+
+# «Без отдела»: the fresh member goes to the new department.
+- tapOn:
+    id: org-settings-unassigned
+- extendedWaitUntil:
+    visible:
+      id: settings-org-unassigned
+    timeout: 10000
+- scrollUntilVisible:
+    element: ${output.memberName}
+    direction: DOWN
+- tapOn: ${output.memberName}
+- extendedWaitUntil:
+    visible:
+      id: org-unassigned-department
+    timeout: 5000
+- takeScreenshot: org-admin-unassigned-${THEME}
+- tapOn:
+    id: org-unassigned-department
+- extendedWaitUntil:
+    visible:
+      id: org-assign-department
+    timeout: 5000
+- tapOn: E2E Массаж ${output.memberTag}
+- extendedWaitUntil:
+    visible: Назначено.*
+    timeout: 10000
+- tapOn: OK
+- assertNotVisible: ${output.memberName}
+- tapOn: Назад
+
+# Deleting: its people go to «Реабилитация» by default.
+- scrollUntilVisible:
+    element: E2E Массаж ${output.memberTag}
+    direction: DOWN
+- tapOn: E2E Массаж ${output.memberTag}
+- extendedWaitUntil:
+    visible:
+      id: department-editor
+    timeout: 5000
+- scrollUntilVisible:
+    element:
+      id: department-editor-delete
+    direction: DOWN
+- tapOn:
+    id: department-editor-delete
+- extendedWaitUntil:
+    visible:
+      id: department-delete-confirm
+    timeout: 5000
+- assertVisible: .*Реабилитация · по умолчанию.*
+- takeScreenshot: org-admin-delete-${THEME}
+- tapOn:
+    id: department-delete-confirm
+- extendedWaitUntil:
+    notVisible: E2E Массаж ${output.memberTag}
+    timeout: 10000
+- tapOn: Назад
+
+# Member permissions one by one (decision 15) and the org group.
+- scrollUntilVisible:
+    element:
+      id: settings-workspace-members
+    direction: DOWN
+- tapOn:
+    id: settings-workspace-members
+- extendedWaitUntil:
+    visible:
+      id: members-list
+    timeout: 10000
+- tapOn:
+    id: members-search
+- inputText: ${output.memberName}
+- extendedWaitUntil:
+    visible: ${output.memberName}
+    timeout: 5000
+- tapOn:
+    id: member-row-0
+- scrollUntilVisible:
+    element:
+      id: member-permission-requests.address_groups
+    direction: DOWN
+- tapOn:
+    id: member-permission-requests.address_groups
+- scrollUntilVisible:
+    element:
+      id: member-org-primary
+    direction: DOWN
+- assertVisible: .*Реабилитация.*
+- takeScreenshot: org-admin-member-${THEME}
+- tapOn:
+    id: member-permission-requests.address_groups

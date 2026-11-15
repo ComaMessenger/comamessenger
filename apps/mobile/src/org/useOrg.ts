@@ -15,6 +15,7 @@ import {
   type ActorSummary,
   type OrgStructure,
 } from "@comamessenger/core";
+import { cacheStorage } from "@/lib/database";
 import { useMessenger } from "@/messenger/MessengerProvider";
 import { useSignedIn } from "@/session/SessionProvider";
 import { directoryKey } from "@/people/usePeople";
@@ -34,11 +35,14 @@ export function useOrg() {
   const available = orgStructureAvailable(features);
   const query = useQuery({
     queryKey: orgKeys.all,
-    queryFn: () =>
-      fetchOrgStructure(
-        api,
-        queryClient.getQueryData<OrgStructure>(orgKeys.all) ?? null,
-      ),
+    queryFn: async () => {
+      const cached = queryClient.getQueryData<OrgStructure>(orgKeys.all);
+      const next = await fetchOrgStructure(api, cached ?? null);
+      // Kept for an offline start (see MessengerProvider).
+      if (next !== cached)
+        void cacheStorage.set("org", next).catch(() => undefined);
+      return next;
+    },
     enabled: available,
     staleTime: 10_000,
   });
