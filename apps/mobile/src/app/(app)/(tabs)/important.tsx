@@ -28,6 +28,7 @@ import {
 import { accountValues } from "@/lib/database";
 import { WaitingList } from "@/important/WaitingList";
 import { ReminderList } from "@/important/ReminderList";
+import { phoneInboxFeatures } from "@/important/features";
 import { useSignedIn } from "@/session/SessionProvider";
 import { useMessenger } from "@/messenger/MessengerProvider";
 import { useTheme } from "@/lib/theme";
@@ -63,8 +64,8 @@ export default function ImportantScreen() {
   const unread = useStore(store, (state) => state.unread);
   const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ tab?: string }>();
-  const tabs = importantTabs(features);
-  const counts = importantCounts(unread, features);
+  const tabs = importantTabs(phoneInboxFeatures(features));
+  const counts = importantCounts(unread, phoneInboxFeatures(features));
   const [chosen, setChosen] = useState<ImportantTab | null>(null);
   const [last, setLast] = useState<ImportantTab | null | undefined>(undefined);
   const [notice, setNotice] = useState<string | null>(null);

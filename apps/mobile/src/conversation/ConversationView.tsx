@@ -413,8 +413,8 @@ export function ConversationView({
   // The "+" sheet, variant A: attachments, «Попросить и поручить», agents.
   // The items and their rules live in @comamessenger/core with the web's;
   // sending later stays on a long press of «Отправить».
-  // «Задача» (wave 3) has no phone screens yet: it stays out of the menu
-  // until they come, a dead item would be a stub.
+  // «Задача» (wave 3) and «Опрос» (wave 4) have no phone screens yet: they
+  // stay out of the menu until they come, a dead item would be a stub.
   const composerGroups = composerMenu({
     platform: "mobile",
     readonly: conversation.readonly,
@@ -424,7 +424,9 @@ export function ConversationView({
   })
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => item.id !== "task"),
+      items: group.items.filter(
+        (item) => item.id !== "task" && item.id !== "poll",
+      ),
     }))
     .filter((group) => group.items.length > 0);
   function pickComposerItem(id: ComposerMenuItemID) {
@@ -439,6 +441,7 @@ export function ConversationView({
       case "request":
         return setRequestOpen(true);
       case "task":
+      case "poll":
         return;
       case "agent":
         return setAgentsOpen(true);

@@ -6,6 +6,7 @@ import * as LegacyLibrary from "expo-media-library/legacy";
 import { File } from "expo-file-system";
 import {
   Camera,
+  ChartNoAxesColumn,
   FileText,
   Image as ImageIcon,
   MessageCircleCheck,
@@ -30,6 +31,7 @@ const icons: Record<ComposerMenuItemID, LucideIcon> = {
   markdownFile: FileText,
   request: MessageCircleCheck,
   task: SquareCheck,
+  poll: ChartNoAxesColumn,
   agent: Sparkles,
 };
 

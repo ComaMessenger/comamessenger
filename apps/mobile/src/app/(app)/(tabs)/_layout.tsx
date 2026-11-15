@@ -20,6 +20,7 @@ import {
 } from "@/agents/data";
 import { countLabel } from "@/ui/CountBadge";
 import { fonts } from "@/ui/Text";
+import { phoneInboxFeatures } from "@/important/features";
 
 function tabIcon(Icon: LucideIcon) {
   return function TabIcon({ color }: { color: ColorValue }) {
@@ -37,7 +38,8 @@ export default function TabsLayout() {
   // «Важные»: requests waiting for the reader's answer and fired reminders.
   const important = useStore(
     store,
-    (state) => importantCounts(state.unread, state.features).badge,
+    (state) =>
+      importantCounts(state.unread, phoneInboxFeatures(state.features)).badge,
   );
   // Actions waiting for the reader's decision count on the «Агенты» tab.
   const { canApprove } = useAgentAccess();
