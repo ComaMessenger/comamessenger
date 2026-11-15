@@ -207,6 +207,7 @@ func (s *session) writeLoop(ctx context.Context) error {
 			"typing_actions",
 			"presence_snapshot",
 			"message_reminders",
+			"message_requests",
 		},
 	}
 	if err := s.write(ctx, hello); err != nil {

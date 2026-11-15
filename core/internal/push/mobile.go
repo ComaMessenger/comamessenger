@@ -249,7 +249,7 @@ func (w *Worker) deliverMobile(ctx context.Context) error {
 		return err
 	}
 	rows, err := w.pool.Query(ctx, `SELECT p.org_id,p.event_seq,p.device_id,d.actor_id,d.relay_handle,d.notification_key,
-		e.type,e.data,e.chat_id,m.thread_root_id,m.body,c.name,a.display_name,
+		e.type,`+pushEventData+`,e.chat_id,m.thread_root_id,m.body,c.name,a.display_name,
 		COALESCE((u.preferences->>'push_preview')::boolean,false),COALESCE(NULLIF(d.locale,''),u.preferences->>'locale','ru'),
 		(SELECT f.voice_duration_ms FROM message_files mf JOIN files f ON f.org_id=mf.org_id AND f.id=mf.file_id WHERE mf.message_id=m.id AND f.voice_duration_ms IS NOT NULL LIMIT 1),
 		`+quietNotification+`,`+scheduledStillFailed+` AND `+reminderStillFired+`

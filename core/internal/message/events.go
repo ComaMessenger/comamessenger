@@ -57,6 +57,10 @@ func CompleteEventMessages(ctx context.Context, tx pgx.Tx, orgID string, items [
 		message.ThreadReplyCount = full.ThreadReplyCount
 		message.Files = full.Files
 		message.AgentProvenance = full.AgentProvenance
+		// The shared request summary only: the per-reader view never goes
+		// into a frame the whole chat receives.
+		message.Request = full.Request
+		message.RequestViewer = nil
 		if message.ThreadRootID != nil {
 			count := rootCounts[*message.ThreadRootID]
 			message.ThreadRootReplyCount = &count
@@ -128,6 +132,7 @@ func TruncatedEventMessage(data json.RawMessage) (json.RawMessage, error) {
 	message.Body = ""
 	message.Files = []filemodel.File{}
 	message.Blocks = nil
+	message.RequestViewer = nil
 	if message.MentionedActorIDs == nil {
 		message.MentionedActorIDs = []string{}
 	}

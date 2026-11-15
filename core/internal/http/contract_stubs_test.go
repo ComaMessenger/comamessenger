@@ -12,8 +12,9 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// Until packages R1 and R2 land, every request and reminder route of the
-// contract exists and answers 501 not_implemented.
+// Every request and reminder route of the contract exists. Without their
+// services (reminders until package R2 lands; requests on a server built
+// without them) they answer 501 not_implemented.
 func TestRequestAndReminderRoutesAnswerNotImplemented(t *testing.T) {
 	h := newIdentityHandlers(slog.New(slog.NewTextHandler(io.Discard, nil)), "", Dependencies{})
 	router := chi.NewRouter()

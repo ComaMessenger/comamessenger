@@ -17,6 +17,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/permission"
 	"github.com/comamessenger/comamessenger/core/internal/reminder"
+	"github.com/comamessenger/comamessenger/core/internal/request"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -63,6 +64,12 @@ type Message struct {
 	// Truncated: in a realtime event only, the message was too large for one
 	// frame; body, files and blocks are left out and clients load it by REST.
 	Truncated bool `json:"truncated,omitempty"`
+	// Request: on a message of type request, the request as every reader
+	// sees it; never recipients or anyone's answers.
+	Request *request.Summary `json:"request,omitempty"`
+	// RequestViewer: REST only, what the reading person may do with the
+	// request. Never set on realtime frames.
+	RequestViewer *request.Viewer `json:"request_viewer,omitempty"`
 }
 
 type ForwardAttribution struct {
@@ -90,6 +97,8 @@ type CreateInput struct {
 	scheduledDelivery bool
 	// links are the body's links, extracted before the transaction.
 	links *PreparedLinks
+	// request makes the message a request; set only by CreateRequest.
+	request *requestCreation
 }
 
 // UseLinks attaches links prepared outside the transaction (PrepareLinks).
@@ -138,6 +147,7 @@ type Service struct {
 	// betweenBackfillSteps runs after a backfill batch is read and its links
 	// extracted, before they are written; tests set it.
 	betweenBackfillSteps func()
+	requests             *request.Service
 }
 
 func NewService(pool *pgxpool.Pool, maxBodyBytes, maxPageSize int, afterCommit func(orgID string, highWatermark int64)) *Service {
@@ -245,6 +255,10 @@ func (s *Service) createTx(ctx context.Context, tx pgx.Tx, user identity.User, c
 	if input.Silent && (isAgent || provenance != nil) {
 		return Message{}, false, 0, ErrForbidden
 	}
+	// Requests are asked by people.
+	if input.request != nil && (isAgent || provenance != nil) {
+		return Message{}, false, 0, ErrForbidden
+	}
 	// The client_msg_id of a scheduled message's send belongs to it alone:
 	// an ordinary send that takes it could hijack or break the delivery.
 	if !input.scheduledDelivery {
@@ -269,6 +283,13 @@ func (s *Service) createTx(ctx context.Context, tx pgx.Tx, user identity.User, c
 						return Message{}, false, 0, err
 					}
 				}
+			}
+			if existing.Type == "request" {
+				replayed := []Message{existing}
+				if err := hydrateFiles(ctx, tx, user.OrgID, replayed); err != nil {
+					return Message{}, false, 0, err
+				}
+				existing = replayed[0]
 			}
 			return existing, false, 0, nil
 		}
@@ -302,6 +323,15 @@ func (s *Service) createTx(ctx context.Context, tx pgx.Tx, user identity.User, c
 		}
 	}
 
+	messageType := "text"
+	var recipients request.Recipients
+	if input.request != nil {
+		messageType = "request"
+		if recipients, err = s.prepareRequestTx(ctx, tx, user, chatID, messageID, input); err != nil {
+			return Message{}, false, 0, err
+		}
+	}
+
 	seq, err := nextSequence(ctx, tx, user.OrgID)
 	if err != nil {
 		return Message{}, false, 0, err
@@ -309,14 +339,19 @@ func (s *Service) createTx(ctx context.Context, tx pgx.Tx, user identity.User, c
 	var result Message
 	err = scanMessage(tx.QueryRow(ctx, `
 		INSERT INTO messages
-			(id, org_id, chat_id, actor_id, client_msg_id, create_fingerprint, body, body_format, reply_to_id, thread_root_id, created_seq, mentioned_actor_ids, blocks, silent)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+			(id, org_id, chat_id, actor_id, client_msg_id, create_fingerprint, body, body_format, reply_to_id, thread_root_id, created_seq, mentioned_actor_ids, blocks, silent, type)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		RETURNING id, chat_id, actor_id, client_msg_id, type, body, body_format, reply_to_id,
 			thread_root_id, version, created_seq, created_at, edited_at, deleted_at, forwarded_from, mentioned_actor_ids, blocks`,
 		messageID, user.OrgID, chatID, user.ActorID, input.ClientMsgID, fingerprint[:], input.Body, input.BodyFormat,
-		input.ReplyToID, input.ThreadRootID, seq, input.MentionedActorIDs, blocksParam(input.Blocks), input.Silent), &result)
+		input.ReplyToID, input.ThreadRootID, seq, input.MentionedActorIDs, blocksParam(input.Blocks), input.Silent, messageType), &result)
 	if err != nil {
 		return Message{}, false, 0, fmt.Errorf("insert message: %w", err)
+	}
+	if input.request != nil {
+		if err := s.requests.InsertTx(ctx, tx, user, chatID, result.ID, input.request.plan, recipients); err != nil {
+			return Message{}, false, 0, err
+		}
 	}
 	result.Silent = input.Silent
 	if err := attachFiles(ctx, tx, user.OrgID, result.ID, input.FileIDs); err != nil {
@@ -472,6 +507,9 @@ func (s *Service) List(ctx context.Context, user identity.User, chatID string, o
 	if err := hydrateFiles(ctx, tx, user.OrgID, messages); err != nil {
 		return Page{}, err
 	}
+	if err := s.hydrateRequestViewerSlice(ctx, tx, user, messages); err != nil {
+		return Page{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return Page{}, fmt.Errorf("commit list messages: %w", err)
 	}
@@ -535,6 +573,9 @@ func (s *Service) Context(ctx context.Context, user identity.User, messageID str
 		return Window{}, err
 	}
 	if err := hydrateFiles(ctx, tx, user.OrgID, result.Messages); err != nil {
+		return Window{}, err
+	}
+	if err := s.hydrateRequestViewerSlice(ctx, tx, user, result.Messages); err != nil {
 		return Window{}, err
 	}
 	if len(result.Messages) > 0 {
@@ -634,6 +675,9 @@ func (s *Service) Update(ctx context.Context, user identity.User, messageID stri
 	if err := hydrateFiles(ctx, tx, user.OrgID, updated); err != nil {
 		return Message{}, err
 	}
+	if err := s.hydrateRequestViewerSlice(ctx, tx, user, updated); err != nil {
+		return Message{}, err
+	}
 	result = updated[0]
 	if err := tx.Commit(ctx); err != nil {
 		return Message{}, fmt.Errorf("commit update message: %w", err)
@@ -696,6 +740,9 @@ func (s *Service) Delete(ctx context.Context, user identity.User, messageID stri
 	}
 	// Its files and links leave the chat's shared media.
 	if err := dropShared(ctx, tx, result.ID); err != nil {
+		return Message{}, err
+	}
+	if err := request.OnMessageDeletedTx(ctx, tx, s.requests, user, result.ID); err != nil {
 		return Message{}, err
 	}
 	deleted := []Message{result}
@@ -1029,6 +1076,9 @@ func commandFingerprint(chatID string, input CreateInput) [32]byte {
 	if input.Silent {
 		silent = "\x00silent"
 	}
+	if input.request != nil {
+		silent += input.request.plan.Fingerprint()
+	}
 	return sha256.Sum256([]byte(chatID + "\x00" + input.Body + "\x00" + input.BodyFormat + "\x00" + replyTo + "\x00" + threadRoot + "\x00" + strings.Join(input.MentionedActorIDs, ",") + "\x00" + strings.Join(input.FileIDs, ",") + blocksFingerprint(input.Blocks) + silent))
 }
 
@@ -1191,7 +1241,11 @@ func hydrateFiles(ctx context.Context, tx pgx.Tx, orgID string, messages []Messa
 		return fmt.Errorf("iterate message files: %w", err)
 	}
 	rows.Close()
-	// Every reader that loads files also shows why an agent wrote a message.
+	// Every reader that loads files also shows why an agent wrote a message
+	// and the shared part of a request.
+	if err := hydrateRequests(ctx, tx, orgID, messages); err != nil {
+		return err
+	}
 	return hydrateAgentProvenance(ctx, tx, orgID, messages)
 }
 

@@ -714,7 +714,7 @@ func (w *Worker) materialize(ctx context.Context) error {
 			WITH event AS (
 			  SELECT * FROM events WHERE org_id=$1 AND seq=$2
 			), recipients AS (
-			  SELECT cm.actor_id AS recipient_id,cm.notify_level,cm.muted_until,c.kind,m.mentioned_actor_ids,m.thread_root_id,'message'::text AS category
+			  SELECT cm.actor_id AS recipient_id,cm.notify_level,cm.muted_until,c.kind,`+requestMentions+` AS mentioned_actor_ids,m.thread_root_id,'message'::text AS category
 			  FROM event e JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id
 			  JOIN chats c ON c.org_id=m.org_id AND c.id=m.chat_id
 			  JOIN chat_members cm ON cm.org_id=e.org_id AND cm.chat_id=e.chat_id
@@ -739,6 +739,7 @@ func (w *Worker) materialize(ctx context.Context) error {
 			  FROM event e
 			  WHERE e.type='scheduled_message.failed' AND `+scheduledFailureCurrent+`
 			  `+reminderRecipients+`
+			  `+requestRecipients+`
 			), eligible AS (
 			SELECT e.org_id,e.seq,e.occurred_at,r.*,u.preferences
 			FROM event e JOIN recipients r ON true
@@ -756,6 +757,7 @@ func (w *Worker) materialize(ctx context.Context) error {
 			    WHEN 'system' THEN COALESCE((u.preferences->>'notify_system')::boolean,true)
 			    WHEN 'scheduled' THEN true
 			    WHEN 'reminder' THEN true
+			    `+requestCategories+`
 			    ELSE CASE r.notify_level
 			      WHEN 'all' THEN true
 			      WHEN 'mentions' THEN r.recipient_id=ANY(r.mentioned_actor_ids)
@@ -841,7 +843,7 @@ func (w *Worker) deliver(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	rows, err := w.pool.Query(ctx, `SELECT d.org_id,d.event_seq,d.subscription_id,s.actor_id,s.endpoint,s.p256dh,s.auth,e.type,e.data,e.chat_id,m.thread_root_id,m.body,c.name,a.display_name,COALESCE((u.preferences->>'push_preview')::boolean,false),COALESCE(u.preferences->>'locale','ru'),(SELECT f.voice_duration_ms FROM message_files mf JOIN files f ON f.org_id=mf.org_id AND f.id=mf.file_id WHERE mf.message_id=m.id AND f.voice_duration_ms IS NOT NULL LIMIT 1),`+quietNotification+`,`+scheduledStillFailed+` AND `+reminderStillFired+` FROM notification_deliveries d JOIN web_push_subscriptions s ON s.id=d.subscription_id JOIN events e ON e.org_id=d.org_id AND e.seq=d.event_seq LEFT JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id LEFT JOIN chats c ON c.org_id=e.org_id AND c.id=e.chat_id JOIN actors a ON a.org_id=e.org_id AND a.id=e.actor_id JOIN users u ON u.org_id=s.org_id AND u.actor_id=s.actor_id WHERE d.lease_token=$1 ORDER BY d.event_seq`, leaseToken)
+	rows, err := w.pool.Query(ctx, `SELECT d.org_id,d.event_seq,d.subscription_id,s.actor_id,s.endpoint,s.p256dh,s.auth,e.type,`+pushEventData+`,e.chat_id,m.thread_root_id,m.body,c.name,a.display_name,COALESCE((u.preferences->>'push_preview')::boolean,false),COALESCE(u.preferences->>'locale','ru'),(SELECT f.voice_duration_ms FROM message_files mf JOIN files f ON f.org_id=mf.org_id AND f.id=mf.file_id WHERE mf.message_id=m.id AND f.voice_duration_ms IS NOT NULL LIMIT 1),`+quietNotification+`,`+scheduledStillFailed+` AND `+reminderStillFired+` FROM notification_deliveries d JOIN web_push_subscriptions s ON s.id=d.subscription_id JOIN events e ON e.org_id=d.org_id AND e.seq=d.event_seq LEFT JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id LEFT JOIN chats c ON c.org_id=e.org_id AND c.id=e.chat_id JOIN actors a ON a.org_id=e.org_id AND a.id=e.actor_id JOIN users u ON u.org_id=s.org_id AND u.actor_id=s.actor_id WHERE d.lease_token=$1 ORDER BY d.event_seq`, leaseToken)
 	if err != nil {
 		return err
 	}
@@ -918,7 +920,7 @@ func (w *Worker) deliverDigests(ctx context.Context) error {
 	}
 	rows, err := w.pool.Query(ctx, `
 		SELECT i.org_id,i.event_seq,i.actor_id,u.email,COALESCE(u.preferences->>'locale','ru'),
-		       e.type,e.data,e.chat_id,m.body,c.name,a.display_name,
+		       e.type,`+pushEventData+`,e.chat_id,m.body,c.name,a.display_name,
 		       COALESCE((u.preferences->>'push_preview')::boolean,false),
 		       (SELECT f.voice_duration_ms FROM message_files mf JOIN files f ON f.org_id=mf.org_id AND f.id=mf.file_id WHERE mf.message_id=m.id AND f.voice_duration_ms IS NOT NULL LIMIT 1)
 		FROM email_digest_items i
@@ -1032,6 +1034,9 @@ func buildNotification(eventType string, eventData []byte, author, locale string
 	if eventType == scheduledreset.EventFailed {
 		return scheduledFailureNotification(eventData, locale)
 	}
+	if content, ok := requestNotification(eventType, eventData, author, locale, preview, chatID, body, chatName); ok {
+		return content
+	}
 	content := notificationContent{Title: author, Body: "Новое сообщение"}
 	if chatName != nil && *chatName != "" {
 		content.Title += " · " + *chatName
@@ -1056,6 +1061,9 @@ func buildNotification(eventType string, eventData []byte, author, locale string
 }
 
 func categoryBody(eventType string, raw []byte, author, locale string) string {
+	if text, ok := requestCategoryBody(eventType, raw, author, locale); ok {
+		return text
+	}
 	data := map[string]any{}
 	_ = json.Unmarshal(raw, &data)
 	if locale == "en" {
