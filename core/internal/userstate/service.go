@@ -54,6 +54,10 @@ type ChatUnread struct {
 	// for the person's answer (see addRequestCounts).
 	RequestsWaiting   int64      `json:"requests_waiting"`
 	RequestsNextDueAt *time.Time `json:"requests_next_due_at"`
+	// TasksMineOpen and TasksMineNextDueAt: the person's open tasks of the
+	// chat (see addTaskCounts).
+	TasksMineOpen      int64      `json:"tasks_mine_open"`
+	TasksMineNextDueAt *time.Time `json:"tasks_mine_next_due_at"`
 }
 
 type ThreadUnread struct {
@@ -70,6 +74,8 @@ type UnreadSnapshot struct {
 	// RemindersFiredTotal: fired reminders the person has not closed yet.
 	RemindersFiredTotal  int   `json:"reminders_fired_total"`
 	RequestsWaitingTotal int64 `json:"requests_waiting_total"`
+	TasksMineOpenTotal   int64 `json:"tasks_mine_open_total"`
+	TasksMineHotTotal    int64 `json:"tasks_mine_hot_total"`
 }
 
 type Service struct {
@@ -424,6 +430,9 @@ func (s *Service) Unread(ctx context.Context, user identity.User) (UnreadSnapsho
 		return UnreadSnapshot{}, err
 	}
 	if err := s.addRequestCounts(ctx, user, &snapshot); err != nil {
+		return UnreadSnapshot{}, err
+	}
+	if err := s.addTaskCounts(ctx, user, &snapshot); err != nil {
 		return UnreadSnapshot{}, err
 	}
 	return snapshot, nil

@@ -41,11 +41,11 @@ const requestCategories = `
 	  AND COALESCE(u.preferences->>'notify_messages','all') IN ('all','direct_and_mentions'))
 	WHEN 'request_summary' THEN true`
 
-// pushEventData replaces e.data where a push is built: for a request
+// requestPushEventData replaces e.data where a push is built: for a request
 // message or a reminder it adds whether the recipient (u) is asked, the due
 // date and the time zone to show it in (the person's, or the workspace's
 // when theirs is the UTC default).
-const pushEventData = `CASE WHEN e.type IN ('message.created','request.reminded') THEN e.data||COALESCE((
+const requestPushEventData = `CASE WHEN e.type IN ('message.created','request.reminded') THEN e.data||COALESCE((
 	SELECT jsonb_build_object('request',true,'message_id',r.message_id,'request_due_at',r.due_at,
 	  'request_recipient',EXISTS (SELECT 1 FROM message_request_recipients rr WHERE rr.message_id=r.message_id AND rr.actor_id=u.actor_id),
 	  'timezone',COALESCE(NULLIF(NULLIF(ua.timezone,''),'UTC'),o.settings->>'default_timezone','UTC'))

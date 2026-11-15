@@ -29,11 +29,12 @@ type Frame struct {
 
 // messageContentTypes are the chat events about one message (subject_id):
 // the message itself, its reactions and pins, and the counters of a request
-// (request.updated; other request events go to people only). An agent that only writes to
+// (request.updated; other request events go to people only) and a task
+// (task.updated). An agent that only writes to
 // the chat receives them for its own messages only — the rule of message.Get
 // and message.ListReactions. Chat, member, thread-follow, read-mark and draft
 // events carry no message content and stay as they are.
-const messageContentTypes = `('message.created', 'message.updated', 'message.deleted', 'reaction.added', 'reaction.removed', 'message.pinned', 'message.unpinned', 'request.updated')`
+const messageContentTypes = `('message.created', 'message.updated', 'message.deleted', 'reaction.added', 'reaction.removed', 'message.pinned', 'message.unpinned', 'request.updated', 'task.updated')`
 
 type Bounds struct {
 	CurrentSeq     int64
@@ -194,6 +195,15 @@ func (s *Store) Replay(ctx context.Context, user identity.User, sessionID string
 	if err := message.CompleteEventMessages(ctx, tx, user.OrgID, items); err != nil {
 		return nil, fmt.Errorf("complete replayed message events: %w", err)
 	}
+	tasks := make([]message.EventMessage, 0)
+	for index := range result {
+		if result[index].Type == "task.updated" {
+			tasks = append(tasks, message.EventMessage{Data: &result[index].Data})
+		}
+	}
+	if err := message.CompleteTaskEvents(ctx, tx, user.OrgID, tasks); err != nil {
+		return nil, fmt.Errorf("complete replayed task events: %w", err)
+	}
 	for index := range result {
 		if err := s.fit(&result[index]); err != nil {
 			return nil, err
@@ -304,6 +314,15 @@ func (s *Store) Live(ctx context.Context, orgID string, afterSeq, throughSeq int
 	}
 	if err := message.CompleteEventMessages(ctx, tx, orgID, items); err != nil {
 		return nil, fmt.Errorf("complete live message events: %w", err)
+	}
+	tasks := make([]message.EventMessage, 0)
+	for index := range result {
+		if result[index].Frame.Type == "task.updated" && len(result[index].RecipientActorIDs) > 0 {
+			tasks = append(tasks, message.EventMessage{Data: &result[index].Frame.Data})
+		}
+	}
+	if err := message.CompleteTaskEvents(ctx, tx, orgID, tasks); err != nil {
+		return nil, fmt.Errorf("complete live task events: %w", err)
 	}
 	for index := range result {
 		if err := s.fit(&result[index].Frame); err != nil {

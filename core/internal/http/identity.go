@@ -121,6 +121,9 @@ type identityHandlers struct {
 	sharedRate            *ipRateLimiter
 	savedRate             *ipRateLimiter
 	savedReadRate         *ipRateLimiter
+	taskRate              *ipRateLimiter
+	taskWriteRate         *ipRateLimiter
+	taskReadRate          *ipRateLimiter
 	bootstrapToken        string
 	requireBootstrapToken bool
 	trustedProxyCIDRs     []netip.Prefix
@@ -148,7 +151,10 @@ func newIdentityHandlers(logger *slog.Logger, allowedOrigin string, dependencies
 		savedRate: newIPRateLimiter(120, 30),
 		// Reading saves joins messages, chats and members per row; a screen
 		// opens with a few requests, a page scroll adds one per page.
-		savedReadRate:  newIPRateLimiter(240, 60),
+		savedReadRate: newIPRateLimiter(240, 60),
+		// Tasks: creating 30 a minute with bursts of 10, changes 120 a
+		// minute, reads like the saved messages.
+		taskRate: newIPRateLimiter(30, 10), taskWriteRate: newIPRateLimiter(120, 30), taskReadRate: newIPRateLimiter(240, 60),
 		bootstrapToken: dependencies.BootstrapToken, requireBootstrapToken: dependencies.RequireBootstrapToken,
 		trustedProxyCIDRs: dependencies.TrustedProxyCIDRs, revokeRealtimeSession: dependencies.RevokeRealtimeSession,
 	}

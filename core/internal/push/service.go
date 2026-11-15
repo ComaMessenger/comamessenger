@@ -718,7 +718,7 @@ func (w *Worker) materialize(ctx context.Context) error {
 			  FROM event e JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id
 			  JOIN chats c ON c.org_id=m.org_id AND c.id=m.chat_id
 			  JOIN chat_members cm ON cm.org_id=e.org_id AND cm.chat_id=e.chat_id
-			  WHERE e.type='message.created' AND cm.actor_id<>e.actor_id
+			  WHERE e.type='message.created' AND cm.actor_id<>e.actor_id AND NOT `+taskAddressee+`
 			  UNION ALL
 			  SELECT m.actor_id,'default',NULL,c.kind,'{}'::uuid[],NULL::uuid,'reaction'
 			  FROM event e JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id
@@ -740,6 +740,7 @@ func (w *Worker) materialize(ctx context.Context) error {
 			  WHERE e.type='scheduled_message.failed' AND `+scheduledFailureCurrent+`
 			  `+reminderRecipients+`
 			  `+requestRecipients+`
+			  `+taskRecipients+`
 			), eligible AS (
 			SELECT e.org_id,e.seq,e.occurred_at,r.*,u.preferences
 			FROM event e JOIN recipients r ON true
@@ -758,6 +759,7 @@ func (w *Worker) materialize(ctx context.Context) error {
 			    WHEN 'scheduled' THEN true
 			    WHEN 'reminder' THEN true
 			    `+requestCategories+`
+			    `+taskCategories+`
 			    ELSE CASE r.notify_level
 			      WHEN 'all' THEN true
 			      WHEN 'mentions' THEN r.recipient_id=ANY(r.mentioned_actor_ids)
@@ -1037,6 +1039,9 @@ func buildNotification(eventType string, eventData []byte, author, locale string
 	if content, ok := requestNotification(eventType, eventData, author, locale, preview, chatID, body, chatName); ok {
 		return content
 	}
+	if content, ok := taskNotification(eventType, eventData, author, locale, preview, chatID, chatName); ok {
+		return content
+	}
 	content := notificationContent{Title: author, Body: "Новое сообщение"}
 	if chatName != nil && *chatName != "" {
 		content.Title += " · " + *chatName
@@ -1063,6 +1068,9 @@ func buildNotification(eventType string, eventData []byte, author, locale string
 func categoryBody(eventType string, raw []byte, author, locale string) string {
 	if text, ok := requestCategoryBody(eventType, raw, author, locale); ok {
 		return text
+	}
+	if content, ok := taskNotification(eventType, raw, author, locale, false, nil, nil); ok {
+		return content.Title + " · " + content.Body
 	}
 	data := map[string]any{}
 	_ = json.Unmarshal(raw, &data)

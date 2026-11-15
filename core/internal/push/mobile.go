@@ -320,6 +320,9 @@ func (w *Worker) deliverMobile(ctx context.Context) error {
 		if content.Kind == reminderKind {
 			fallbackBody = ReminderText("title", item.locale)
 		}
+		if content.Kind == taskKind {
+			fallbackBody = TaskText("assigned_title", item.locale)
+		}
 		collapseID := content.ChatID
 		if content.Tag != "" {
 			collapseID = content.Tag

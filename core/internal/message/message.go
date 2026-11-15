@@ -18,6 +18,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/permission"
 	"github.com/comamessenger/comamessenger/core/internal/reminder"
 	"github.com/comamessenger/comamessenger/core/internal/request"
+	"github.com/comamessenger/comamessenger/core/internal/task"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -73,6 +74,9 @@ type Message struct {
 	// RequestViewer: REST only, what the reading person may do with the
 	// request. Never set on realtime frames.
 	RequestViewer *request.Viewer `json:"request_viewer,omitempty"`
+	// Task: on a message of type task, the whole task, the same for every
+	// reader.
+	Task *task.Task `json:"task,omitempty"`
 }
 
 type ForwardAttribution struct {
@@ -103,6 +107,8 @@ type CreateInput struct {
 	links *PreparedLinks
 	// request makes the message a request; set only by CreateRequest.
 	request *requestCreation
+	// task makes the message a task; set only by CreateTask.
+	task *taskCreation
 }
 
 // UseLinks attaches links prepared outside the transaction (PrepareLinks).
@@ -153,6 +159,7 @@ type Service struct {
 	// extracted, before they are written; tests set it.
 	betweenBackfillSteps func()
 	requests             *request.Service
+	tasks                *task.Service
 }
 
 func NewService(pool *pgxpool.Pool, maxBodyBytes, maxPageSize int, afterCommit func(orgID string, highWatermark int64)) *Service {
@@ -261,7 +268,7 @@ func (s *Service) createTx(ctx context.Context, tx pgx.Tx, user identity.User, c
 		return Message{}, false, 0, ErrForbidden
 	}
 	// Requests are asked by people.
-	if input.request != nil && (isAgent || provenance != nil) {
+	if (input.request != nil || input.task != nil) && (isAgent || provenance != nil) {
 		return Message{}, false, 0, ErrForbidden
 	}
 	// The client_msg_id of a scheduled message's send belongs to it alone:
@@ -289,7 +296,7 @@ func (s *Service) createTx(ctx context.Context, tx pgx.Tx, user identity.User, c
 					}
 				}
 			}
-			if existing.Type == "request" {
+			if existing.Type == "request" || existing.Type == "task" {
 				replayed := []Message{existing}
 				if err := hydrateFiles(ctx, tx, user.OrgID, replayed); err != nil {
 					return Message{}, false, 0, err
@@ -344,6 +351,13 @@ func (s *Service) createTx(ctx context.Context, tx pgx.Tx, user identity.User, c
 			return Message{}, false, 0, err
 		}
 	}
+	var preparedTask task.Prepared
+	if input.task != nil {
+		messageType = "task"
+		if preparedTask, err = s.prepareTaskTx(ctx, tx, user, chatID, messageID, input); err != nil {
+			return Message{}, false, 0, err
+		}
+	}
 
 	seq, err := nextSequence(ctx, tx, user.OrgID)
 	if err != nil {
@@ -366,6 +380,11 @@ func (s *Service) createTx(ctx context.Context, tx pgx.Tx, user identity.User, c
 	}
 	if input.request != nil {
 		if err := s.requests.InsertTx(ctx, tx, user, chatID, result.ID, input.request.plan, recipients); err != nil {
+			return Message{}, false, 0, err
+		}
+	}
+	if input.task != nil {
+		if err := s.tasks.InsertTx(ctx, tx, user, chatID, result.ID, preparedTask); err != nil {
 			return Message{}, false, 0, err
 		}
 	}
@@ -640,6 +659,11 @@ func (s *Service) Update(ctx context.Context, user identity.User, messageID stri
 	if current.DeletedAt != nil {
 		return Message{}, ErrNotFound
 	}
+	// The body of a task is built from its title and description: it
+	// changes through updateTask only.
+	if current.Type == "task" {
+		return Message{}, invalid("a task is edited with updateTask")
+	}
 	if current.Version != input.ExpectedVersion {
 		return Message{}, ErrVersionConflict
 	}
@@ -769,6 +793,9 @@ func (s *Service) Delete(ctx context.Context, user identity.User, messageID stri
 		return Message{}, err
 	}
 	if err := request.OnMessageDeletedTx(ctx, tx, s.requests, user, result.ID); err != nil {
+		return Message{}, err
+	}
+	if err := task.OnMessageDeletedTx(ctx, tx, s.tasks, user, result.ID); err != nil {
 		return Message{}, err
 	}
 	deleted := []Message{result}
@@ -1108,6 +1135,9 @@ func commandFingerprint(chatID string, input CreateInput) [32]byte {
 	if input.request != nil {
 		silent += input.request.plan.Fingerprint()
 	}
+	if input.task != nil {
+		silent += input.task.plan.Fingerprint()
+	}
 	return sha256.Sum256([]byte(chatID + "\x00" + input.Body + "\x00" + input.BodyFormat + "\x00" + replyTo + "\x00" + threadRoot + "\x00" + strings.Join(input.MentionedActorIDs, ",") + "\x00" + strings.Join(input.FileIDs, ",") + blocksFingerprint(input.Blocks) + silent + departmentsFingerprint(input.MentionedDepartmentIDs)))
 }
 
@@ -1276,6 +1306,9 @@ func hydrateFiles(ctx context.Context, tx pgx.Tx, orgID string, messages []Messa
 		return err
 	}
 	if err := hydrateRequests(ctx, tx, orgID, messages); err != nil {
+		return err
+	}
+	if err := hydrateTasks(ctx, tx, orgID, messages); err != nil {
 		return err
 	}
 	return hydrateAgentProvenance(ctx, tx, orgID, messages)
