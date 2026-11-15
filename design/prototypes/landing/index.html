@@ -524,6 +524,8 @@ h3 { font-size: 20px; line-height: 1.25; font-weight: 600; letter-spacing: -.01e
 .form .err { color: var(--danger); font-size: 13.5px; }
 .ok-box { grid-column: 1 / -1; display: flex; gap: 12px; padding: 16px; border-radius: 14px; background: var(--success-soft); }
 .ok-box .ic { color: var(--success); width: 24px; height: 24px; }
+.tg-lead { max-width: 640px; }
+.tg-lead .cta { margin-top: 24px; display: inline-grid; justify-items: start; }
 .contacts { margin-top: 28px; display: grid; gap: 12px; color: var(--muted); }
 .contacts div { display: flex; gap: 10px; align-items: center; }
 .contacts .ic { color: var(--primary); }
@@ -803,7 +805,6 @@ h3 { font-size: 20px; line-height: 1.25; font-weight: 600; letter-spacing: -.01e
       <div class="fact"><svg class="ic"><use href="#i-phone"/></svg>Приложение для iPhone в TestFlight</div>
       <div class="fact"><svg class="ic"><use href="#i-spark"/></svg>Модели: Anthropic, OpenAI или своя</div>
     </div>
-    <div class="logos"><span class="lbl">Работают в Coma:</span><span class="logo-ph">[логотип клиента]</span><span class="logo-ph">[логотип клиента]</span><span class="logo-ph">[логотип клиента]</span><span class="logo-ph">[логотип клиента]</span></div>
   </div>
 </div>
 
@@ -1104,7 +1105,7 @@ h3 { font-size: 20px; line-height: 1.25; font-weight: 600; letter-spacing: -.01e
         <h4>Спрашивает подтверждение</h4>
         <div class="perm" data-p><svg class="ic"><use href="#i-send"/></svg>Написать человеку в личку<span class="sp"></span><button class="switch" type="button" role="switch" aria-checked="true" aria-label="Подтверждение для лички"></button></div>
         <h4>Лимит расходов</h4>
-        <div class="perm"><svg class="ic"><use href="#i-gauge"/></svg><span><span class="ph">[сумма]</span> ₽ в месяц</span></div>
+        <div class="perm"><svg class="ic"><use href="#i-gauge"/></svg><span>5 000 ₽ в месяц</span></div>
         <div class="sum" id="agSum"></div>
       </div>
     </div>
@@ -1154,7 +1155,7 @@ h3 { font-size: 20px; line-height: 1.25; font-weight: 600; letter-spacing: -.01e
     <div class="card repo rv">
       <div class="rt"><svg class="ic"><use href="#i-gh"/></svg>ComaMessenger / comamessenger</div>
       <p class="rd">Open-source self-hosted corporate messenger with chats, read-only channels, threads and an agent-first architecture.</p>
-      <div class="badges"><span class="bd"><svg class="ic"><use href="#i-star"/></svg><span class="ph">[звёзды]</span></span><span class="bd">AGPL-3.0 · Apache-2.0</span><span class="bd">Go · TypeScript</span></div>
+      <div class="badges"><span class="bd">AGPL-3.0 · Apache-2.0</span><span class="bd">Go · TypeScript</span></div>
       <div class="tree-files">
         <div><span>core/</span><span>сервер на Go</span></div>
         <div><span>apps/web/</span><span>веб-клиент</span></div>
@@ -1181,32 +1182,8 @@ h3 { font-size: 20px; line-height: 1.25; font-weight: 600; letter-spacing: -.01e
       <li class="card rv"><span class="num">4</span><h3>Агенты</h3><p>Загружаем регламенты в базу знаний и включаем первых агентов.</p></li>
     </ol>
     <div class="mig-foot">
-      <span class="term-len">Срок: <span class="ph">[число]</span> дней</span>
-      <a class="btn sec" href="#presentation" data-ph="Презентация для руководителя готовится"><svg class="ic"><use href="#i-down"/></svg>Скачать презентацию для руководителя</a>
+      <span class="term-len">Срок: 1 день</span>
     </div>
-  </div>
-</section>
-
-<!-- ============ кейс ============ -->
-<section id="case" aria-labelledby="cs-h">
-  <div class="wrap">
-    <article class="card case rv">
-      <div class="l">
-        <span class="lab">Кейс</span>
-        <h2 id="cs-h">Реабилитационный центр перешёл на Coma</h2>
-        <p class="lead">В центре работают инструкторы, врачи и администраторы. Пишут в рабочие чаты с телефона, между занятиями.</p>
-        <dl>
-          <div><dt>Что было</dt><dd>Вопросы по расписанию и регламентам терялись в общих чатах.</dd></div>
-          <div><dt>Что сделали</dt><dd>Чаты по залам и агенты:<div class="agents-used"><span>Справка: ответы по регламентам</span><span>Контроль: отметки под инструктажами</span><span>Передача: дела между слотами</span></div></dd></div>
-        </dl>
-      </div>
-      <div class="r">
-        <div class="metric"><b class="ph">[число]</b><span>сотрудников</span></div>
-        <div class="metric"><b class="ph">[число]</b><span>недель на переезд</span></div>
-        <div class="metric"><b class="ph">[число]</b><span>запросов в неделю</span></div>
-        <blockquote class="quote"><span class="ph">[цитата руководителя центра]</span><footer><span class="ph">[имя, должность]</span></footer></blockquote>
-      </div>
-    </article>
   </div>
 </section>
 
@@ -1231,41 +1208,28 @@ h3 { font-size: 20px; line-height: 1.25; font-weight: 600; letter-spacing: -.01e
         <div class="amt sm">По запросу</div>
         <p>Развернём сервер, заведём структуру, подключим модели и настроим первых агентов.</p>
         <ul><li><svg class="ic"><use href="#i-check"/></svg>Установка на ваш сервер</li><li><svg class="ic"><use href="#i-check"/></svg>Отделы, должности, чаты</li><li><svg class="ic"><use href="#i-check"/></svg>Регламенты в базе знаний</li></ul>
-        <a class="btn sec" href="#lead" data-plan="Внедрение">Оставить заявку</a>
+        <a class="btn sec" href="https://t.me/levpavloff" target="_blank" rel="noopener">Написать в Telegram</a>
       </article>
       <article class="card price rv">
         <h3>Поддержка</h3>
         <div class="amt sm">По запросу</div>
         <p>Обновления, резервные копии, помощь администратору.</p>
         <ul><li><svg class="ic"><use href="#i-check"/></svg>Обновления версий</li><li><svg class="ic"><use href="#i-check"/></svg>Резервные копии</li><li><svg class="ic"><use href="#i-check"/></svg>Ответы на вопросы администратора</li></ul>
-        <a class="btn sec" href="#lead" data-plan="Поддержка">Оставить заявку</a>
+        <a class="btn sec" href="https://t.me/levpavloff" target="_blank" rel="noopener">Написать в Telegram</a>
       </article>
     </div>
   </div>
 </section>
 
-<!-- ============ заявка ============ -->
+<!-- ============ связаться ============ -->
 <section id="lead" aria-labelledby="ld-h">
-  <div class="wrap lead-grid">
-    <div class="rv">
-      <p class="eyebrow">Заявка</p>
+  <div class="wrap">
+    <div class="rv tg-lead">
+      <p class="eyebrow">Внедрение</p>
       <h2 id="ld-h">Обсудим внедрение</h2>
-      <p class="lead">Расскажите о компании. Мы ответим и покажем Coma на ваших задачах.</p>
-      <div class="contacts">
-        <div><svg class="ic"><use href="#i-mail"/></svg><span class="ph">[почта для заявок]</span></div>
-        <div><svg class="ic"><use href="#i-msg"/></svg><span class="ph">[телефон или мессенджер]</span></div>
-      </div>
+      <p class="lead">Напишите в Telegram, как устроена работа в вашей компании. Покажем Coma на ваших задачах и поможем развернуть.</p>
+      <div class="cta"><a class="btn pri" href="https://t.me/levpavloff" target="_blank" rel="noopener"><svg class="ic"><use href="#i-msg"/></svg>Написать в Telegram</a><small>@levpavloff</small></div>
     </div>
-    <form class="card form rv" id="leadForm" novalidate>
-      <label>Имя<input name="name" autocomplete="name" required></label>
-      <label>Компания<input name="company" autocomplete="organization" required></label>
-      <label>Телефон или почта<input name="contact" autocomplete="email" required></label>
-      <label>Сколько сотрудников<select name="size"><option>до 50</option><option>50–200</option><option>200–1000</option><option>больше 1000</option></select></label>
-      <label class="full">Что хотите решить <span class="opt-l">(необязательно)</span><textarea name="goal" id="goal"></textarea></label>
-      <p class="legal">Нажимая кнопку, вы соглашаетесь с <span class="ph">[политикой обработки персональных данных]</span>.</p>
-      <div class="send"><button class="btn pri" type="submit">Отправить заявку</button><span class="err" id="formErr" role="alert"></span></div>
-      <div class="ok-box" id="formOk" hidden><svg class="ic"><use href="#i-okc"/></svg><div><b>Заявка отправлена.</b><br>Ответим в течение <span class="ph">[срок]</span>. <span style="color:var(--muted)">В прототипе данные никуда не уходят.</span></div></div>
-    </form>
   </div>
 </section>
 
@@ -1292,7 +1256,7 @@ h3 { font-size: 20px; line-height: 1.25; font-weight: 600; letter-spacing: -.01e
   <div class="wrap rv">
     <svg class="mascot big-m" aria-hidden="true"><use href="#mascot"/></svg>
     <h2 id="fn-h">Посмотрите Coma на своих задачах</h2>
-    <p class="lead">Разверните Coma на своём сервере или оставьте заявку, поможем с внедрением.</p>
+    <p class="lead">Разверните Coma на своём сервере или напишите нам в Telegram, поможем с внедрением.</p>
     <div class="cta-row">
       <div class="cta"><a class="btn light" href="#demo" data-demo>Демо скоро</a><small>Готовим публичное демо в браузере</small></div>
       <div class="cta"><a class="btn ghost-deep" href="https://github.com/ComaMessenger/comamessenger" target="_blank" rel="noopener"><svg class="ic"><use href="#i-gh"/></svg>Развернуть у себя</a><small>Бесплатно, код на GitHub</small></div>
@@ -1305,7 +1269,7 @@ h3 { font-size: 20px; line-height: 1.25; font-weight: 600; letter-spacing: -.01e
   <div class="wrap">
     <a class="logo" href="#top" style="font-size:17px"><svg class="mascot" aria-hidden="true" style="width:20px;height:26px"><use href="#mascot-b"/></svg>Coma</a>
     <span>Открытый рабочий мессенджер · coma-chat.com</span>
-    <nav aria-label="Ссылки в подвале"><a href="https://github.com/ComaMessenger/comamessenger" target="_blank" rel="noopener">GitHub</a><a href="https://github.com/ComaMessenger/comamessenger/tree/main/docs" target="_blank" rel="noopener">Документация</a><a href="#lead">Внедрение</a><span class="ph">[контакты]</span></nav>
+    <nav aria-label="Ссылки в подвале"><a href="https://github.com/ComaMessenger/comamessenger" target="_blank" rel="noopener">GitHub</a><a href="https://github.com/ComaMessenger/comamessenger/tree/main/docs" target="_blank" rel="noopener">Документация</a><a href="#lead">Внедрение</a><a href="https://t.me/levpavloff" target="_blank" rel="noopener">Telegram</a></nav>
   </div>
 </footer>
 
@@ -1377,12 +1341,8 @@ h3 { font-size: 20px; line-height: 1.25; font-weight: 600; letter-spacing: -.01e
   $$('a', mnav).forEach(a => a.addEventListener('click', () => { mnav.classList.remove('open'); burger.setAttribute('aria-expanded', 'false'); burger.innerHTML = icon('i-menu'); }));
 
   /* ---------- placeholder links ---------- */
-  $$('[data-demo]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); toast('Демо скоро откроем. А пока можно развернуть Coma у себя или оставить заявку.'); }));
+  $$('[data-demo]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); toast('Демо скоро откроем. А пока можно развернуть Coma у себя или написать нам в Telegram.'); }));
   $$('[data-ph]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); toast(a.dataset.ph); }));
-  $$('[data-plan]').forEach(a => a.addEventListener('click', () => {
-    const g = $('#goal');
-    if (!g.value) g.value = 'Интересует: ' + a.dataset.plan.toLowerCase();
-  }));
 
   /* ---------- runner helper (cancellable timelines) ---------- */
   function makeRunner(script) {
@@ -1692,17 +1652,6 @@ h3 { font-size: 20px; line-height: 1.25; font-weight: 600; letter-spacing: -.01e
       try { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); ok = document.execCommand('copy'); ta.remove(); } catch (e2) { ok = false; }
     }
     toast(ok ? 'Команды скопированы' : 'Не удалось скопировать, выделите команды вручную');
-  });
-
-  /* ---------- lead form ---------- */
-  $('#leadForm').addEventListener('submit', e => {
-    e.preventDefault();
-    const f = e.currentTarget, err = $('#formErr');
-    const bad = $$('[required]', f).filter(i => !i.value.trim());
-    if (bad.length) { err.textContent = 'Заполните имя, компанию и контакт'; bad[0].focus(); return; }
-    err.textContent = '';
-    $('#formOk').hidden = false;
-    $('button[type="submit"]', f).disabled = true;
   });
 
   /* ---------- visibility-driven animation ---------- */
