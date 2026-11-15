@@ -68,7 +68,7 @@ type UnreadSnapshot struct {
 	Chats   []ChatUnread   `json:"chats"`
 	Threads []ThreadUnread `json:"threads"`
 	// RemindersFiredTotal: fired reminders the person has not closed yet.
-	RemindersFiredTotal int `json:"reminders_fired_total"`
+	RemindersFiredTotal  int   `json:"reminders_fired_total"`
 	RequestsWaitingTotal int64 `json:"requests_waiting_total"`
 }
 
