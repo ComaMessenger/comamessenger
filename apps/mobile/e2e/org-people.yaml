@@ -1,0 +1,147 @@
+# Phase 6.5 wave 2: «Ещё → Люди» grouped by department, the department
+# filter, collapsing a group, the department card with «Входит в», the
+# person card with the department, the position and the manager.
+# Seed first, then run after sign-in.yaml (reuses its session):
+#   COMA_API=… node e2e/seed-org.mjs && maestro test -e THEME=light e2e/org-people.yaml
+appId: com.comamessenger.app
+---
+- runFlow: open-app.yaml
+- runFlow:
+    file: tabs.yaml
+    env:
+      TAB: more
+- tapOn:
+    id: open-people
+# Groups appear once the structure and every directory page are loaded.
+- extendedWaitUntil:
+    visible: "Зал ЛФК, .*"
+    timeout: 20000
+- assertVisible:
+    id: people-dept-all
+- assertVisible: ".*руководитель отдела.*"
+- takeScreenshot: org-people-${THEME}
+
+# The department chips: «Бассейн» leaves its own group only.
+# The chips row scrolls sideways: swipe it, not the list.
+- swipe:
+    start: 85%,22%
+    end: 15%,22%
+- tapOn:
+    text: Бассейн
+    index: 0
+- extendedWaitUntil:
+    visible: ".*Пётр Морозов.*"
+    timeout: 5000
+- assertNotVisible: ".*Олег Чернов.*"
+- takeScreenshot: org-people-filter-${THEME}
+- swipe:
+    start: 15%,22%
+    end: 85%,22%
+- tapOn:
+    id: people-dept-all
+
+# «Онлайн» and «Агенты» moved to the header menu.
+- tapOn:
+    id: people-menu
+- extendedWaitUntil:
+    visible:
+      id: people-view-agents
+    timeout: 5000
+- takeScreenshot: org-people-menu-${THEME}
+- tapOn:
+    id: people-view-all
+
+# Collapsing the first group hides its people; the arrow brings them back.
+- tapOn:
+    id: people-group-toggle-0
+- takeScreenshot: org-people-collapsed-${THEME}
+- tapOn:
+    id: people-group-toggle-0
+
+# Search by position: a flat list with the department under the name.
+- tapOn:
+    id: people-search
+- inputText: Врач
+- extendedWaitUntil:
+    visible: ".*Дарья Романова.*"
+    timeout: 10000
+- assertVisible: .*Медицинская служба.*
+- takeScreenshot: org-people-search-${THEME}
+- tapOn:
+    id: people-search
+- eraseText: 10
+- hideKeyboard
+
+# The department card from a group header.
+# A group header is one accessible element: «Зал ЛФК, Реабилитация · 4 чел.».
+- scrollUntilVisible:
+    element: "Зал ЛФК, .*"
+    direction: DOWN
+- tapOn: "Зал ЛФК, .*"
+- extendedWaitUntil:
+    visible:
+      id: department
+    timeout: 10000
+- assertVisible:
+    id: department-lead
+- assertVisible: ".*Ирина Лебедева.*"
+- assertVisible: ".*совместитель.*"
+# No chat yet: whoever runs the structure may create it.
+- assertVisible:
+    id: department-create-chat
+- takeScreenshot: org-department-${THEME}
+
+# «Входит в» leads up the structure.
+- tapOn:
+    id: department-parent
+- extendedWaitUntil:
+    visible:
+      id: department-children
+    timeout: 10000
+- assertVisible: ".*Бассейн.*"
+- takeScreenshot: org-department-parent-${THEME}
+
+# «Бассейн» has a chat without Анна Иванова: «В чате нет 1 сотрудника».
+- tapOn: ".*Бассейн.*"
+- extendedWaitUntil:
+    visible:
+      id: department-missing
+    timeout: 10000
+- assertVisible:
+    id: department-chat
+- takeScreenshot: org-department-missing-${THEME}
+- tapOn:
+    id: department-missing-add
+- extendedWaitUntil:
+    visible: ".*Добавлен 1 сотрудник.*"
+    timeout: 10000
+# The alert's only button: Maestro does not find it by text on iOS 26.
+- tapOn:
+    point: 50%,54%
+- assertNotVisible:
+    id: department-missing
+- tapOn:
+    id: department-back
+- tapOn:
+    id: department-back
+
+# A member: the person card with the org group and the manager.
+- tapOn: ".*Олег Чернов.*"
+- extendedWaitUntil:
+    visible:
+      id: person-org
+    timeout: 10000
+- assertVisible:
+    id: person-department
+- assertVisible: ".*Инструктор.*"
+- takeScreenshot: org-person-${THEME}
+- tapOn:
+    id: person-manager
+- extendedWaitUntil:
+    visible: ".*Ирина Лебедева.*"
+    timeout: 10000
+- extendedWaitUntil:
+    visible:
+      id: person-subordinates
+    timeout: 10000
+- takeScreenshot: org-person-manager-${THEME}

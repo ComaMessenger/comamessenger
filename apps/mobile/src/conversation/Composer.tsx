@@ -25,9 +25,11 @@ import {
   encodeMentions,
   insertMention,
   matchCommands,
+  mentionSuggestions,
   updateMentionText,
   type ChatCommand,
   type ChatMember,
+  type OrgDepartment,
 } from "@comamessenger/core";
 import { radius, spacing } from "@comamessenger/tokens";
 import { useTheme } from "@/lib/theme";
@@ -39,6 +41,9 @@ import { VoiceActionButton, VoiceRecordingBar } from "@/voice/VoiceComposer";
 import { useMediaFacts, usePoster } from "@/media/facts";
 import { formatMediaDuration } from "@/media/items";
 import { useVoiceRecorder, type VoiceTarget } from "@/voice/useVoiceRecorder";
+import { DepartmentIcon } from "@/org/parts";
+import { useOrg } from "@/org/useOrg";
+import { useSignedIn } from "@/session/SessionProvider";
 import { useChatActivity } from "./useChatActivity";
 
 const lineHeight = 21;
@@ -171,15 +176,21 @@ export function Composer({
 
   const mention = /@([\p{L}\p{N}_.-]*)$/u.exec(draft.text);
   const query = mention?.[1]?.toLowerCase() ?? "";
-  const suggestions = mention
-    ? members
-        .filter(
-          (member) =>
-            member.display_name.toLowerCase().includes(query) ||
-            member.handle.toLowerCase().includes(query),
-        )
-        .slice(0, 5)
-    : [];
+  // Departments first (decision 18: only those with someone of this chat
+  // besides the author), then people.
+  const { structure } = useOrg();
+  const { user } = useSignedIn();
+  const found = mention
+    ? mentionSuggestions(query, {
+        members,
+        authorID: user.id,
+        structure,
+        peopleLimit: 5,
+        departmentLimit: 4,
+      })
+    : null;
+  const departments = found?.departments ?? [];
+  const suggestions = found?.people ?? [];
 
   const typedCommand = commands.length ? commandQuery(draft.text) : null;
   const commandMatches =
@@ -196,7 +207,7 @@ export function Composer({
       </View>
     );
 
-  function pick(member: ChatMember) {
+  function pick(member: Pick<ChatMember, "actor_id" | "display_name">) {
     if (!mention) return;
     const next = insertMention(
       draft,
@@ -207,6 +218,11 @@ export function Composer({
     );
     onChangeBody(encodeMentions(next));
     input.current?.focus();
+  }
+
+  /** @отдел: the same token as a person's, the department id inside. */
+  function pickDepartment(department: OrgDepartment) {
+    pick({ actor_id: department.id, display_name: department.name });
   }
 
   function pickCommand(command: ChatCommand) {
@@ -262,14 +278,59 @@ export function Composer({
           ))}
         </ScrollView>
       )}
-      {suggestions.length > 0 && (
+      {suggestions.length + departments.length > 0 && (
         <ScrollView
+          testID="mention-menu"
           keyboardShouldPersistTaps="always"
           style={[
             styles.suggestions,
             { backgroundColor: theme.surface, borderColor: theme.border },
           ]}
         >
+          {departments.length > 0 && (
+            <Text
+              tone="muted"
+              size={12}
+              weight="semibold"
+              style={styles.mentionSection}
+            >
+              {t("orgMentionDepartments").toLocaleUpperCase()}
+            </Text>
+          )}
+          {departments.map((item, index) => (
+            <Pressable
+              key={item.department.id}
+              testID={`mention-department-${index}`}
+              accessibilityRole="button"
+              accessibilityLabel={`@${item.department.name}, ${t("orgMentionInChat", { count: item.inChatCount })}`}
+              onPress={() => pickDepartment(item.department)}
+              style={({ pressed }) => [
+                styles.suggestion,
+                styles.tall,
+                pressed && { backgroundColor: theme.surfaceSelected },
+              ]}
+            >
+              <DepartmentIcon />
+              <View style={styles.grow}>
+                <Text weight="medium" size={15} numberOfLines={1}>
+                  @{item.department.name}
+                </Text>
+                <Text tone="subtle" size={12.5} numberOfLines={1}>
+                  {t("orgMentionInChat", { count: item.inChatCount })}
+                </Text>
+              </View>
+            </Pressable>
+          ))}
+          {departments.length > 0 && suggestions.length > 0 && (
+            <Text
+              tone="muted"
+              size={12}
+              weight="semibold"
+              style={styles.mentionSection}
+            >
+              {t("orgMentionPeople").toLocaleUpperCase()}
+            </Text>
+          )}
           {suggestions.map((member) => (
             <Pressable
               key={member.actor_id}
@@ -531,6 +592,14 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
   },
   handle: { maxWidth: "45%", flexShrink: 1 },
+  // Prototype: `.tsec` headings of the @ menu, `.su` rows with a caption.
+  mentionSection: {
+    paddingHorizontal: spacing[3],
+    paddingTop: 8,
+    paddingBottom: 4,
+    letterSpacing: 0.5,
+  },
+  tall: { minHeight: 52, paddingVertical: 6 },
   suggestions: {
     maxHeight: 220,
     borderWidth: 1,

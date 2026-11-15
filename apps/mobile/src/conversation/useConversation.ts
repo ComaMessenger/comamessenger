@@ -9,7 +9,8 @@ import {
   canManageChat,
   isReadOnly,
   mentionedActorIDs,
-  resolvedMentionActorIDs,
+  mentionedDepartmentIDs,
+  messageMentionFields,
   typingScope,
   updateMentionText,
   type ClientMessage,
@@ -23,6 +24,8 @@ import { cachedMessages, withCache } from "@/messenger/cache";
 import { syncDraft } from "@/lib/drafts";
 import { useMessenger } from "@/messenger/MessengerProvider";
 import { useSignedIn } from "@/session/SessionProvider";
+import { useOrg } from "@/org/useOrg";
+import { noteSentMessage } from "@/org/mentionNotes";
 
 const noMessages: ClientMessage[] = [];
 
@@ -48,6 +51,8 @@ export function useConversation(
 ) {
   const { api, user } = useSignedIn();
   const { store, coordinator, outbox, scheduleReload } = useMessenger();
+  // @отдел goes to mentioned_department_ids with org_structure (wave 2).
+  const { structure } = useOrg();
   const queryClient = useQueryClient();
   const chat = useStore(store, (state) => state.chats[chatID]);
   const stored = useStore(
@@ -299,20 +304,28 @@ export function useConversation(
       setBody("");
       lastTyping.current = 0;
       coordinator.typing(chatID, false, threadRootID);
-      const mentioned = resolvedMentionActorIDs(content, members, presence);
+      const mentioned = messageMentionFields(content, {
+        members,
+        presence,
+        structure,
+      });
       return {
         content,
         deliver: async (files: FileMetadata[]) => {
           if ((!content && !files.length) || (chat && isReadOnly(chat))) return;
+          const clientMsgID = crypto.randomUUID();
+          // «Уведомлены N человек из отдела …» under messages of this session.
+          if (mentioned.mentioned_department_ids?.length)
+            noteSentMessage(clientMsgID);
           await outbox.enqueue(
             chatID,
             {
-              client_msg_id: crypto.randomUUID(),
+              client_msg_id: clientMsgID,
               body: content,
               body_format: "markdown",
               reply_to_id: replyTo?.id,
               thread_root_id: threadRootID ?? undefined,
-              mentioned_actor_ids: mentioned,
+              ...mentioned,
               file_ids: files.length ? files.map((file) => file.id) : undefined,
               // Recipients are notified as usual, without sound or vibration.
               ...(options.silent ? { silent: true } : {}),
@@ -322,7 +335,17 @@ export function useConversation(
         },
       };
     },
-    [body, chat, chatID, coordinator, members, outbox, presence, threadRootID],
+    [
+      body,
+      chat,
+      chatID,
+      coordinator,
+      members,
+      outbox,
+      presence,
+      structure,
+      threadRootID,
+    ],
   );
 
   const send = useCallback(
@@ -343,16 +366,23 @@ export function useConversation(
       const original = decodeMentions(message.body);
       if (!nextText.trim() || nextText === original.text) return;
       const nextBody = encodeMentions(updateMentionText(original, nextText));
+      const departmentIDs = structure?.departments.map((item) => item.id);
+      const departments = departmentIDs
+        ? mentionedDepartmentIDs(nextBody, departmentIDs)
+        : [];
       const updated = await api.updateMessage(message.id, {
         body: nextBody,
         body_format: "markdown",
         expected_version: message.version,
-        mentioned_actor_ids: mentionedActorIDs(nextBody),
+        mentioned_actor_ids: mentionedActorIDs(nextBody, departmentIDs),
+        ...(departments.length
+          ? { mentioned_department_ids: departments }
+          : {}),
       });
       store.getState().reconcile(updated);
       scheduleReload();
     },
-    [api, scheduleReload, store],
+    [api, scheduleReload, store, structure],
   );
 
   /** Applies a message returned by a command (a card press) before its event arrives. */

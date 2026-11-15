@@ -1,0 +1,47 @@
+# Phase 6.5 wave 2: @отдел in the composer. Departments come first in the
+# @ menu with how many of their people are in this chat; after sending, the
+# author sees «Уведомлены N человек из отдела …» under the message.
+# Seed first (it makes «Планёрка ЛФК» the first chat), then run after
+# sign-in.yaml:
+#   COMA_API=… node e2e/seed-org.mjs && maestro test -e THEME=light e2e/org-mention.yaml
+appId: com.comamessenger.app
+---
+- runFlow: open-app.yaml
+- extendedWaitUntil:
+    visible: ".*Планёрка ЛФК.*"
+    timeout: 15000
+- tapOn:
+    id: chat-row-0
+- extendedWaitUntil:
+    visible:
+      id: composer-input
+    timeout: 10000
+- evalScript: ${output.tag = String(Date.now()).slice(-6)}
+- tapOn:
+    id: composer-input
+- runFlow:
+    when:
+      visible: Continue
+    commands:
+      - tapOn: Continue
+      - tapOn:
+          id: composer-input
+- inputText: "@Зал"
+- extendedWaitUntil:
+    visible:
+      id: mention-department-0
+    timeout: 10000
+# Ирина and Олег of «Зал ЛФК» and Пётр («совм.») are in the chat.
+- assertVisible: .*3 человека из отдела в этом чате.*
+- takeScreenshot: org-mention-menu-${THEME}
+- tapOn:
+    id: mention-department-0
+- inputText: "завтра в 8:30 планёрка ${output.tag}"
+- tapOn:
+    id: composer-send
+- extendedWaitUntil:
+    visible:
+      id: department-mention-note
+    timeout: 15000
+- assertVisible: .*Уведомлены 3 человека из отдела «Зал ЛФК».*
+- takeScreenshot: org-mention-note-${THEME}

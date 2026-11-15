@@ -56,6 +56,8 @@ export const PersonRow = memo(function PersonRow({
   person,
   presence,
   meta,
+  tags,
+  tagsLabel,
   selected,
   busy,
   trailing,
@@ -68,6 +70,10 @@ export const PersonRow = memo(function PersonRow({
   presence?: Presence;
   /** Replaces the job title line, e.g. the role in a chat. */
   meta?: string;
+  /** After the name: «рук.», «совм.» of the org structure. */
+  tags?: ReactNode;
+  /** What the tags say, for the row's accessibility label. */
+  tagsLabel?: string;
   selected?: boolean;
   busy?: boolean;
   trailing?: ReactNode;
@@ -85,6 +91,7 @@ export const PersonRow = memo(function PersonRow({
   const label = [
     person.display_name,
     agent ? t("agent") : null,
+    tagsLabel,
     line,
     state === "online" ? t("online") : null,
   ]
@@ -129,6 +136,7 @@ export const PersonRow = memo(function PersonRow({
             {person.display_name}
           </Text>
           {agent ? <AgentTag /> : null}
+          {tags}
           {person.status_emoji ? (
             <Text size={14} accessibilityElementsHidden>
               {person.status_emoji}

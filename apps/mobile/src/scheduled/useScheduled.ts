@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import {
   failureReasonKey,
   mentionedActorIDs,
+  mentionedDepartmentIDs,
   notRetryableReason,
   removeScheduled,
   scheduledErrorKind,
@@ -15,6 +16,7 @@ import {
 } from "@comamessenger/core";
 import { withCache } from "@/messenger/cache";
 import { useSignedIn } from "@/session/SessionProvider";
+import { useOrg } from "@/org/useOrg";
 import { refreshRecord, scheduledKey, setItems } from "./scheduledCache";
 
 export { applyScheduledEvent, scheduledKey } from "./scheduledCache";
@@ -100,6 +102,23 @@ export type ScheduledActions = ReturnType<typeof useScheduledActions>;
  * the screen shows what is true now, and says why the action did not apply.
  */
 export function useScheduledActions(notify: (text: string) => void) {
+  const { structure } = useOrg();
+  // @отдел of the edited text goes to mentioned_department_ids (wave 2).
+  const editedMentions = useCallback(
+    (body: string) => {
+      const departmentIDs = structure?.departments.map((item) => item.id);
+      const departments = departmentIDs
+        ? mentionedDepartmentIDs(body, departmentIDs)
+        : [];
+      return {
+        mentioned_actor_ids: mentionedActorIDs(body, departmentIDs),
+        ...(departments.length
+          ? { mentioned_department_ids: departments }
+          : {}),
+      };
+    },
+    [structure],
+  );
   const { t } = useTranslation();
   const { api, user } = useSignedIn();
   const queryClient = useQueryClient();
@@ -174,7 +193,7 @@ export function useScheduledActions(notify: (text: string) => void) {
               ? {
                   body: change.body,
                   body_format: "markdown" as const,
-                  mentioned_actor_ids: mentionedActorIDs(change.body),
+                  ...editedMentions(change.body),
                 }
               : {}),
           });
@@ -188,7 +207,7 @@ export function useScheduledActions(notify: (text: string) => void) {
           return null;
         }
       }),
-    [api, fail, notify, queryClient, run, user.id],
+    [api, editedMentions, fail, notify, queryClient, run, user.id],
   );
 
   const remove = useCallback(

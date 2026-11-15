@@ -25,10 +25,12 @@ import {
   requestLimits,
   requestOptionLabels,
   requestPresetLabelKeys,
+  audienceSegments,
   requestRecipientIDs,
   toCreateRequestInput,
   type ChatMember,
   type RequestDraft,
+  type RequestDraftAudience,
   type RequestDraftProblem,
 } from "@comamessenger/core";
 import { radius, spacing } from "@comamessenger/tokens";
@@ -42,6 +44,8 @@ import { BottomSheet } from "@/ui/BottomSheet";
 import { Text, fonts, maxTextScale } from "@/ui/Text";
 import { useClock, useNow } from "@/scheduled/clock";
 import { combine, formatDate, formatTime } from "@/scheduled/format";
+import { RequestGroupChoice } from "@/org/RequestGroupChoice";
+import { useOrg } from "@/org/useOrg";
 import { calendarLocale } from "./locale";
 import { sendRequest } from "./outbox";
 import { useRequestErrorText } from "./useRequestActions";
@@ -77,6 +81,17 @@ function blank(draft: RequestDraft) {
   return !draft.body.trim();
 }
 
+/** A department or position not chosen yet, or nobody of it in the chat. */
+function groupProblemKey(audience: RequestDraftAudience): string | null {
+  if (audience.kind === "department")
+    return audience.departmentID
+      ? "orgRequestNobody"
+      : "orgRequestPickDepartment";
+  if (audience.kind === "position")
+    return audience.positionID ? "orgRequestNobody" : "orgRequestPickPosition";
+  return null;
+}
+
 function problemKey(problem: RequestDraftProblem): string {
   switch (problem.field) {
     case "body":
@@ -110,12 +125,15 @@ export function RequestSheet({
   visible,
   chatID,
   members,
+  audience,
   onClose,
   onNotice,
 }: {
   visible: boolean;
   chatID: string;
   members: ChatMember[];
+  /** Whom to ask, set by the opener (a department or a person card). */
+  audience?: RequestDraftAudience;
   onClose(): void;
   onNotice(text: string): void;
 }) {
@@ -133,17 +151,26 @@ export function RequestSheet({
   const [sending, setSending] = useState(false);
   const [tried, setTried] = useState(false);
   const loaded = useRef<string | null>(null);
+  // Wave 2: «Отдел» and «Должность» with requests.address_groups.
+  const org = useOrg();
+  const segments = audienceSegments(user, org.features, org.structure);
 
   // The form of this chat comes back as it was left.
   useEffect(() => {
-    if (!visible || loaded.current === chatID) return;
+    if (!visible || loaded.current === chatID) {
+      if (visible && audience) update({ audience });
+      return;
+    }
     loaded.current = chatID;
     void accountValues
       .get<StoredDraft>(draftKey(chatID))
       .then((stored) => {
         const restored = fromStored(stored);
-        if (!restored) return;
-        setDraft(restored);
+        if (!restored) {
+          if (audience) update({ audience });
+          return;
+        }
+        setDraft(audience ? { ...restored, audience } : restored);
         setCustomDue(
           restored.dueAt !== null &&
             !requestDuePresets(new Date()).some(
@@ -152,6 +179,8 @@ export function RequestSheet({
         );
       })
       .catch(() => undefined);
+    // The opener's audience applies once per opening.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatID, visible]);
 
   function update(patch: Partial<RequestDraft>) {
@@ -171,9 +200,16 @@ export function RequestSheet({
       ),
     [members, user.id],
   );
+  // A kept draft for a department or position the author may no longer
+  // address falls back to the whole chat.
+  const allowed = segments.includes(draft.audience.kind);
+  const audienceNow: RequestDraftAudience = useMemo(
+    () => (allowed ? draft.audience : { kind: "chat" }),
+    [allowed, draft.audience],
+  );
   const recipients = useMemo(
-    () => requestRecipientIDs(draft.audience, members, user.id),
-    [draft.audience, members, user.id],
+    () => requestRecipientIDs(audienceNow, members, user.id, org.structure),
+    [audienceNow, members, user.id, org.structure],
   );
   const problem = requestDraftProblem(draft, now, recipients.length);
   const options = requestOptionLabels(
@@ -263,7 +299,11 @@ export function RequestSheet({
     const sentAt = new Date();
     try {
       const result = await sendRequest(api, store, chatID, (clientMsgID) =>
-        toCreateRequestInput(draft, clientMsgID, sentAt),
+        toCreateRequestInput(
+          { ...draft, audience: audienceNow },
+          clientMsgID,
+          sentAt,
+        ),
       );
       if (result.kind === "refused") {
         Alert.alert(t("requestSendFailed"), errorText(result.error));
@@ -320,20 +360,42 @@ export function RequestSheet({
       <SectionLabel>{t("requestWhoLabel")}</SectionLabel>
       <Segmented
         testID="request-audience"
-        value={draft.audience.kind}
-        options={[
-          { value: "chat", label: t("requestAudienceChat") },
-          { value: "people", label: t("requestAudiencePeople") },
-        ]}
+        value={audienceNow.kind}
+        options={segments.map((kind) => ({
+          value: kind,
+          label: t(
+            {
+              chat: "requestAudienceChat",
+              people: "requestAudiencePeople",
+              department: "orgRequestDepartment",
+              position: "orgRequestPosition",
+            }[kind],
+          ),
+        }))}
         onChange={(kind) =>
           update({
             audience:
               kind === "chat"
                 ? { kind: "chat" }
-                : { kind: "people", actorIDs: chosen },
+                : kind === "people"
+                  ? { kind: "people", actorIDs: chosen }
+                  : kind === "department"
+                    ? { kind: "department", departmentID: "" }
+                    : { kind: "position", positionID: "" },
           })
         }
       />
+      {(audienceNow.kind === "department" || audienceNow.kind === "position") &&
+      org.structure ? (
+        <RequestGroupChoice
+          kind={audienceNow.kind}
+          audience={audienceNow}
+          structure={org.structure}
+          members={members}
+          authorID={user.id}
+          onChange={(next) => update({ audience: next })}
+        />
+      ) : null}
       {draft.audience.kind === "people" ? (
         <View style={[styles.chips, styles.peopleChips]}>
           {people.map((member) => {
@@ -381,7 +443,7 @@ export function RequestSheet({
       </View>
       {tried && problem?.field === "audience" ? (
         <Text tone="danger" size={13}>
-          {t(problemKey(problem))}
+          {t(groupProblemKey(audienceNow) ?? problemKey(problem))}
         </Text>
       ) : null}
 

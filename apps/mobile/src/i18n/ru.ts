@@ -1,4 +1,5 @@
 import { agentBuilderRu } from "../agents/builder/i18n";
+import { orgRu } from "../org/i18n";
 
 export const ru = {
   // Server
@@ -1479,6 +1480,7 @@ export const ru = {
 
   // Agent builder and Architect
   ...agentBuilderRu,
+  ...orgRu,
 
   // Knowledge base (keys shared with apps/web/src/knowledge/i18n.ts)
   knowledgeBase: "База знаний",

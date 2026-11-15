@@ -50,7 +50,16 @@ import {
 import { TabChip } from "@/ui/TabChip";
 import { Text } from "@/ui/Text";
 import { TextField } from "@/ui/TextField";
+import { MemberOrgGroup } from "@/org/MemberOrgGroup";
+import { useOrg } from "@/org/useOrg";
 import { SettingsScreen, settingsContent } from "./SettingsScreen";
+
+/** The second line of each member permission switch. */
+const memberPermissionHintKeys: Partial<Record<Permission, string>> = {
+  "knowledge.manage": "memberPermissionHint_knowledge",
+  "org.manage": "memberPermissionHint_org",
+  "requests.address_groups": "memberPermissionHint_address",
+};
 
 export const membersKey = ["organization-members"] as const;
 
@@ -216,6 +225,11 @@ export function MemberScreen({ actorID }: { actorID: string }) {
   const members = useMembers(allowed);
   const member = members.data?.find((item) => item.actor_id === actorID);
   const [busy, setBusy] = useState<string | null>(null);
+  const org = useOrg();
+  const features = org.features;
+  // The org group needs org.manage or members.manage; this screen already
+  // requires members.manage.
+  const orgAvailable = org.canManage && Boolean(org.structure);
 
   async function run(
     key: string,
@@ -281,6 +295,7 @@ export function MemberScreen({ actorID }: { actorID: string }) {
         (() => {
           const rules = memberRules(user, member, {
             passwordRecoveryAvailable: branding?.password_recovery_available,
+            features,
           });
           const active = member.status === "active";
           return (
@@ -364,31 +379,48 @@ export function MemberScreen({ actorID }: { actorID: string }) {
                 )}
               </SettingsGroup>
 
-              {rules.showsKnowledgePermission && (
+              {rules.memberPermissions.length > 0 && (
                 <SettingsGroup
-                  title={t("kbPermissionTitle")}
+                  title={t("orgMemberPermissions")}
                   hint={
-                    rules.canGrantKnowledge
-                      ? t("kbPermissionHint")
-                      : t("kbPermissionNeedsOwn")
+                    rules.memberPermissions.every((item) => item.enabled)
+                      ? undefined
+                      : t("orgMemberPermissionsHint")
                   }
                 >
-                  <SwitchRow
-                    testID="member-knowledge"
-                    label={t("kbPermissionToggle")}
-                    value={member.permissions.includes("knowledge.manage")}
-                    disabled={!rules.canGrantKnowledge || busy !== null}
-                    onChange={(checked) =>
-                      void update("permissions", {
-                        permissions: withPermission(
-                          member.permissions,
-                          "knowledge.manage",
-                          checked,
-                        ),
-                      })
-                    }
-                  />
+                  {rules.memberPermissions.map((item, index) => (
+                    <View key={item.code}>
+                      {index > 0 && <Divider />}
+                      <SwitchRow
+                        testID={
+                          item.code === "knowledge.manage"
+                            ? "member-knowledge"
+                            : `member-permission-${item.code}`
+                        }
+                        label={t(permissionLabelKeys[item.code])}
+                        hint={t(memberPermissionHintKeys[item.code] ?? "")}
+                        value={item.granted}
+                        disabled={!item.enabled || busy !== null}
+                        onChange={(checked) =>
+                          void update("permissions", {
+                            permissions: withPermission(
+                              member.permissions,
+                              item.code,
+                              checked,
+                            ),
+                          })
+                        }
+                      />
+                    </View>
+                  ))}
                 </SettingsGroup>
+              )}
+
+              {orgAvailable && member.status === "active" && (
+                <MemberOrgGroup
+                  actorID={member.actor_id}
+                  name={member.display_name}
+                />
               )}
 
               {rules.showsAdminPermissions && (

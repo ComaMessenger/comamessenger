@@ -1,0 +1,63 @@
+# Phase 6.5 wave 2: «Ещё → Оргструктура»: the tree, collapsing a branch,
+# search, the department card from a result.
+# Seed first, then run after sign-in.yaml:
+#   COMA_API=… node e2e/seed-org.mjs && maestro test -e THEME=light e2e/org-tree.yaml
+appId: com.comamessenger.app
+---
+- runFlow: open-app.yaml
+- runFlow:
+    file: tabs.yaml
+    env:
+      TAB: more
+- tapOn:
+    id: open-org
+- extendedWaitUntil:
+    visible:
+      id: org-tree-list
+    timeout: 15000
+- extendedWaitUntil:
+    visible: ".*Зал ЛФК.*"
+    timeout: 10000
+- assertVisible: ".*Ирина Лебедева.*"
+- assertVisible: .*сотрудники вместе с подотделами.*
+- takeScreenshot: org-tree-${THEME}
+
+# The arrow of «Реабилитация» (second: «Медицинская служба» goes first) hides «Зал ЛФК» and «Бассейн» and survives
+# reopening the screen.
+- tapOn:
+    id: org-tree-toggle-1
+- assertNotVisible: ".*Зал ЛФК.*"
+- takeScreenshot: org-tree-collapsed-${THEME}
+- tapOn:
+    id: org-tree-back
+- tapOn:
+    id: open-org
+- extendedWaitUntil:
+    visible:
+      id: org-tree-list
+    timeout: 15000
+- assertNotVisible: ".*Зал ЛФК.*"
+- tapOn:
+    id: org-tree-toggle-1
+- extendedWaitUntil:
+    visible: ".*Зал ЛФК.*"
+    timeout: 5000
+
+# Search in the header: departments, positions and people.
+- tapOn:
+    id: org-tree-search
+- inputText: басс
+- extendedWaitUntil:
+    visible:
+      id: org-found-department-0
+    timeout: 5000
+- assertVisible: ".*Пётр Морозов.*"
+- takeScreenshot: org-tree-search-${THEME}
+- tapOn:
+    id: org-found-department-0
+- extendedWaitUntil:
+    visible:
+      id: department
+    timeout: 10000
+- assertVisible: ".*Бассейн.*"
+- takeScreenshot: org-tree-department-${THEME}

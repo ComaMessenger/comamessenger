@@ -3,12 +3,13 @@ import { Alert, Platform, type View } from "react-native";
 import * as Haptics from "expo-haptics";
 import { useTranslation } from "react-i18next";
 import {
-  resolvedMentionActorIDs,
+  messageMentionFields,
   scheduleRequestSignature,
   scheduledErrorKind,
   type ChatMember,
   type CreateScheduledMessageRequest,
 } from "@comamessenger/core";
+import { useOrg } from "@/org/useOrg";
 import { useWhen } from "./clock";
 import { ScheduleSheet } from "./ScheduleSheet";
 import { SendOptionsMenu, type SendMode } from "./SendOptionsMenu";
@@ -55,6 +56,7 @@ export function useScheduleComposer({
   const { t } = useTranslation();
   const when = useWhen();
   const { create } = useScheduledActions(noop);
+  const { structure } = useOrg();
   // The send button: the menu is measured from it, not from the finger.
   const sendRef = useRef<View>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -109,7 +111,7 @@ export function useScheduleComposer({
         ...(threadRootID ? { thread_root_id: threadRootID } : {}),
         ...(current.fileIDs.length ? { file_ids: current.fileIDs } : {}),
         // @here means who is online when it is sent; that is unknown now.
-        mentioned_actor_ids: resolvedMentionActorIDs(body, members, {}),
+        ...messageMentionFields(body, { members, presence: {}, structure }),
         ...(silent ? { silent: true } : {}),
       };
       const signature = scheduleRequestSignature(request);
@@ -145,6 +147,7 @@ export function useScheduleComposer({
       members,
       onNotice,
       onScheduled,
+      structure,
       t,
       threadRootID,
       when,

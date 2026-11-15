@@ -1,4 +1,5 @@
 import { agentBuilderEn } from "../agents/builder/i18n";
+import { orgEn } from "../org/i18n";
 import type { ru } from "./ru";
 
 export const en: Record<keyof typeof ru, string> = {
@@ -1445,6 +1446,7 @@ export const en: Record<keyof typeof ru, string> = {
 
   // Agent builder and Architect
   ...agentBuilderEn,
+  ...orgEn,
 
   // Knowledge base (keys shared with apps/web/src/knowledge/i18n.ts)
   knowledgeBase: "Knowledge base",

@@ -10,6 +10,8 @@ import {
 } from "@comamessenger/core";
 import { radius, spacing } from "@comamessenger/tokens";
 import { useTheme } from "@/lib/theme";
+import { useStore } from "zustand";
+import { useMessenger } from "@/messenger/MessengerProvider";
 import { useSignedIn } from "@/session/SessionProvider";
 import {
   Divider,
@@ -31,7 +33,9 @@ export function WorkspaceOverview() {
   const { t } = useTranslation();
   const theme = useTheme();
   const { user } = useSignedIn();
-  const pages = workspaceOverviewLinks(user);
+  const { store } = useMessenger();
+  const features = useStore(store, (state) => state.features);
+  const pages = workspaceOverviewLinks(user, features);
   return (
     <SettingsScreen
       title={t("workspaceSettings")}

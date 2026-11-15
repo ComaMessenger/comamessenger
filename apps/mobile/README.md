@@ -70,6 +70,8 @@ The knowledge base flow seeds its collections through the API first: `node e2e/s
 
 The walkthrough keeps to its own chat «Обход интерфейса» and appends a fresh set of messages there before each run, so it passes on a clean instance and after other flows: `node e2e/seed-walkthrough.mjs && maestro test -e THEME=light e2e/walkthrough.yaml`.
 
+The org structure flows (phase 6.5 wave 2) rebuild their departments, positions and the chat «Планёрка ЛФК» through the API first; the seed is safe to repeat: `node e2e/seed-org.mjs && maestro test -e THEME=light e2e/org-people.yaml` (then `org-tree`, `org-admin`, `org-mention`, `org-request`, each after its own seed run). The server needs `org_structure` in hello.
+
 Maestro needs a JDK; the one bundled with Android Studio works: `export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"`.
 
 ## Checks
