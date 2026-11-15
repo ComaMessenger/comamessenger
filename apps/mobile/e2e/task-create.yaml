@@ -107,7 +107,7 @@ appId: com.comamessenger.app
     id: chat-slot-tasks
 - extendedWaitUntil:
     visible:
-      id: chat-tasks-drop
+      id: drop-all
     timeout: 5000
 - takeScreenshot: ${THEME}-task-drop
 - tapOn:
@@ -116,10 +116,11 @@ appId: com.comamessenger.app
     visible:
       id: chat-tasks
     timeout: 10000
-- assertVisible: .*Подготовить зал к среде ${output.tag}.*
+- assertVisible: "Подготовить зал к среде ${output.tag}, .*"
 - takeScreenshot: ${THEME}-task-all
-# The task screen of a row.
-- tapOn: .*Подготовить зал к среде ${output.tag}.*
+# The task screen of a row (the title itself: the round check of the row
+# is labelled «Готово: …» and would close the task).
+- tapOn: "Подготовить зал к среде ${output.tag}, .*"
 - extendedWaitUntil:
     visible:
       id: task-screen

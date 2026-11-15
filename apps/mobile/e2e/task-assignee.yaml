@@ -29,7 +29,7 @@ appId: com.comamessenger.app
     id: chat-slot-hot
 - extendedWaitUntil:
     visible:
-      id: chat-tasks-drop
+      id: drop-all
     timeout: 5000
 - assertVisible: НА ВАС · 2
 - takeScreenshot: ${THEME}-task-drop-mine
@@ -37,7 +37,7 @@ appId: com.comamessenger.app
     id: chat-slot-hot
 - extendedWaitUntil:
     notVisible:
-      id: chat-tasks-drop
+      id: drop-all
     timeout: 5000
 - tapOn:
     id: chat-slot-complete

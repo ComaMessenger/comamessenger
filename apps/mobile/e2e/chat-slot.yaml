@@ -72,7 +72,7 @@ appId: com.comamessenger.app
 - tapOn:
     id: chat-slot-pinned
 - extendedWaitUntil:
-    visible: Ключи от раздевалки теперь на стойке администратора
+    visible: .*Ключи от раздевалки теперь на стойке администратора.*
     timeout: 10000
 - runScript: scripts/clear-scheduled.js
 - tapOn:

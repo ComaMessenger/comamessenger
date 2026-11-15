@@ -5,7 +5,6 @@ import {
   formatTaskDue,
   isTaskActive,
   isTaskHot,
-  isTaskOnMe,
   taskPermissions,
   type ChatMember,
   type Message,
@@ -72,19 +71,18 @@ export const TaskRow = memo(function TaskRow({
     ? permissions.complete
     : done && permissions.reopen;
   const hot = isTaskHot(task, now);
-  const onMe = isTaskOnMe(task, viewer.actorID);
   const everyone = [...(members ?? []), ...(people ?? [])];
   const person = (id: string) =>
     everyone.find((member) => member.actor_id === id);
   const assigneeID = task.assignee.actor_id;
-  const who = onMe
-    ? t("taskOnYou")
-    : assigneeID
-      ? assigneeID === viewer.actorID
-        ? t("taskYou")
-        : // First names in lists, as in the prototype («Олег · сегодня, 17:00»).
-          (person(assigneeID)?.display_name.split(/\s+/)[0] ?? t("taskSomeone"))
-      : task.assignee.label;
+  // «на вас» when the reader answers for it; an item of theirs keeps the
+  // name of the responsible person, as in the prototype.
+  const who = assigneeID
+    ? assigneeID === viewer.actorID
+      ? t("taskOnYou")
+      : // First names in lists, as in the prototype («Олег · сегодня, 17:00»).
+        (person(assigneeID)?.display_name.split(/\s+/)[0] ?? t("taskSomeone"))
+    : task.assignee.label;
   const parts = [
     task.due_at
       ? {
@@ -170,7 +168,10 @@ export const TaskRow = memo(function TaskRow({
                 weight={part.hot ? "semibold" : "regular"}
                 style={{ color: part.hot ? theme.danger : theme.muted }}
               >
-                {` · ${part.text}`}
+                <Text size={12.5} style={{ color: theme.muted }}>
+                  {" · "}
+                </Text>
+                {part.text}
               </Text>
             ))}
           </Text>
