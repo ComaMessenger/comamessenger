@@ -115,9 +115,7 @@ export function PersonScreen({ actorID }: { actorID: string }) {
       ? currentAway(person.actor_id, person.away, overrides)
       : null;
   const awayNow = useAwayNow([away]);
-  const badge = agent
-    ? null
-    : avatarBadge(presence ?? null, away, awayNow);
+  const badge = agent ? null : avatarBadge(presence ?? null, away, awayNow);
   const status = person
     ? shownStatus(
         { ...person, away },

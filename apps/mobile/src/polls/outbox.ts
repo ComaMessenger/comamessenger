@@ -73,7 +73,10 @@ export function sendPoll(
 }
 
 /** Sends what is waiting for the network; stops at the first network failure. */
-export function flushPollOutbox(api: API, store: MessengerStore): Promise<void> {
+export function flushPollOutbox(
+  api: API,
+  store: MessengerStore,
+): Promise<void> {
   return serial(async () => {
     let items = await load();
     for (const entry of [...items]) {

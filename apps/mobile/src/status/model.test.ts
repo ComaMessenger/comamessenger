@@ -9,12 +9,32 @@ const peer = (id: string, name: string, type: "user" | "agent" = "user") => ({
 
 describe("«Вместо меня»", () => {
   const chats = [
-    { kind: "direct" as const, direct_peer: peer("oleg", "Олег Чернов"), last_activity_seq: 5 },
+    {
+      kind: "direct" as const,
+      direct_peer: peer("oleg", "Олег Чернов"),
+      last_activity_seq: 5,
+    },
     { kind: "group" as const, direct_peer: null, last_activity_seq: 9 },
-    { kind: "direct" as const, direct_peer: peer("bot", "Помощник", "agent"), last_activity_seq: 8 },
-    { kind: "direct" as const, direct_peer: peer("marina", "Марина Соколова"), last_activity_seq: 7 },
-    { kind: "direct" as const, direct_peer: peer("me", "Анна Иванова"), last_activity_seq: 6 },
-    { kind: "direct" as const, direct_peer: peer("igor", "Игорь Лаптев"), last_activity_seq: 1 },
+    {
+      kind: "direct" as const,
+      direct_peer: peer("bot", "Помощник", "agent"),
+      last_activity_seq: 8,
+    },
+    {
+      kind: "direct" as const,
+      direct_peer: peer("marina", "Марина Соколова"),
+      last_activity_seq: 7,
+    },
+    {
+      kind: "direct" as const,
+      direct_peer: peer("me", "Анна Иванова"),
+      last_activity_seq: 6,
+    },
+    {
+      kind: "direct" as const,
+      direct_peer: peer("igor", "Игорь Лаптев"),
+      last_activity_seq: 1,
+    },
   ] as never[];
 
   it("offers the people of the latest direct chats, not agents or oneself", () => {

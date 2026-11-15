@@ -42,16 +42,23 @@ describe("the poll queue", () => {
     expect(queuedPollFor(changed.items, "chat", first.entry.signature)).toBe(
       first.entry,
     );
-    expect(withoutPoll(changed.items, "id-1").map((item) => item.clientMsgID))
-      .toEqual(["id-2", "id-3"]);
+    expect(
+      withoutPoll(changed.items, "id-1").map((item) => item.clientMsgID),
+    ).toEqual(["id-2", "id-3"]);
   });
 
   it("keeps a poll for the network, drops one the server refused", async () => {
-    const entry: QueuedPoll = enqueuePoll([], "chat", input, () => "x", now)
-      .entry;
-    expect(
-      await sendQueuedPoll(entry, async () => ({ id: "m1" })),
-    ).toEqual({ kind: "sent", message: { id: "m1" } });
+    const entry: QueuedPoll = enqueuePoll(
+      [],
+      "chat",
+      input,
+      () => "x",
+      now,
+    ).entry;
+    expect(await sendQueuedPoll(entry, async () => ({ id: "m1" }))).toEqual({
+      kind: "sent",
+      message: { id: "m1" },
+    });
     expect(
       await sendQueuedPoll(entry, async () => {
         throw new TypeError("Network request failed");

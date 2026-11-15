@@ -290,9 +290,7 @@ export default function MoreScreen() {
                   >
                     <Repeat2 size={20} color={theme.primary} />
                     <Text weight="medium" size={15} style={styles.grow}>
-                      {name
-                        ? substitutingLine(entry, name, now, locale)
-                        : "…"}
+                      {name ? substitutingLine(entry, name, now, locale) : "…"}
                     </Text>
                     <ChevronRight size={20} color={theme.subtle} />
                   </Pressable>

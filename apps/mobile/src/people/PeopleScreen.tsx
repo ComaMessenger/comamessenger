@@ -332,96 +332,104 @@ export function PeopleScreen() {
             style={styles.chipsScroll}
             contentContainerStyle={styles.chips}
           >
-            {filters.map((item) => (
-              <TabChip
-                key={item.value}
-                testID={`people-filter-${item.value}`}
-                label={item.label}
-                count={
-                  item.value === "online"
-                    ? counts.online
-                    : item.value === "all" && presenceFilters.length
-                      ? presenceCounts.all
-                      : undefined
-                }
-                selected={filter === item.value && !byPresence}
-                onPress={() => {
-                  setFilter(item.value);
-                  setPresenceFilter("all");
-                }}
-              />
-            )).flatMap((chip, index) =>
-              // «На месте» and «Отсутствуют» right after «Все».
-              index === 0
-                ? [
-                    chip,
-                    ...presenceFilters
-                      .filter((value) => value !== "all")
-                      .map((value) => (
-                        <TabChip
-                          key={`presence-${value}`}
-                          testID={`people-filter-${value}`}
-                          label={t(awayPresenceFilterLabelKeys[value])}
-                          count={presenceCounts[value]}
-                          selected={presenceFilter === value}
-                          onPress={() => {
-                            setFilter("all");
-                            setPresenceFilter(value);
-                          }}
-                        />
-                      )),
-                  ]
-                : [chip],
-            )}
+            {filters
+              .map((item) => (
+                <TabChip
+                  key={item.value}
+                  testID={`people-filter-${item.value}`}
+                  label={item.label}
+                  count={
+                    item.value === "online"
+                      ? counts.online
+                      : item.value === "all" && presenceFilters.length
+                        ? presenceCounts.all
+                        : undefined
+                  }
+                  selected={filter === item.value && !byPresence}
+                  onPress={() => {
+                    setFilter(item.value);
+                    setPresenceFilter("all");
+                  }}
+                />
+              ))
+              .flatMap((chip, index) =>
+                // «На месте» and «Отсутствуют» right after «Все».
+                index === 0
+                  ? [
+                      chip,
+                      ...presenceFilters
+                        .filter((value) => value !== "all")
+                        .map((value) => (
+                          <TabChip
+                            key={`presence-${value}`}
+                            testID={`people-filter-${value}`}
+                            label={t(awayPresenceFilterLabelKeys[value])}
+                            count={presenceCounts[value]}
+                            selected={presenceFilter === value}
+                            onPress={() => {
+                              setFilter("all");
+                              setPresenceFilter(value);
+                            }}
+                          />
+                        )),
+                    ]
+                  : [chip],
+              )}
           </ScrollView>
           {byPresence ? (
             <PresencePeople filter={presenceFilter} structure={null} />
           ) : (
-          <FlatList
-            testID="people-list"
-            data={directory.people}
-            keyExtractor={(person) => person.actor_id}
-            keyboardDismissMode="on-drag"
-            keyboardShouldPersistTaps="handled"
-            onEndReached={directory.loadMore}
-            onEndReachedThreshold={0.5}
-            renderItem={({ item, index }) => (
-              <PersonRow
-                testID={`person-row-${index}`}
-                person={item}
-                presence={directory.presence[item.actor_id]}
-                hint={t("openProfileHint")}
-                onPress={() => router.push(`/people/${item.actor_id}`)}
-              />
-            )}
-            ListFooterComponent={
-              directory.loadingMore || directory.searching ? (
-                <ActivityIndicator style={styles.loader} color={theme.muted} />
-              ) : null
-            }
-            ListEmptyComponent={
-              directory.loading ? (
-                <ActivityIndicator style={styles.loader} color={theme.muted} />
-              ) : directory.failed ? (
-                <View style={styles.state}>
-                  <Notice
-                    title={t("peopleLoadFailed")}
-                    actionLabel={t("retry")}
-                    onAction={directory.refetch}
+            <FlatList
+              testID="people-list"
+              data={directory.people}
+              keyExtractor={(person) => person.actor_id}
+              keyboardDismissMode="on-drag"
+              keyboardShouldPersistTaps="handled"
+              onEndReached={directory.loadMore}
+              onEndReachedThreshold={0.5}
+              renderItem={({ item, index }) => (
+                <PersonRow
+                  testID={`person-row-${index}`}
+                  person={item}
+                  presence={directory.presence[item.actor_id]}
+                  hint={t("openProfileHint")}
+                  onPress={() => router.push(`/people/${item.actor_id}`)}
+                />
+              )}
+              ListFooterComponent={
+                directory.loadingMore || directory.searching ? (
+                  <ActivityIndicator
+                    style={styles.loader}
+                    color={theme.muted}
                   />
-                </View>
-              ) : directory.searching ? null : (
-                <View style={styles.state}>
-                  <Text weight="semibold" size={16} style={styles.center}>
-                    {t("peopleEmpty")}
-                  </Text>
-                  <Text tone="muted" size={14} style={styles.center}>
-                    {t("peopleEmptyHint")}
-                  </Text>
-                </View>
-              )
-            }
-          />
+                ) : null
+              }
+              ListEmptyComponent={
+                directory.loading ? (
+                  <ActivityIndicator
+                    style={styles.loader}
+                    color={theme.muted}
+                  />
+                ) : directory.failed ? (
+                  <View style={styles.state}>
+                    <Notice
+                      title={t("peopleLoadFailed")}
+                      actionLabel={t("retry")}
+                      onAction={directory.refetch}
+                    />
+                  </View>
+                ) : directory.searching ? null : (
+                  <View style={styles.state}>
+                    <Text weight="semibold" size={16} style={styles.center}>
+                      {t("peopleEmpty")}
+                    </Text>
+                    <Text tone="muted" size={14} style={styles.center}>
+                      {t("peopleEmptyHint")}
+                    </Text>
+                  </View>
+                )
+              }
+            />
           )}
         </>
       )}

@@ -35,11 +35,7 @@ import {
 import { setLocale } from "@/i18n";
 import { applyThemePreference } from "@/lib/theme";
 import { createAppStore } from "./appStore";
-import {
-  cacheStorage,
-  checkpointStorage,
-  outboxStorage,
-} from "@/lib/database";
+import { cacheStorage, checkpointStorage, outboxStorage } from "@/lib/database";
 import { hydrateDrafts } from "@/lib/drafts";
 import { reactionsKey } from "@/conversation/reactions";
 import { invalidateChatDetails } from "@/chatinfo/queries";
@@ -96,10 +92,7 @@ export function useMessenger(): MessengerValue {
 export function MessengerProvider({ children }: { children: ReactNode }) {
   const { api, user } = useSignedIn();
   const { sessionExpired, updateUser } = useSession();
-  const store = useMemo(
-    () => createAppStore(api, user.id),
-    [api, user.id],
-  );
+  const store = useMemo(() => createAppStore(api, user.id), [api, user.id]);
   // Request-lived data (members, reactions, thread pages); event-lived state
   // stays in the domain store, as on the web (ADR-0009).
   const queryClient = useMemo(
@@ -248,11 +241,15 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
             // the own status when it changed elsewhere or started by itself.
             if (applied) {
               applyPollEvent(queryClient, user.id, event);
-              applyAwayEvent(queryClient, user.id, event, () =>
-                void api
-                  .me()
-                  .then(updateUser)
-                  .catch(() => undefined),
+              applyAwayEvent(
+                queryClient,
+                user.id,
+                event,
+                () =>
+                  void api
+                    .me()
+                    .then(updateUser)
+                    .catch(() => undefined),
               );
             }
             // Scheduled messages reach only the author's devices and carry
@@ -306,7 +303,9 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
             // Lost org.updated events: the structure is read again.
             void queryClient.invalidateQueries({ queryKey: orgKeys.all });
             void queryClient.invalidateQueries({ queryKey: ["away", user.id] });
-            void queryClient.invalidateQueries({ queryKey: ["polls", user.id] });
+            void queryClient.invalidateQueries({
+              queryKey: ["polls", user.id],
+            });
             await reload();
             if (active) {
               const page = await api.messages(active, { limit: 50 });

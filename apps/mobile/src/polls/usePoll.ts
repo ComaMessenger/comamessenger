@@ -21,7 +21,6 @@ import { invalidatePollLists } from "./lists";
 /** Polls being read right now, so cards on screen ask once. */
 const loading = new Set<string>();
 
-
 /**
  * The reader's viewer of one poll from the store. A poll that came by
  * realtime has none yet: it is read once. While the card is on screen the

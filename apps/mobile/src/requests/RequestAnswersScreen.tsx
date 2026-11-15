@@ -283,9 +283,7 @@ export function RequestAnswersScreen({
                   <Text weight="semibold" size={15} numberOfLines={1}>
                     {member?.display_name ?? t("participant")}
                   </Text>
-                  {member && awayOn ? (
-                    <AwayNote member={member} />
-                  ) : null}
+                  {member && awayOn ? <AwayNote member={member} /> : null}
                   <Text
                     size={13.5}
                     numberOfLines={3}

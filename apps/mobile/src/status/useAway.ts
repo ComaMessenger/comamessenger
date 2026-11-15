@@ -48,7 +48,10 @@ export function useAwayNow(
   useEffect(() => {
     const wait = Math.max(
       1_000,
-      Math.min(60_000, Number.isFinite(next) ? next - Date.now() + 500 : 60_000),
+      Math.min(
+        60_000,
+        Number.isFinite(next) ? next - Date.now() + 500 : 60_000,
+      ),
     );
     const timer = setTimeout(() => setNow(new Date()), wait);
     return () => clearTimeout(timer);

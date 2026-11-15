@@ -432,9 +432,7 @@ export function RequestSheet({
               audience: {
                 kind: "people",
                 actorIDs: [
-                  ...chosen.filter(
-                    (id) => id !== away && id !== substitute,
-                  ),
+                  ...chosen.filter((id) => id !== away && id !== substitute),
                   substitute,
                 ],
               },

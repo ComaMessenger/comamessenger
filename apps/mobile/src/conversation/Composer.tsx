@@ -363,7 +363,10 @@ export function Composer({
                   pressed && { backgroundColor: theme.surfaceSelected },
                 ]}
               >
-                <AwayBadge badge={avatarBadge(null, away, new Date())} size={28}>
+                <AwayBadge
+                  badge={avatarBadge(null, away, new Date())}
+                  size={28}
+                >
                   <Avatar
                     name={member.display_name}
                     seed={member.actor_id}

@@ -153,7 +153,8 @@ await call(
 
 const { chats } = await call("/api/v1/chats", {}, token);
 let direct = chats.find(
-  (item) => item.kind === "direct" && item.direct_peer?.actor_id === anna.user.id,
+  (item) =>
+    item.kind === "direct" && item.direct_peer?.actor_id === anna.user.id,
 );
 if (!direct)
   direct = await call(
@@ -170,7 +171,10 @@ let group = chats.find(
 if (!group)
   group = await call(
     "/api/v1/chats",
-    { method: "POST", body: JSON.stringify({ kind: "group", name: groupName }) },
+    {
+      method: "POST",
+      body: JSON.stringify({ kind: "group", name: groupName }),
+    },
     token,
   );
 const { members } = await call(`/api/v1/chats/${group.id}/members`, {}, token);
@@ -184,6 +188,20 @@ for (const person of people)
       },
       token,
     );
+// Анна writes in the direct chat (other «Анна Иванова» chats of other seeds
+// stay below it), then Марина in the group, so it is the latest chat.
+await call(
+  `/api/v1/chats/${direct.id}/messages`,
+  {
+    method: "POST",
+    body: JSON.stringify({
+      client_msg_id: crypto.randomUUID(),
+      body: "С понедельника ухожу в отпуск, слоты в бассейне отдала.",
+      body_format: "plain",
+    }),
+  },
+  anna.access_token,
+);
 // Марина writes in the group, so it is the latest chat.
 await call(
   `/api/v1/chats/${group.id}/messages`,

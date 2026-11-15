@@ -220,12 +220,7 @@ function AwaySection({
 
   function change(next: AwayDraft) {
     setDraft(
-      withDefaultAutoreply(
-        next,
-        nameOf(next.substituteID),
-        new Date(),
-        locale,
-      ),
+      withDefaultAutoreply(next, nameOf(next.substituteID), new Date(), locale),
     );
     setError("");
   }
@@ -736,10 +731,7 @@ function CustomSection({ onDone }: { onDone(text: string): void }) {
       ) : null}
       <View style={styles.customRow}>
         <View
-          style={[
-            styles.emojiNow,
-            { backgroundColor: theme.surfaceSelected },
-          ]}
+          style={[styles.emojiNow, { backgroundColor: theme.surfaceSelected }]}
           accessible
           accessibilityLabel={t("statusEmoji")}
         >

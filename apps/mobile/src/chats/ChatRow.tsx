@@ -81,10 +81,7 @@ export const ChatRow = memo(function ChatRow({
   const overrides = useAwayOverrides();
   const away =
     chat.kind === "direct" && peer && !agent
-      ? activeAway(
-          currentAway(peer.actor_id, peer.away, overrides),
-          new Date(),
-        )
+      ? activeAway(currentAway(peer.actor_id, peer.away, overrides), new Date())
       : null;
   const online =
     chat.kind === "direct" && !agent && presence === "online" && !away;

@@ -1218,7 +1218,9 @@ export function ConversationView({
         ) : null}
         <PollEditSheet
           message={
-            pollEditFor?.poll ? { ...pollEditFor, poll: pollEditFor.poll } : null
+            pollEditFor?.poll
+              ? { ...pollEditFor, poll: pollEditFor.poll }
+              : null
           }
           onClose={() => setPollEditFor(null)}
           onNotice={setNotice}

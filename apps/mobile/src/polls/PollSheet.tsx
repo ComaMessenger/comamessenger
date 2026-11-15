@@ -236,9 +236,7 @@ export function PollSheet({
         label={t("pollMultiple")}
         hint={t("pollMultipleHint")}
         value={draft.multiple}
-        onChange={(multiple) =>
-          update((current) => ({ ...current, multiple }))
-        }
+        onChange={(multiple) => update((current) => ({ ...current, multiple }))}
       />
       <ToggleRow
         testID="poll-anonymous"
@@ -279,7 +277,9 @@ export function PollSheet({
           testID="poll-due-other"
           label={
             customDue && draft.dueAt
-              ? t("pollDueBy", { when: formatPollDue(draft.dueAt, now, locale) })
+              ? t("pollDueBy", {
+                  when: formatPollDue(draft.dueAt, now, locale),
+                })
               : t("pollDueOther")
           }
           selected={customDue}
@@ -396,7 +396,9 @@ function OptionRow({
           accessibilityLabel={t("pollDragOption", { index: number })}
           accessibilityHint={t("pollDragOptionHint")}
           accessibilityActions={[
-            ...(index > 0 ? [{ name: "decrement", label: t("pollMoveUp") }] : []),
+            ...(index > 0
+              ? [{ name: "decrement", label: t("pollMoveUp") }]
+              : []),
             ...(index < count - 1
               ? [{ name: "increment", label: t("pollMoveDown") }]
               : []),
@@ -404,7 +406,10 @@ function OptionRow({
           onAccessibilityAction={(event) => {
             if (event.nativeEvent.actionName === "decrement" && index > 0)
               onMove(index - 1);
-            if (event.nativeEvent.actionName === "increment" && index < count - 1)
+            if (
+              event.nativeEvent.actionName === "increment" &&
+              index < count - 1
+            )
               onMove(index + 1);
           }}
           hitSlop={8}
@@ -481,7 +486,12 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: 15.5,
   },
-  remove: { width: 32, height: 32, alignItems: "center", justifyContent: "center" },
+  remove: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   // `.addo`: primary, 600, under the fields.
   add: {
     flexDirection: "row",

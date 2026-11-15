@@ -50,9 +50,7 @@ export function PollVotersSheet({
     poll.status === "open" ? viewer?.counts : (poll.final_counts ?? null);
   const tabs = pollVoterTabs(
     poll,
-    viewer
-      ? { ...viewer, counts: counts ?? viewer.counts }
-      : null,
+    viewer ? { ...viewer, counts: counts ?? viewer.counts } : null,
     calendarLocale(i18n.language),
   );
   return (

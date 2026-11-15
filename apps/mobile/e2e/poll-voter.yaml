@@ -27,9 +27,14 @@ appId: com.comamessenger.app
     timeout: 10000
 
 # 1. The ordinary poll: Олег voted, the results stay hidden before mine.
-- extendedWaitUntil:
-    visible: .*Какой день удобнее для выездного занятия\?.*
-    timeout: 10000
+# Earlier runs leave deleted polls above it.
+- scrollUntilVisible:
+    element: .*Какой день удобнее для выездного занятия\?.*
+    direction: DOWN
+    timeout: 20000
+- scrollUntilVisible:
+    element: .*Неудобен вечер.*
+    direction: DOWN
 - extendedWaitUntil:
     visible: 1 из 4 ответили
     timeout: 10000
@@ -48,7 +53,13 @@ appId: com.comamessenger.app
 - takeScreenshot: ${THEME}-poll-voted
 
 # 3. «Отменить голос», then «Вторник».
-# The vote is on its way while the buttons are disabled.
+# The vote is on its way while the buttons are disabled; the server's
+# answer adds «Кто голосовал» and the links settle.
+- extendedWaitUntil:
+    visible:
+      id: poll-who-voted
+    timeout: 10000
+- waitForAnimationToEnd
 - extendedWaitUntil:
     visible:
       id: poll-retract

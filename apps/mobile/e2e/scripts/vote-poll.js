@@ -11,8 +11,9 @@ function signIn(email, password) {
   );
 }
 var me = json(
-  http.get(output.api + "/api/v1/me", { headers: { Authorization: output.auth } })
-    .body,
+  http.get(output.api + "/api/v1/me", {
+    headers: { Authorization: output.auth },
+  }).body,
 );
 var chats = json(
   http.get(output.api + "/api/v1/chats", {
