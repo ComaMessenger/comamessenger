@@ -14,6 +14,8 @@ import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import {
   chatAvatarSource,
+  hasServerFeature,
+  serverFeature,
   type ActorPage,
   type ActorSummary,
   type Chat,
@@ -29,6 +31,7 @@ import { Button } from "@/ui/Button";
 import { IconButton } from "@/ui/IconButton";
 import { MenuSheet, afterSheetCloses } from "@/ui/MenuSheet";
 import { Notice } from "@/ui/Notice";
+import { CardRequest } from "@/org/CardRequest";
 import { PersonOrgEditor } from "@/org/PersonOrgEditor";
 import { PersonOrgSection, showsOwnTitle } from "@/org/PersonOrgSection";
 import { useOrg } from "@/org/useOrg";
@@ -104,6 +107,13 @@ export function PersonScreen({ actorID }: { actorID: string }) {
   const [menu, setMenu] = useState(false);
   const [editingOrg, setEditingOrg] = useState(false);
   const editsOrg = org.canManage && person?.type === "user";
+  const [asking, setAsking] = useState(false);
+  // «Запрос» one person, with the chat to ask in (direct by default).
+  const asks =
+    Boolean(structure) &&
+    person?.type === "user" &&
+    !self &&
+    hasServerFeature(org.features, serverFeature.requests);
 
   return (
     <SafeAreaView
@@ -204,6 +214,14 @@ export function PersonScreen({ actorID }: { actorID: string }) {
                   pending={direct.opening === person.actor_id}
                   onPress={() => void direct.open(person.actor_id)}
                 />
+                {asks ? (
+                  <Button
+                    testID="person-request"
+                    variant="secondary"
+                    label={t("orgRequest")}
+                    onPress={() => setAsking(true)}
+                  />
+                ) : null}
                 {agent && canViewAgents ? (
                   <Button
                     testID="person-agent-card"
@@ -286,6 +304,14 @@ export function PersonScreen({ actorID }: { actorID: string }) {
           ) : null}
         </ScrollView>
       )}
+      {asks && person && structure ? (
+        <CardRequest
+          visible={asking}
+          audience={{ kind: "people", actorIDs: [person.actor_id] }}
+          structure={structure}
+          onClose={() => setAsking(false)}
+        />
+      ) : null}
       {editsOrg && person ? (
         <>
           <MenuSheet

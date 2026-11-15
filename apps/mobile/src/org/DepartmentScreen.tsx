@@ -13,6 +13,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Archive,
   MessageCircle,
+  MessageCircleCheck,
   MessageCirclePlus,
   MoreHorizontal,
   Pencil,
@@ -21,6 +22,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import {
+  audienceSegments,
   canManageDepartmentChat,
   departmentChatState,
   departmentCount,
@@ -43,6 +45,7 @@ import { MenuSheet, afterSheetCloses } from "@/ui/MenuSheet";
 import { Notice } from "@/ui/Notice";
 import { ScreenHeader } from "@/ui/ScreenHeader";
 import { Text } from "@/ui/Text";
+import { CardRequest } from "./CardRequest";
 import { DepartmentEditor } from "./DepartmentEditor";
 import {
   ActionTiles,
@@ -86,6 +89,11 @@ export function DepartmentScreen({ departmentID }: { departmentID: string }) {
   const [menu, setMenu] = useState(false);
   const [linking, setLinking] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [asking, setAsking] = useState(false);
+  // «Запрос» to the department: requests.address_groups, both features.
+  const asks = audienceSegments(user, org.features, structure).includes(
+    "department",
+  );
   const chats = useStore(store, (state) => state.chats);
 
   const chat = department ? departmentChatState(user, department) : null;
@@ -175,6 +183,15 @@ export function DepartmentScreen({ departmentID }: { departmentID: string }) {
       testID: "department-create-chat",
       busy: busy === "chat",
       onPress: openChat,
+    });
+
+  if (department && asks)
+    actions.push({
+      key: "request",
+      label: t("orgRequest"),
+      icon: MessageCircleCheck,
+      testID: "department-request",
+      onPress: () => setAsking(true),
     });
 
   const members = department ? (index?.members.get(department.id) ?? []) : [];
@@ -504,6 +521,15 @@ export function DepartmentScreen({ departmentID }: { departmentID: string }) {
               );
             })}
           </BottomSheet>
+          {asks && structure ? (
+            <CardRequest
+              visible={asking}
+              audience={{ kind: "department", departmentID: department.id }}
+              structure={structure}
+              departmentChatID={department.chat_id}
+              onClose={() => setAsking(false)}
+            />
+          ) : null}
           {org.canManage ? (
             <DepartmentEditor
               visible={editing}

@@ -183,6 +183,9 @@ export const orgRu = {
     "Запрос увидят в выбранном чате; ответят только люди из адресата.",
   orgRequestChatPeople: "{count} чел. из адресата в чате",
   orgRequestDirect: "Личный чат",
+  orgRequestPickDepartment: "Выберите отдел",
+  orgRequestPickPosition: "Выберите должность",
+  orgRequestNobody: "В этом чате нет никого из адресата",
   orgMentionDepartments: "Отделы",
   orgMentionPeople: "Люди",
   orgMentionInChat:
@@ -375,6 +378,9 @@ export const orgEn: Record<keyof typeof orgRu, string> = {
     "The chosen chat sees the request; only people of the addressee answer.",
   orgRequestChatPeople: "{count} of the addressee in the chat",
   orgRequestDirect: "Direct chat",
+  orgRequestPickDepartment: "Choose a department",
+  orgRequestPickPosition: "Choose a position",
+  orgRequestNobody: "Nobody of the addressee is in this chat",
   orgMentionDepartments: "Departments",
   orgMentionPeople: "People",
   orgMentionInChat:

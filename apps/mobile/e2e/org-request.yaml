@@ -1,0 +1,100 @@
+# Phase 6.5 wave 2: requests to a department and a position. The owner may
+# always address groups (requests.address_groups). «+» → «Запрос» →
+# «Отдел» → «Зал ЛФК» waits for its 3 people in «Планёрка ЛФК»; the card says
+# «отдел «Зал ЛФК»». Then «Запрос» from the department card and from a
+# person card, with the chat chosen first.
+# Seed first, then run after sign-in.yaml:
+#   COMA_API=… node e2e/seed-org.mjs && maestro test -e THEME=light e2e/org-request.yaml
+appId: com.comamessenger.app
+---
+- runFlow: open-app.yaml
+- tapOn: .*Планёрка ЛФК.*
+- extendedWaitUntil:
+    visible:
+      id: conversation
+    timeout: 10000
+- evalScript: ${output.tag = String(Date.now()).slice(-6)}
+- tapOn:
+    id: composer-attach
+- tapOn:
+    id: composer-action-request
+- extendedWaitUntil:
+    visible:
+      id: request-sheet
+    timeout: 5000
+- tapOn:
+    id: request-body
+- eraseText: 200
+- inputText: Все ли ознакомились с новым графиком? ${output.tag}
+- hideKeyboard
+
+# «Должность»: positions with how many of them are in the chat.
+- tapOn:
+    id: request-audience-position
+- extendedWaitUntil:
+    visible:
+      id: request-position-list
+    timeout: 5000
+- takeScreenshot: org-request-position-${THEME}
+
+# «Отдел»: «Зал ЛФК» with its subdepartments.
+- tapOn:
+    id: request-audience-department
+- extendedWaitUntil:
+    visible:
+      id: request-department-list
+    timeout: 5000
+- tapOn: "Зал ЛФК, .*"
+- assertVisible: .*Ждём от 3 человек.*
+- takeScreenshot: org-request-department-${THEME}
+- scrollUntilVisible:
+    element:
+      id: request-send
+    direction: DOWN
+    visibilityPercentage: 100
+- tapOn:
+    id: request-send
+- extendedWaitUntil:
+    notVisible:
+      id: request-sheet
+    timeout: 10000
+- extendedWaitUntil:
+    visible: .*отдел «Зал ЛФК».*
+    timeout: 10000
+- takeScreenshot: org-request-card-${THEME}
+
+# «Запрос» on the department card: the chat first, then the form with the
+# department already chosen.
+- tapOn:
+    id: conversation-back
+    retryTapIfNoChange: true
+- runFlow:
+    file: tabs.yaml
+    env:
+      TAB: more
+- tapOn:
+    id: open-org
+- extendedWaitUntil:
+    visible:
+      id: org-tree-list
+    timeout: 15000
+- tapOn: "Зал ЛФК, .*"
+- extendedWaitUntil:
+    visible:
+      id: department-request
+    timeout: 10000
+- tapOn:
+    id: department-request
+- extendedWaitUntil:
+    visible:
+      id: request-chat-0
+    timeout: 15000
+- takeScreenshot: org-request-chats-${THEME}
+- tapOn:
+    id: request-chat-0
+- extendedWaitUntil:
+    visible:
+      id: request-sheet
+    timeout: 10000
+- assertVisible: .*Ждём от 3 человек.*
+- takeScreenshot: org-request-from-department-${THEME}
