@@ -1,5 +1,13 @@
 import { useMemo, useState } from "react";
 import {
+  awayKindEmoji,
+  awayLine,
+  capitalize,
+  isAwayActive,
+  isAwayPlanned,
+  shownStatus,
+  visibleSubstitute,
+  withCurrentAway,
   canManageOrg,
   chatAvatarSource,
   departmentPath,
@@ -15,7 +23,7 @@ import { useQueries } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import type { ActorSummary, Chat } from "@comamessenger/core";
-import { Avatar, Button, Tag } from "../ui";
+import { Avatar, Button, Tag, cx } from "../ui";
 import { titleOf } from "../lib/chats";
 import { useMessenger } from "../shell/MessengerContext";
 import { DirectoryDetailHead } from "./DirectoryPage";
@@ -24,6 +32,9 @@ import { departmentPathOf } from "./routes";
 import { OrgMark } from "../org/DepartmentIcon";
 import { OrgDepartmentLink, OrgPersonLink } from "../org/OrgRows";
 import { PersonOrgDialog } from "../org/PersonOrgDialog";
+import { calendarLocale } from "../requests/format";
+import { AwayAvatar } from "../status/AwayAvatar";
+import { useAwayLookup, useAwayNow } from "../status/useAway";
 import {
   useActorMap,
   useAllActors,
@@ -56,7 +67,7 @@ function useSharedChats(actorID: string) {
 
 /** Member detail: identity, status, actions, about and shared chats. */
 export function MemberProfile({
-  actor,
+  actor: listed,
   onBack,
   standalone = false,
 }: {
@@ -67,6 +78,11 @@ export function MemberProfile({
 }) {
   const { t } = useTranslation();
   const { api, user, store, navigate } = useMessenger();
+  const people = useAwayLookup();
+  const actor = withCurrentAway(listed, people.overrides);
+  const now = useAwayNow([actor.away]);
+  const locale = calendarLocale();
+  const status = shownStatus(actor, now, locale);
   const presence = useStore(
     store,
     (state) => state.presence[actor.actor_id] ?? "offline",
@@ -106,7 +122,9 @@ export function MemberProfile({
       )}
       <div className="member-profile__scroll">
         <header className="member-profile__identity">
-          <Avatar
+          <AwayAvatar
+            away={actor.away}
+            now={now}
             name={actor.display_name}
             seed={actor.actor_id}
             actorID={actor.actor_id}
@@ -141,12 +159,17 @@ export function MemberProfile({
                 .filter(Boolean)
                 .join(" · ")}
             </p>
-            {actor.status_text && (
-              <span className="member-profile__status">
-                {actor.status_emoji && (
-                  <span aria-hidden="true">{actor.status_emoji}</span>
+            {status && status.text && (
+              <span
+                className={cx(
+                  "member-profile__status",
+                  status.away && "member-profile__status--away",
                 )}
-                {actor.status_text}
+              >
+                {status.emoji && (
+                  <span aria-hidden="true">{status.emoji}</span>
+                )}
+                {status.text}
               </span>
             )}
             <div className="member-profile__actions">
@@ -169,6 +192,13 @@ export function MemberProfile({
           </div>
         </header>
         <div className="member-profile__cards">
+          {!isAgent && people.on && (
+            <PersonAwayCard
+              actor={actor}
+              now={now}
+              lookup={people.lookup}
+            />
+          )}
           {structure && (
             <PersonOrgCard actorID={actor.actor_id} structure={structure} />
           )}
@@ -340,5 +370,64 @@ function PersonOrgCard({
         </section>
       )}
     </>
+  );
+}
+
+/**
+ * "Away" of a person card (decision 5 and 14): the period, in effect
+ * or planned ("20–30 November — on vacation"), and the substitute with
+ * "Write".
+ */
+function PersonAwayCard({
+  actor,
+  now,
+  lookup,
+}: {
+  actor: ActorSummary;
+  now: Date;
+  lookup: ReturnType<typeof useAwayLookup>["lookup"];
+}) {
+  const { t } = useTranslation();
+  const { api, store, navigate } = useMessenger();
+  const [opening, setOpening] = useState(false);
+  const away = actor.away;
+  if (!away || (!isAwayActive(away, now) && !isAwayPlanned(away, now)))
+    return null;
+  const locale = calendarLocale();
+  const substitute = visibleSubstitute(away, lookup, now);
+  async function write(actorID: string) {
+    if (opening) return;
+    setOpening(true);
+    try {
+      navigate(`/chat/${await openDirectChat(api, store, actorID)}`);
+    } finally {
+      setOpening(false);
+    }
+  }
+  return (
+    <section className="member-profile__card away-card">
+      <h3>{t("memberAwayTitle")}</h3>
+      <p className="away-card__line">
+        <span aria-hidden="true">{awayKindEmoji[away.kind]}</span>
+        {capitalize(awayLine(away, now, locale))}
+      </p>
+      {substitute && (
+        <div className="away-card__substitute">
+          <OrgPersonLink
+            actor={substitute}
+            caption={t("memberAwaySubstitute")}
+            onClick={() => navigate(`/members/${substitute.actor_id}`)}
+          />
+          <Button
+            size="sm"
+            pending={opening}
+            onClick={() => void write(substitute.actor_id)}
+          >
+            <MessageSquare aria-hidden="true" />
+            {t("memberAwayWrite")}
+          </Button>
+        </div>
+      )}
+    </section>
   );
 }

@@ -18,6 +18,7 @@ import {
   type RequestInboxItem,
   type TaskInboxMode,
   type WaitingFilter,
+  type WaitingPollRow,
   type WaitingTaskRow,
 } from "@comamessenger/core";
 import {
@@ -38,6 +39,7 @@ import { useMessenger } from "../shell/MessengerContext";
 import { calendarLocale } from "./format";
 import { RequestCard } from "./RequestCard";
 import { useRequestActions } from "./useRequest";
+import { PollMessage } from "../polls/PollMessage";
 
 function useInbox(state: "waiting" | "answered", enabled = true) {
   const { api, user } = useMessenger();
@@ -66,7 +68,9 @@ function useSyncViewers(items: readonly RequestInboxItem[]) {
 }
 
 const filterOf = (value: unknown): WaitingFilter =>
-  value === "requests" || value === "tasks" ? value : "all";
+  value === "requests" || value === "tasks" || value === "polls"
+    ? value
+    : "all";
 const modeOf = (value: unknown): TaskInboxMode =>
   value === "authored" ? "authored" : "assigned";
 
@@ -105,18 +109,27 @@ function WaitingWithTasks({ filters }: { filters: WaitingFilter[] }) {
     all: counts.waiting,
     requests: Math.max(0, unread.requests_waiting_total ?? 0),
     tasks: Math.max(0, unread.tasks_mine_open_total ?? 0),
-    polls: 0,
+    polls: Math.max(0, unread.polls_waiting_total ?? 0),
   };
-  const listKind = filter === "requests" ? "requests" : "all";
+  const listKind =
+    filter === "requests" ? "requests" : filter === "polls" ? "polls" : "all";
   const waiting = useWaitingInbox(listKind, filter !== "tasks");
-  const answered = useInbox("answered", filter !== "tasks");
+  // Answered belongs to requests; the polls chip has none.
+  const answered = useInbox(
+    "answered",
+    filter !== "tasks" && filter !== "polls",
+  );
+  const pollViewers = useStore(store, (state) => state.pollViewers);
   const pageItems = useMemo(
     () => waiting.data?.pages.flatMap((page) => page.items) ?? [],
     [waiting.data],
   );
   const answeredItems = useMemo(
-    () => answered.data?.pages.flatMap((page) => page.items) ?? [],
-    [answered.data],
+    () =>
+      filter === "polls"
+        ? []
+        : (answered.data?.pages.flatMap((page) => page.items) ?? []),
+    [answered.data, filter],
   );
   const requestItems = useMemo(
     () =>
@@ -202,6 +215,26 @@ function WaitingWithTasks({ filters }: { filters: WaitingFilter[] }) {
         return fresh ? [[item.message.id, fresh]] : [];
       }),
     ),
+    polls: Object.fromEntries(
+      pageItems.flatMap((item) =>
+        item.kind === "poll"
+          ? [
+              [
+                item.message.id,
+                {
+                  poll:
+                    store
+                      .getState()
+                      .messages[item.chat_id]?.find(
+                        (m) => m.id === item.message.id,
+                      )?.poll ?? null,
+                  viewer: pollViewers[item.message.id] ?? null,
+                },
+              ],
+            ]
+          : [],
+      ),
+    ),
   });
   const rows = filterWaitingRows(list.waiting, filter);
   const body = waiting.isLoading ? (
@@ -220,7 +253,11 @@ function WaitingWithTasks({ filters }: { filters: WaitingFilter[] }) {
     <EmptyState
       icon={<MessageSquareMore />}
       title={t("importantWaitingEmpty")}
-      hint={t("importantWaitingEmptyHintTasks")}
+      hint={t(
+        filter === "polls"
+          ? "importantWaitingEmptyHintPolls"
+          : "importantWaitingEmptyHintTasks",
+      )}
     />
   ) : (
     <>
@@ -229,6 +266,16 @@ function WaitingWithTasks({ filters }: { filters: WaitingFilter[] }) {
           <InboxRequest key={row.item.message.id} item={row.item} />
         ) : row.kind === "task" ? (
           <InboxTask
+            key={row.item.message.id}
+            row={row}
+            chatName={
+              chats[row.item.chat.id]
+                ? titleOf(chats[row.item.chat.id]!, [], user.id)
+                : row.item.chat.display_name
+            }
+          />
+        ) : row.kind === "poll" ? (
+          <InboxPoll
             key={row.item.message.id}
             row={row}
             chatName={
@@ -278,6 +325,60 @@ function WaitingWithTasks({ filters }: { filters: WaitingFilter[] }) {
       {head}
       {body}
     </div>
+  );
+}
+
+/** A poll with a due date the reader has not voted in: vote right here. */
+function InboxPoll({ row, chatName }: { row: WaitingPollRow; chatName: string }) {
+  const { t } = useTranslation();
+  const { navigate } = useMessenger();
+  const { message, author, chat } = row.item;
+  const due = message.poll.due_at ? new Date(message.poll.due_at) : null;
+  return (
+    <article
+      className="inbox-card"
+      aria-label={t("importantPollFrom", { name: author.display_name })}
+    >
+      <header className="inbox-card__head">
+        <Avatar
+          name={author.display_name}
+          seed={author.actor_id}
+          actorID={author.actor_id}
+          avatarVersion={author.avatar_version}
+          agent={author.type === "agent"}
+          size="sm"
+        />
+        <span className="inbox-card__title">
+          <strong className="truncate">
+            {t("importantPollFrom", { name: author.display_name })}
+          </strong>
+          <span className="truncate">
+            {[
+              chatName,
+              due
+                ? t("importantPollDue", {
+                    when: formatRequestDue(due, new Date(), calendarLocale()),
+                  })
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
+        </span>
+        <time className="inbox-card__time" dateTime={message.created_at}>
+          {formatListTime(message.created_at)}
+        </time>
+      </header>
+      <PollMessage message={message} members={[]} fallback={row.item.viewer} />
+      <button
+        type="button"
+        className="inbox-card__open"
+        onClick={() => navigate(`/chat/${chat.id}?message=${message.id}`)}
+      >
+        {t("importantOpenPoll")}
+        <ArrowUpRight aria-hidden="true" />
+      </button>
+    </article>
   );
 }
 

@@ -11,7 +11,6 @@ import {
 } from "@comamessenger/core";
 import { hasPermission } from "../settings";
 import {
-  Avatar,
   EmptyState,
   IconButton,
   InlineError,
@@ -23,6 +22,17 @@ import { formatDaySeparator } from "../lib/format";
 import { audienceSegments, messageMentionFields } from "@comamessenger/core";
 import { noteDepartmentSend, useMentionStructure } from "../org/mentions";
 import { DepartmentMentionNote } from "../org/DepartmentMentionNote";
+import { currentAway } from "@comamessenger/core";
+import { AwayAvatar } from "../status/AwayAvatar";
+import { useAwayOverrides } from "../status/useAway";
+import { openDirectChat } from "../directories/openDirectChat";
+import {
+  AwayMentionNote,
+  noteAwaySend,
+  useAwayMentionHints,
+  useForgetAwayNotes,
+  useMentionAwayNote,
+} from "../status/AwayMentions";
 import { canManageChat, chatGlyph, isReadOnly, titleOf } from "../lib/chats";
 import { useIsMobile } from "../lib/useMediaQuery";
 import { useMessenger } from "../shell/MessengerContext";
@@ -49,6 +59,8 @@ import { CreateTaskDialog } from "../tasks/CreateTask";
 import { TaskPanel } from "../tasks/TaskPanel";
 import { useTaskViewer } from "../tasks/format";
 import { useTasksAvailable } from "../tasks/useTasks";
+import { PollDialog } from "../polls/PollDialog";
+import { pollsAvailable } from "@comamessenger/core";
 import { useToast } from "../shell/ToastProvider";
 
 export function Conversation({
@@ -88,17 +100,22 @@ export function Conversation({
     scheduleReload,
     openDialog,
     whenReady,
+    navigate,
   } = useMessenger();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const features = useStore(store, (state) => state.features);
   const [requesting, setRequesting] = useState(false);
   const [tasking, setTasking] = useState(false);
+  const [polling, setPolling] = useState(false);
+  const pollsOn = pollsAvailable(features);
   const tasksOn = useTasksAvailable();
   const typingActions = useStore(store, (state) => state.typingActions[chatID]);
   const presence = useStore(store, (state) => state.presence);
   const orgStructure = useMentionStructure();
   const lastSeen = useStore(store, (state) => state.lastSeen);
+  const awayOverrides = useAwayOverrides();
+  useForgetAwayNotes(chatID);
   const messageStreams = useStore(store, (state) => state.messageStreams);
   const agentStatuses = useStore(store, (state) => state.agentStatuses);
   const membersQuery = useQuery({
@@ -126,6 +143,8 @@ export function Conversation({
   useUploadActivity(coordinator, chatID, null, attachments.attachments);
   const [reply, setReply] = useState<Message | null>(null);
   const [body, setBody] = useState(() => getLocalDraft(chatID, null));
+  const awayHints = useAwayMentionHints(body, members);
+  const mentionAwayNote = useMentionAwayNote();
   const [info, setInfo] = useState(false);
   const [scheduling, setScheduling] = useState<ScheduleDraft | null>(null);
 
@@ -197,6 +216,7 @@ export function Conversation({
     clearComposer();
     const clientMsgID = crypto.randomUUID();
     noteDepartmentSend(clientMsgID, draft.mentioned_department_ids);
+    noteAwaySend(chatID, clientMsgID, awayHints);
     await outbox.enqueue(chatID, {
       client_msg_id: clientMsgID,
       ...draft,
@@ -228,6 +248,7 @@ export function Conversation({
           presence,
           lastSeen,
           agentStatuses: Object.values(agentStatuses),
+          away: awayOverrides,
         }}
         fallback={directPeer ? directPeer.title || `@${directPeer.handle}` : ""}
       />
@@ -254,7 +275,16 @@ export function Conversation({
               <ChevronLeft />
             </IconButton>
           )}
-          <Avatar
+          <AwayAvatar
+            away={
+              directPeer && directPeer.type !== "agent"
+                ? currentAway(
+                    directPeer.actor_id,
+                    directPeer.away,
+                    awayOverrides,
+                  )
+                : null
+            }
             name={title}
             seed={chat?.avatar_seed}
             {...(chat ? chatAvatarSource(chat) : {})}
@@ -420,6 +450,7 @@ export function Conversation({
                         viewerID={user.id}
                         structure={orgStructure}
                       />
+                      <AwayMentionNote message={message} />
                     </div>
                   );
                 })}
@@ -482,6 +513,14 @@ export function Conversation({
           features={features}
           onRequest={() => setRequesting(true)}
           onTask={tasksOn ? () => setTasking(true) : undefined}
+          onPoll={pollsOn ? () => setPolling(true) : undefined}
+          awayHints={awayHints}
+          mentionAwayNote={mentionAwayNote}
+          onWriteTo={(actorID) =>
+            void openDirectChat(api, store, actorID).then((id) =>
+              navigate(`/chat/${id}`),
+            )
+          }
         />
       </div>
 
@@ -501,6 +540,21 @@ export function Conversation({
           members={members}
           onCreated={() => requestAnimationFrame(feed.scrollToBottom)}
           onClose={() => setTasking(false)}
+        />
+      )}
+      {polling && (
+        <PollDialog
+          chatID={chatID}
+          userID={user.id}
+          createPoll={(id, input) => api.createPoll(id, input)}
+          onSent={(message) => {
+            setPolling(false);
+            store.getState().reconcile(message);
+            scheduleReload();
+            toast({ message: t("pollSent") });
+            requestAnimationFrame(feed.scrollToBottom);
+          }}
+          onClose={() => setPolling(false)}
         />
       )}
       {requestID && !threadID && (

@@ -20,6 +20,8 @@ import { requestsCatalog } from "../requests/i18n";
 import { remindersCatalog } from "../reminders/i18n";
 import { orgCatalog } from "../org/i18n";
 import { tasksCatalog } from "../tasks/i18n";
+import { statusCatalog } from "../status/i18n";
+import { pollsCatalog } from "../polls/i18n";
 
 const catalogs = mergeCatalogs({ ru, en }, [
   authCatalog,
@@ -38,6 +40,8 @@ const catalogs = mergeCatalogs({ ru, en }, [
   remindersCatalog,
   orgCatalog,
   tasksCatalog,
+  pollsCatalog,
+  statusCatalog,
 ]);
 
 const pseudo = Object.fromEntries(

@@ -940,9 +940,15 @@ export function Avatar({
   avatarVersion = 0,
   className,
   glyph,
+  statusBadge,
 }: {
   name: string;
   seed?: string;
+  /**
+   * An emoji in place of the presence dot: the kind of an away status
+   * ("Away", wave 4) — 🌴 instead of the green dot.
+   */
+  statusBadge?: string;
   /** Overrides the initials, e.g. "#" for channels. */
   glyph?: string;
   size?: "xs" | "sm" | "md" | "lg" | "xl" | "xxl";
@@ -995,7 +1001,11 @@ export function Avatar({
           <Bot strokeWidth={3} />
         </span>
       )}
-      {resolvedPresence && !agent && (
+      {statusBadge && !agent ? (
+        <span className="ui-avatar__status" aria-hidden="true">
+          {statusBadge}
+        </span>
+      ) : resolvedPresence && !agent && (
         <i
           aria-hidden="true"
           className={cx(

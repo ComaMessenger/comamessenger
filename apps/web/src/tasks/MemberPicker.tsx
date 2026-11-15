@@ -1,8 +1,23 @@
 import { useState, type RefObject } from "react";
 import { Check, UserX } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { foldOrgText, type ChatMember } from "@comamessenger/core";
-import { Avatar, FloatingPopover, cx } from "../ui";
+import {
+  awayPickerHint,
+  foldOrgText,
+  visibleSubstitute,
+  withCurrentAway,
+  type ChatMember,
+} from "@comamessenger/core";
+import { FloatingPopover, cx } from "../ui";
+import { calendarLocale } from "../requests/format";
+import { AwayAvatar } from "../status/AwayAvatar";
+import { useAwayLookup } from "../status/useAway";
+
+/** Who may be offered: a chat member or a person of the workspace. */
+export type PickerPerson = Pick<
+  ChatMember,
+  "actor_id" | "display_name" | "handle" | "title" | "avatar_version" | "type"
+> & { away?: ChatMember["away"] };
 
 /**
  * A person of the chat for a task: the responsible one or an item's
@@ -20,7 +35,7 @@ export function MemberPicker({
   onDismiss,
 }: {
   anchorRef: RefObject<HTMLElement | null>;
-  members: readonly ChatMember[];
+  members: readonly PickerPerson[];
   selfID: string;
   selected: string | null;
   label: string;
@@ -31,7 +46,25 @@ export function MemberPicker({
 }) {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
-  const people = members.filter((member) => member.type === "user");
+  const away = useAwayLookup();
+  const now = new Date();
+  const locale = calendarLocale();
+  const people = members
+    .filter((member) => member.type === "user")
+    .map((member) => withCurrentAway(member, away.overrides));
+  const inList = new Map(people.map((member) => [member.actor_id, member]));
+  // The substitute is offered only when they may be picked here too.
+  const hintOf = (member: PickerPerson) =>
+    awayPickerHint(
+      member,
+      visibleSubstitute(
+        member.away,
+        (id) => inList.get(id) ?? away.lookup(id),
+        now,
+      ),
+      now,
+      locale,
+    );
   const folded = foldOrgText(query.trim());
   const shown = people
     .filter(
@@ -83,38 +116,61 @@ export function MemberPicker({
               {selected === null && <Check aria-hidden="true" />}
             </button>
           )}
-          {shown.map((member) => (
-            <button
-              key={member.actor_id}
-              type="button"
-              role="option"
-              aria-selected={selected === member.actor_id}
-              className={cx(
-                "task-picker__row",
-                selected === member.actor_id && "task-picker__row--on",
-              )}
-              onClick={() => onPick(member.actor_id)}
-            >
-              <Avatar
-                name={member.display_name}
-                seed={member.actor_id}
-                actorID={member.actor_id}
-                avatarVersion={member.avatar_version}
-                size="xs"
-              />
-              <span className="task-picker__name">
-                <strong className="truncate">
-                  {member.actor_id === selfID
-                    ? t("taskPickerMe", { name: member.display_name })
-                    : member.display_name}
-                </strong>
-                {member.title && (
-                  <small className="truncate">{member.title}</small>
+          {shown.map((member) => {
+            const hint = hintOf(member);
+            const choose =
+              hint?.choose && inList.has(hint.choose.actorID)
+                ? hint.choose
+                : null;
+            return (
+              <div key={member.actor_id} className="task-picker__item">
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={selected === member.actor_id}
+                  className={cx(
+                    "task-picker__row",
+                    selected === member.actor_id && "task-picker__row--on",
+                  )}
+                  onClick={() => onPick(member.actor_id)}
+                >
+                  <AwayAvatar
+                    name={member.display_name}
+                    seed={member.actor_id}
+                    actorID={member.actor_id}
+                    avatarVersion={member.avatar_version}
+                    away={member.away}
+                    now={now}
+                    size="xs"
+                  />
+                  <span className="task-picker__name">
+                    <strong className="truncate">
+                      {member.actor_id === selfID
+                        ? t("taskPickerMe", { name: member.display_name })
+                        : member.display_name}
+                    </strong>
+                    {hint ? (
+                      <small className="truncate away-note">{hint.text}</small>
+                    ) : (
+                      member.title && (
+                        <small className="truncate">{member.title}</small>
+                      )
+                    )}
+                  </span>
+                  {selected === member.actor_id && <Check aria-hidden="true" />}
+                </button>
+                {choose && (
+                  <button
+                    type="button"
+                    className="away-choose"
+                    onClick={() => onPick(choose.actorID)}
+                  >
+                    {choose.label}
+                  </button>
                 )}
-              </span>
-              {selected === member.actor_id && <Check aria-hidden="true" />}
-            </button>
-          ))}
+              </div>
+            );
+          })}
           {!shown.length && (
             <p className="task-picker__empty">{t("taskPickerEmpty")}</p>
           )}

@@ -15,7 +15,6 @@ import {
   type RequestAnswerFilter,
 } from "@comamessenger/core";
 import {
-  Avatar,
   Button,
   EmptyState,
   IconButton,
@@ -31,6 +30,9 @@ import { ConfirmDialog } from "../dialogs/ConfirmDialog";
 import { calendarLocale } from "./format";
 import { RequestPill } from "./RequestCard";
 import { useRequestActions } from "./useRequest";
+import { awayNote, withCurrentAway } from "@comamessenger/core";
+import { AwayAvatar } from "../status/AwayAvatar";
+import { useAwayOverrides } from "../status/useAway";
 
 /**
  * Answers: who answered what, for the author and chat admins. Tabs by
@@ -304,9 +306,19 @@ function AnswerRow({
   const { t } = useTranslation();
   const note = requestAnswerNote(item);
   const name = member?.display_name ?? t("requestUnknownPerson");
+  const overrides = useAwayOverrides();
+  const now = new Date();
+  const person = member ? withCurrentAway(member, overrides) : null;
+  // Someone away who has not answered gets the mark (decision 6).
+  const away =
+    person && !item.answered_at
+      ? awayNote(person, now, calendarLocale())
+      : null;
   return (
     <div className="request-answer">
-      <Avatar
+      <AwayAvatar
+        away={person?.away}
+        now={now}
         name={name}
         seed={item.actor_id}
         actorID={item.actor_id}
@@ -331,6 +343,7 @@ function AnswerRow({
                 : note === "left"
                   ? t("requestAnswerLeft")
                   : (member?.title ?? "")}
+          {away && <span className="away-note"> · {away}</span>}
           {item.late && note !== "readNotAnswered" && note !== "notOpened" && (
             <span className="request-card__late"> · {t("requestLate")}</span>
           )}

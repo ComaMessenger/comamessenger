@@ -8,9 +8,18 @@ import {
   Moon,
   Smile,
   UserRound,
+  UsersRound,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Avatar, Menu, MenuDivider, MenuItem, cx } from "../ui";
+import { myStatusSummary, substitutingLine } from "@comamessenger/core";
+import { Menu, MenuDivider, MenuItem, cx } from "../ui";
+import { calendarLocale } from "../requests/format";
+import { AwayAvatar } from "../status/AwayAvatar";
+import {
+  useAwayLookup,
+  useSelfAway,
+  useSubstituting,
+} from "../status/useAway";
 import { formatDateTime } from "../lib/format";
 import { useMessenger } from "./MessengerContext";
 import { SnoozeControls } from "./SnoozeControls";
@@ -25,16 +34,26 @@ export function ProfileMenu({ onClose }: { onClose(): void }) {
   const { t } = useTranslation();
   const { user, navigate, openDialog, snoozedUntil } = useMessenger();
   const [dndOpen, setDndOpen] = useState(Boolean(snoozedUntil));
+  const away = useSelfAway();
+  const now = new Date();
+  // The away status in effect or planned, else the custom one (decision 12).
+  const summary = myStatusSummary({ ...user, away }, now, calendarLocale());
+  const substituting = useSubstituting();
+  const people = useAwayLookup();
+  const statusLine =
+    summary.kind === "none" ? "" : `${summary.emoji} ${summary.text}`.trim();
   return (
     <Menu label={t("profileMenu")} className="profile-menu">
       <div className="profile-menu__identity">
-        <Avatar
+        <AwayAvatar
           name={user.display_name}
           seed={user.id}
           actorID={user.id}
           avatarVersion={user.avatar_version}
           size="xl"
           presence="online"
+          away={away}
+          now={now}
         />
         <span className="profile-menu__identity__copy">
           <strong className="truncate">{user.display_name}</strong>
@@ -45,16 +64,35 @@ export function ProfileMenu({ onClose }: { onClose(): void }) {
       </div>
       <MenuItem
         icon={<Smile />}
-        className={cx(!user.status_text && "profile-menu__status--empty")}
+        className={cx(
+          !statusLine && "profile-menu__status--empty",
+          (summary.kind === "away" || summary.kind === "planned") &&
+            "profile-menu__status--away",
+        )}
         onClick={() => {
           onClose();
           openDialog({ kind: "status" });
         }}
       >
-        {user.status_text
-          ? `${user.status_emoji} ${user.status_text}`.trim()
-          : t("setStatusAction")}
+        {statusLine || t("setStatusAction")}
       </MenuItem>
+      {(substituting.data ?? []).map((entry) => {
+        const name = people.lookup(entry.actor_id)?.display_name;
+        if (!name) return null;
+        return (
+          <MenuItem
+            key={entry.actor_id}
+            icon={<UsersRound />}
+            className="profile-menu__substituting"
+            onClick={() => {
+              onClose();
+              navigate(`/members/${entry.actor_id}`);
+            }}
+          >
+            {substitutingLine(entry, name, new Date(), calendarLocale())}
+          </MenuItem>
+        );
+      })}
       <MenuItem
         icon={<UserRound />}
         onClick={() => {

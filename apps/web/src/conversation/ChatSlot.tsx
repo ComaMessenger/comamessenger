@@ -13,7 +13,10 @@ import {
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
 import {
+  awaySlot,
   buildChatSlot,
+  currentAway,
+  visibleSubstitute,
   hasTask,
   messagePlainText,
   nextPinIndex,
@@ -35,6 +38,8 @@ import { useScheduledMessages } from "../scheduled/useScheduled";
 import { calendarLocale } from "../requests/format";
 import { ChatTasksDrop } from "../tasks/ChatTasksDrop";
 import { useChatTasks, useTaskActions } from "../tasks/useTasks";
+import { openDirectChat } from "../directories/openDirectChat";
+import { useAwayLookup } from "../status/useAway";
 
 /**
  * The last slot shown per reader and chat: kept on screen while sources
@@ -154,6 +159,11 @@ export function ChatSlot({
     state.unread.chats.find((item) => item.chat_id === chatID),
   );
   const requestViewers = useStore(store, (state) => state.requestViewers);
+  const peer = useStore(store, (state) => {
+    const chat = state.chats[chatID];
+    return chat?.kind === "direct" ? (chat.direct_peer ?? null) : null;
+  });
+  const people = useAwayLookup();
   const tasks = useChatTasks(chatID);
   const pins = useSlotPins(chatID);
   const scheduled = useScheduledMessages(api, user.id);
@@ -168,11 +178,32 @@ export function ChatSlot({
     [tasks.data],
   );
   const now = new Date();
+  const locale = calendarLocale();
+  // A direct chat with someone away (decision 10): "Instead of Anna — Marina".
+  const peerAway =
+    people.on && peer && peer.type !== "agent"
+      ? { ...peer, away: currentAway(peer.actor_id, peer.away, people.overrides) }
+      : null;
+  const away = peerAway
+    ? awaySlot(
+        peerAway,
+        visibleSubstitute(
+          peerAway.away,
+          (id) =>
+            people.lookup(id) ??
+            members.find((member) => member.actor_id === id),
+          now,
+        ),
+        now,
+        locale,
+      )
+    : null;
   const built = buildChatSlot(
     {
       viewer,
       features,
-      locale: calendarLocale(),
+      locale,
+      away,
       tasks: tasks.isError ? [] : tasks.data ? taskMessages : undefined,
       taskCounts: tasks.data?.counts,
       pins: pins.isError ? [] : pins.data,
@@ -224,6 +255,10 @@ export function ChatSlot({
         navigate(`/scheduled?chat=${chatID}`);
         return;
       case "away":
+        if (current.targetActorId)
+          void openDirectChat(api, store, current.targetActorId).then((id) =>
+            navigate(`/chat/${id}`),
+          );
         return;
     }
   }
@@ -259,7 +294,11 @@ export function ChatSlot({
           <SlotComplete message={hotTask} />
         ) : (
           <span className="chat-slot__icon" aria-hidden="true">
-            {kindIcons[item.kind]}
+            {item.kind === "away" && item.emoji ? (
+              <span className="chat-slot__emoji">{item.emoji}</span>
+            ) : (
+              kindIcons[item.kind]
+            )}
           </span>
         )}
         <button

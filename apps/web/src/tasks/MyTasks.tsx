@@ -23,12 +23,16 @@ import { TaskRow } from "./TaskRow";
 
 /** One list of Waiting for you, page by page. */
 export function useWaitingInbox(
-  kind: "all" | "requests" | "tasks",
+  kind: "all" | "requests" | "tasks" | "polls",
   enabled: boolean,
 ) {
   const { api, user } = useMessenger();
   return useInfiniteQuery({
-    queryKey: taskKeys.waiting(user.id, kind),
+    // taskKeys.waiting predates polls; the key keeps its shape.
+    queryKey:
+      kind === "polls"
+        ? ([...taskKeys.all(user.id), "waiting", kind] as const)
+        : taskKeys.waiting(user.id, kind),
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) => api.waitingInbox({ kind, cursor: pageParam }),
     getNextPageParam: (page) => page.next_cursor ?? undefined,

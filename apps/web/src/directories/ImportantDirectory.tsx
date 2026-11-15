@@ -148,9 +148,12 @@ export function ImportantDirectory({ selectedID }: { selectedID?: string }) {
         lead={
           tab === "waiting"
             ? t(
-                features.includes("message_tasks")
-                  ? "importantWaitingLeadTasks"
-                  : "importantWaitingLead",
+                features.includes("message_polls") &&
+                  features.includes("message_tasks")
+                  ? "importantWaitingLeadPolls"
+                  : features.includes("message_tasks")
+                    ? "importantWaitingLeadTasks"
+                    : "importantWaitingLead",
               )
             : t("remindersLead")
         }

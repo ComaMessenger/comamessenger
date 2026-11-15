@@ -10,10 +10,11 @@ import {
   Settings2,
   Smile,
   UserRound,
+  UsersRound,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { Avatar, Spinner, cx } from "../ui";
+import { Spinner, cx } from "../ui";
 import { formatTime } from "../lib/format";
 import { useMessenger } from "../shell/MessengerContext";
 import { Logo } from "../shell/Logo";
@@ -22,6 +23,18 @@ import { workspaceRoleKey } from "../shell/WorkspaceMenu";
 import { useScheduledMessages } from "../scheduled/useScheduled";
 import { canAccessSettingsPage } from "../settings";
 import { useServerFeatures } from "../org/useOrg";
+import {
+  awayNotificationsText,
+  myStatusSummary,
+  substitutingLine,
+} from "@comamessenger/core";
+import { calendarLocale } from "../requests/format";
+import { AwayAvatar } from "../status/AwayAvatar";
+import {
+  useAwayLookup,
+  useSelfAway,
+  useSubstituting,
+} from "../status/useAway";
 
 function MoreRow({
   icon,
@@ -86,9 +99,16 @@ export function MorePage() {
   const failedScheduled = (scheduled.data ?? []).filter(
     (item) => item.status === "failed",
   ).length;
-  const statusText = user.status_text
-    ? `${user.status_emoji} ${user.status_text}`.trim()
-    : "";
+  const away = useSelfAway();
+  const now = new Date();
+  const locale = calendarLocale();
+  // The away status in effect or planned comes before the custom one.
+  const summary = myStatusSummary({ ...user, away }, now, locale);
+  const statusText =
+    summary.kind === "none" ? "" : `${summary.emoji} ${summary.text}`.trim();
+  const pushOff = awayNotificationsText(away, now, locale);
+  const substituting = useSubstituting();
+  const people = useAwayLookup();
 
   async function signOut() {
     setLoggingOut(true);
@@ -103,13 +123,15 @@ export function MorePage() {
     <section className="more-page" aria-label={t("more")}>
       <div className="more-page__column">
         <header className="more-page__identity">
-          <Avatar
+          <AwayAvatar
             name={user.display_name}
             seed={user.id}
             actorID={user.id}
             avatarVersion={user.avatar_version}
             size="xxl"
             presence="online"
+            away={away}
+            now={now}
             className="more-page__avatar"
           />
           <span className="more-page__identity-copy">
@@ -147,6 +169,22 @@ export function MorePage() {
             hintTone={statusText ? "foreground" : "muted"}
             onClick={() => openDialog({ kind: "status" })}
           />
+          {(substituting.data ?? []).map((entry) => {
+            const name = people.lookup(entry.actor_id)?.display_name;
+            if (!name) return null;
+            return (
+              <div key={entry.actor_id} className="more-page__substituting">
+                <div className="more-page__divider" />
+                <MoreRow
+                  icon={<UsersRound aria-hidden="true" />}
+                  title={t("moreSubstitutingTitle")}
+                  hint={substitutingLine(entry, name, now, locale)}
+                  hintTone="foreground"
+                  onClick={() => navigate(`/members/${entry.actor_id}`)}
+                />
+              </div>
+            );
+          })}
           <div className="more-page__divider" />
           <MoreRow
             icon={<Moon aria-hidden="true" />}
@@ -217,7 +255,9 @@ export function MorePage() {
             icon={<Bell aria-hidden="true" />}
             title={t("notifications")}
             hint={
-              preferences.data
+              pushOff
+                ? pushOff
+                : preferences.data
                 ? preferences.data.push_enabled
                   ? t("morePushOn")
                   : t("morePushOff")

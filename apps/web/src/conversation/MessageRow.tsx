@@ -66,11 +66,14 @@ import { MessageBlocksView } from "../agentchat/MessageBlocksView";
 import { AgentWhy } from "../agentchat/AgentWhy";
 import { RequestMessage } from "../requests/RequestMessage";
 import { TaskMessage } from "../tasks/TaskMessage";
+import { PollMessage } from "../polls/PollMessage";
+import { PollEditDialog } from "../polls/PollEditDialog";
 import { CreateTaskDialog } from "../tasks/CreateTask";
 import { isReadOnly } from "../lib/chats";
 import { useStore } from "zustand";
 import { useWorkplaceFeatures } from "../requests/format";
 import { ReminderPicker } from "../reminders/ReminderPicker";
+import { AutoReplyTag } from "../status/AutoReplyTag";
 import {
   reminderWhenText,
   useMessageReminder,
@@ -139,6 +142,7 @@ export function MessageRow({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [editingPoll, setEditingPoll] = useState(false);
   const [editText, setEditText] = useState("");
   const [busy, setBusy] = useState(false);
   const toolbarRef = useRef<HTMLDivElement>(null);
@@ -169,6 +173,7 @@ export function MessageRow({
   const [reminderBusy, setReminderBusy] = useState(false);
   const request = message.request && !message.deleted_at ? message.request : null;
   const task = message.task && !message.deleted_at ? message.task : null;
+  const poll = message.poll && !message.deleted_at ? message.poll : null;
   const makeTaskShown = canMakeTask({
     tasks: features.tasks && !chatReadonly,
     persisted,
@@ -388,6 +393,7 @@ export function MessageRow({
         isAgent && delivery === undefined && "message--agent",
         overlayOpen && "message--overlay-open",
         pinned && "message--pinned",
+        message.auto_reply && !message.deleted_at && "message--auto-reply",
       )}
     >
       <div className="message__gutter">
@@ -414,11 +420,12 @@ export function MessageRow({
           <header className="message__meta">
             <strong>{name}</strong>
             {isAgent && <Tag tone="agent">{t("agentTag")}</Tag>}
+            {message.auto_reply && !message.deleted_at && <AutoReplyTag />}
             {marks && <span className="message__marks">{marks}</span>}
             <time dateTime={message.created_at}>
               {formatTime(message.created_at)}
             </time>
-            {message.edited_at && !message.deleted_at && !request && !task && (
+            {message.edited_at && !message.deleted_at && !request && !task && !poll && (
               <span className="message__edited">{t("edited")}</span>
             )}
           </header>
@@ -469,6 +476,8 @@ export function MessageRow({
             onThread={showThreadIndicator ? onThread : undefined}
             onJump={onJump}
           />
+        ) : poll ? (
+          <PollMessage message={{ ...message, poll }} members={members} />
         ) : request ? (
           <RequestMessage
             message={message}
@@ -724,10 +733,24 @@ export function MessageRow({
             <MenuItem icon={<Copy />} onClick={() => void copy("text")}>
               {t("copyText")}
             </MenuItem>
-            {own && !task && (
+            {own && !task && !poll && (
               <>
                 <MenuDivider />
                 <MenuItem icon={<Pencil />} onClick={startEdit}>
+                  {t("editMessage")}
+                </MenuItem>
+              </>
+            )}
+            {own && poll && poll.status === "open" && (
+              <>
+                <MenuDivider />
+                <MenuItem
+                  icon={<Pencil />}
+                  onClick={() => {
+                    closeOverlays();
+                    setEditingPoll(true);
+                  }}
+                >
                   {t("editMessage")}
                 </MenuItem>
               </>
@@ -781,6 +804,17 @@ export function MessageRow({
             excerpt: messagePlainText(message.body).trim().slice(0, 140),
           }}
           onClose={() => setMakingTask(false)}
+        />
+      )}
+      {editingPoll && poll && (
+        <PollEditDialog
+          messageID={message.id}
+          poll={poll}
+          onSaved={(updated) => {
+            setEditingPoll(false);
+            onChanged(updated);
+          }}
+          onClose={() => setEditingPoll(false)}
         />
       )}
       {forwarding && (
