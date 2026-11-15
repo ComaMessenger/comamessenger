@@ -72,7 +72,7 @@ The walkthrough keeps to its own chat «Обход интерфейса» and ap
 
 The org structure flows (phase 6.5 wave 2) rebuild their departments, positions and the chat «Планёрка ЛФК» through the API first; the seed is safe to repeat: `node e2e/seed-org.mjs && maestro test -e THEME=light e2e/org-people.yaml` (then `org-tree`, `org-admin`, `org-mention`, `org-request`, each after its own seed run). The server needs `org_structure` in hello.
 
-Tasks and the slot under the chat header (phase 6.6) seed their chat «Инструкторы · задачи» first: `node e2e/seed-tasks.mjs && maestro test -e THEME=light e2e/task-create.yaml` (also `task-assignee.yaml`, `task-from-message.yaml`); `chat-slot.yaml` runs after `SLOT_ONLY=1 node e2e/seed-tasks.mjs` (pinned and scheduled only). Against another instance pass `COMA_API=http://localhost:<port>` to the seeds and `-e SERVER=localhost:<port>` to the flows; `sign-in.yaml` keeps its own `SERVER` default, so edit it in a copy.
+Tasks and the slot under the chat header (phase 6.6) seed their chat «Инструкторы · задачи» first: `node e2e/seed-tasks.mjs && maestro test -e THEME=light e2e/task-create.yaml` (also `task-assignee.yaml`, `task-from-message.yaml`); `task-queue.yaml` runs after `node e2e/seed-org.mjs` (a task for the department «Зал ЛФК», Олег takes it); `chat-slot.yaml` runs after `SLOT_ONLY=1 node e2e/seed-tasks.mjs` (pinned and scheduled only). Against another instance pass `COMA_API=http://localhost:<port>` to the seeds and `-e SERVER=localhost:<port>` to the flows; `sign-in.yaml` keeps its own `SERVER` default, so edit it in a copy.
 
 Maestro needs a JDK; the one bundled with Android Studio works: `export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"`.
 

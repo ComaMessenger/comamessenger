@@ -1,0 +1,66 @@
+# A task for a department (phase 6.6, decision 6): with the right
+# «Обращаться к отделам и ролям» the form offers «Отдел» and «Должность»;
+# the task goes to a queue of the department's people in the chat, and the
+# first who takes it answers for it. Run after sign-in.yaml:
+#   node e2e/seed-org.mjs && maestro test -e THEME=light e2e/task-queue.yaml
+# THEME (light or dark) names the screenshots; no default here, a flow
+# default would override -e.
+appId: com.comamessenger.app
+---
+- runScript: scripts/login.js
+- runFlow: open-app.yaml
+- tapOn: .*Планёрка ЛФК.*
+- extendedWaitUntil:
+    visible:
+      id: conversation
+    timeout: 10000
+- evalScript: ${output.tag = String(Date.now()).slice(-6)}
+- tapOn:
+    id: composer-attach
+- tapOn:
+    id: composer-action-task
+- extendedWaitUntil:
+    visible:
+      id: task-sheet
+    timeout: 5000
+- tapOn:
+    id: task-title-input
+- eraseText: 200
+- inputText: Проверить тренажёры ${output.tag}
+- tapOn:
+    id: task-assignee-kind-department
+- extendedWaitUntil:
+    visible:
+      id: task-group-department
+    timeout: 10000
+- tapOn:
+    id: task-group-department-Зал ЛФК
+- extendedWaitUntil:
+    visible: .*Увидят 3 человека в этом чате.*
+    timeout: 5000
+- takeScreenshot: ${THEME}-task-queue-sheet
+- scrollUntilVisible:
+    element:
+      id: task-create
+    direction: DOWN
+    visibilityPercentage: 100
+- tapOn:
+    id: task-create
+- extendedWaitUntil:
+    notVisible:
+      id: task-sheet
+    timeout: 10000
+- extendedWaitUntil:
+    visible: .*Отдел «Зал ЛФК» · возьмёт первый из 3.*
+    timeout: 10000
+- takeScreenshot: ${THEME}-task-queue-card
+# Олег takes it: the card names him.
+- runScript: scripts/take-task.js
+- assertTrue: ${output.takeStatus == 200}
+- extendedWaitUntil:
+    visible: .*Олег Чернов · отвечает.*
+    timeout: 10000
+- takeScreenshot: ${THEME}-task-queue-taken
+- tapOn:
+    id: conversation-back
+    retryTapIfNoChange: true
