@@ -37,14 +37,18 @@ import { ThreadPanel } from "./ThreadPanel";
 import { ChatStatusLine } from "./HeaderStatus";
 import { useUploadActivity } from "../composer/useUploadActivity";
 import { useChatAgents } from "../agentchat/useChatAgents";
-import { ScheduledBar } from "../scheduled/ScheduledBar";
 import {
   ComposerScheduleDialog,
   type ScheduleDraft,
 } from "../scheduled/ComposerScheduleDialog";
 import { RequestDialog } from "../requests/RequestDialog";
 import { RequestAnswersPanel } from "../requests/RequestAnswersPanel";
-import { ReminderStrip, WaitingStrip } from "../requests/ChatStrips";
+import { ReminderStrip } from "../requests/ChatStrips";
+import { ChatSlot } from "./ChatSlot";
+import { CreateTaskDialog } from "../tasks/CreateTask";
+import { TaskPanel } from "../tasks/TaskPanel";
+import { useTaskViewer } from "../tasks/format";
+import { useTasksAvailable } from "../tasks/useTasks";
 import { useToast } from "../shell/ToastProvider";
 
 export function Conversation({
@@ -52,20 +56,26 @@ export function Conversation({
   chat,
   threadID,
   requestID = null,
+  taskPanel = null,
   onBack,
   onOpenThread,
   onCloseThread,
   onOpenRequest,
+  onOpenTask,
 }: {
   chatID: string;
   chat?: Chat;
   threadID: string | null;
   /** The request whose answers panel is open. */
   requestID?: string | null;
+  /** All tasks of the chat or one task, in the panel of the thread. */
+  taskPanel?: { kind: "list" } | { kind: "task"; messageID: string } | null;
   onBack(): void;
   onOpenThread(id: string): void;
   onCloseThread(): void;
   onOpenRequest?(messageID: string): void;
+  /** A task's own screen in the panel. */
+  onOpenTask?(messageID: string): void;
 }) {
   const { t, i18n } = useTranslation();
   const isMobile = useIsMobile();
@@ -83,6 +93,8 @@ export function Conversation({
   const { toast } = useToast();
   const features = useStore(store, (state) => state.features);
   const [requesting, setRequesting] = useState(false);
+  const [tasking, setTasking] = useState(false);
+  const tasksOn = useTasksAvailable();
   const typingActions = useStore(store, (state) => state.typingActions[chatID]);
   const presence = useStore(store, (state) => state.presence);
   const orgStructure = useMentionStructure();
@@ -118,14 +130,7 @@ export function Conversation({
   const [scheduling, setScheduling] = useState<ScheduleDraft | null>(null);
 
   const title = titleOf(chat, members, user.id);
-  // One strip under the header: “Waiting for your answer” wins over Scheduled.
-  const waitingStripShown = useStore(
-    store,
-    (state) =>
-      (state.unread.chats.find((item) => item.chat_id === chatID)
-        ?.requests_waiting ?? 0) > 0 &&
-      state.features.includes("message_requests"),
-  );
+  const taskViewer = useTaskViewer(chatID, members);
   const directPeer =
     chat?.kind === "direct"
       ? (chat.direct_peer ??
@@ -234,7 +239,7 @@ export function Conversation({
     <div
       className={cx(
         "conversation",
-        (threadID || requestID) && "conversation--thread-open",
+        (threadID || requestID || taskPanel) && "conversation--thread-open",
       )}
     >
       <div className="conversation__main">
@@ -294,15 +299,15 @@ export function Conversation({
           </div>
         </header>
         <ReminderStrip chatID={chatID} />
-        {waitingStripShown ? (
-          <WaitingStrip
-            chatID={chatID}
-            messages={feed.messages}
-            onJump={(id) => void feed.jump(id)}
-          />
-        ) : (
-          <ScheduledBar chatID={chatID} />
-        )}
+        <ChatSlot
+          chatID={chatID}
+          members={members}
+          messages={feed.messages}
+          viewer={taskViewer}
+          canCreateTask={tasksOn && !readonly}
+          onJump={(id) => void feed.jump(id)}
+          onNewTask={() => setTasking(true)}
+        />
 
         <div className="conversation__stream">
           <div
@@ -476,9 +481,28 @@ export function Conversation({
           placeholder={commands.length ? t("acComposerPlaceholder") : undefined}
           features={features}
           onRequest={() => setRequesting(true)}
+          onTask={tasksOn ? () => setTasking(true) : undefined}
         />
       </div>
 
+      {taskPanel && !threadID && !requestID && (
+        <TaskPanel
+          chatID={chatID}
+          members={members}
+          panel={taskPanel}
+          onOpenTask={(id) => onOpenTask?.(id)}
+          onJump={(id) => void feed.jump(id)}
+          onClose={onCloseThread}
+        />
+      )}
+      {tasking && (
+        <CreateTaskDialog
+          chatID={chatID}
+          members={members}
+          onCreated={() => requestAnimationFrame(feed.scrollToBottom)}
+          onClose={() => setTasking(false)}
+        />
+      )}
       {requestID && !threadID && (
         <RequestAnswersPanel
           chatID={chatID}

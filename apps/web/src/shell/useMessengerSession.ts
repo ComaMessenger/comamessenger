@@ -45,6 +45,7 @@ import {
   scheduledQueryKey,
 } from "../scheduled/useScheduled";
 import { applyWorkplaceEvent, invalidateWorkplace } from "../requests/realtime";
+import { applyTaskEvent } from "../tasks/realtime";
 
 export type InAppNotification = {
   id: string;
@@ -259,8 +260,25 @@ export function useMessengerSession({
               if (org.kind === "refetch") scheduleOrgRefetch(org.delayMs);
               return true;
             }
+            // The reader's part in a task before the update: losing it
+            // changes Waiting for you and the counters as much as gaining it.
+            const previousTask =
+              event.type === "task.updated" &&
+              typeof event.data.message_id === "string"
+                ? (store.getState().taskOf(event.data.message_id) ??
+                  undefined)
+                : undefined;
             const applied = store.getState().apply(event);
-            if (refreshesUnread(event)) unreadRefresher.request();
+            if (
+              refreshesUnread(
+                event,
+                previousTask !== undefined
+                  ? { me: user.id, previous: previousTask }
+                  : undefined,
+              )
+            )
+              unreadRefresher.request();
+            applyTaskEvent(queryClient, user.id, event);
             // Requests and reminders: private lists and the reader's own
             // reminders, which only reach the owner's devices.
             if (applyWorkplaceEvent(queryClient, user.id, event))

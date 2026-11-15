@@ -48,6 +48,16 @@ const routes = [
   }),
   createRoute({
     getParentRoute: () => root,
+    path: "/chat/$chatId/tasks",
+    component: marker,
+  }),
+  createRoute({
+    getParentRoute: () => root,
+    path: "/chat/$chatId/tasks/$messageId",
+    component: marker,
+  }),
+  createRoute({
+    getParentRoute: () => root,
     path: "/threads",
     component: marker,
   }),

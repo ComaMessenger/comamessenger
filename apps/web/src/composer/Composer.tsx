@@ -100,6 +100,7 @@ export function Composer({
   onRequest,
   structure = null,
   authorID = "",
+  onTask,
 }: {
   members: ChatMember[];
   presence?: PresenceMap;
@@ -137,6 +138,8 @@ export function Composer({
   structure?: OrgStructure | null;
   /** The author, left out of the department counts. */
   authorID?: string;
+  /** Task from + (`message_tasks`): opens New task. */
+  onTask?(): void;
 }) {
   const { t } = useTranslation();
   const input = useRef<HTMLTextAreaElement>(null);
@@ -185,13 +188,17 @@ export function Composer({
     platform: "web",
     readonly,
     hasAgents: !compact && agents.length > 0,
-    features: onRequest ? features : [],
+    features: onRequest || onTask ? features : [],
     inThread: compact,
   })
-    // Tasks (wave 3) have no web screens yet: no dead item in the menu.
+    // A screen without the form does not offer its item.
     .map((group) => ({
       ...group,
-      items: group.items.filter((entry) => entry.id !== "task"),
+      items: group.items.filter(
+        (entry) =>
+          (entry.id !== "task" || onTask) &&
+          (entry.id !== "request" || onRequest),
+      ),
     }))
     .filter((group) => group.items.length > 0);
   const atAttachmentLimit = attachments.length >= attachmentLimit;
@@ -405,6 +412,9 @@ export function Composer({
     else if (id === "request") {
       setAttachOpen(false);
       onRequest?.();
+    } else if (id === "task") {
+      setAttachOpen(false);
+      onTask?.();
     } else if (id === "agent") {
       if (agents.length === 1) callAgent(agents[0]!);
       else setPlusView("agents");

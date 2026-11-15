@@ -146,13 +146,174 @@ const answer = (option: number, at: string, comment = ""): Answer => ({
   version: 1,
 });
 
+export type TaskItemRecord = {
+  id: string;
+  text: string;
+  assignee_id: string | null;
+  done_at: string | null;
+  done_by: string | null;
+};
+
+export type TaskRecord = {
+  id: string;
+  chat_id: string;
+  author: string;
+  title: string;
+  description: string;
+  created_seq: number;
+  created_at: string;
+  assignee: {
+    kind: "person" | "department" | "position";
+    actor_id: string | null;
+    label: string;
+    candidate_ids: string[];
+    department_id?: string | null;
+    position_id?: string | null;
+  };
+  status: "open" | "in_progress" | "done" | "canceled";
+  status_changed_at: string | null;
+  status_changed_by: string | null;
+  canceled_reason: string | null;
+  due_at: string | null;
+  remind_before_due: boolean;
+  items: TaskItemRecord[];
+  source_message_id: string | null;
+  last_nudge_at: string | null;
+  nudge_count: number;
+  version: number;
+};
+
 export const ids = {
   mats: id(30),
   planning: id(31),
   saturday: id(32),
   journal: id(33),
   printouts: id(35),
+  pool: id(40),
+  hall: id(41),
+  keys: id(42),
+  december: id(43),
+  journalTask: id(44),
+  department: id(80),
+  position: id(81),
 };
+
+const item = (
+  n: number,
+  text: string,
+  assignee: string | null,
+  doneBy: string | null = null,
+): TaskItemRecord => ({
+  id: id(100 + n),
+  text,
+  assignee_id: assignee,
+  done_at: doneBy ? "2026-11-11T06:05:00Z" : null,
+  done_by: doneBy,
+});
+
+const person = (actorID: string) => ({
+  kind: "person" as const,
+  actor_id: actorID,
+  label: "",
+  candidate_ids: [],
+});
+
+/**
+ * Tasks of «Инструкторы · зал» as in the prototype: one burning on Anna,
+ * one with a checklist, one on Oleg set by Anna, one done; and an overdue
+ * one in «Общий».
+ */
+export function taskFixtures(): TaskRecord[] {
+  const base = {
+    description: "",
+    status_changed_at: null,
+    status_changed_by: null,
+    canceled_reason: null,
+    remind_before_due: true,
+    items: [],
+    source_message_id: null,
+    last_nudge_at: null,
+    nudge_count: 0,
+    version: 1,
+  };
+  return [
+    {
+      ...base,
+      id: ids.pool,
+      chat_id: chatID,
+      author: people.marina.actor_id,
+      title: "Повесить новое расписание бассейна",
+      created_seq: 6,
+      created_at: "2026-11-11T06:45:00Z",
+      assignee: person(anna.id),
+      status: "open",
+      due_at: "2026-11-11T09:00:00Z",
+    },
+    {
+      ...base,
+      id: ids.hall,
+      chat_id: chatID,
+      author: people.marina.actor_id,
+      title: "Подготовить большой зал к слоту в пт, 9:00",
+      description: "Слот Олега, после — группа на растяжку.",
+      created_seq: 7,
+      created_at: "2026-11-11T06:50:00Z",
+      assignee: person(anna.id),
+      status: "open",
+      due_at: "2026-11-13T05:45:00Z",
+      items: [
+        item(1, "Разложить маты", people.oleg.actor_id, people.oleg.actor_id),
+        item(2, "Достать инвентарь из кладовой", anna.id),
+        item(3, "Проветрить зал", null),
+      ],
+      version: 3,
+    },
+    {
+      ...base,
+      id: ids.keys,
+      chat_id: chatID,
+      author: anna.id,
+      title: "Забрать ключи от малого зала у охраны",
+      created_seq: 8,
+      created_at: "2026-11-11T06:55:00Z",
+      assignee: person(people.oleg.actor_id),
+      status: "in_progress",
+      status_changed_at: "2026-11-11T07:00:00Z",
+      status_changed_by: people.oleg.actor_id,
+      due_at: "2026-11-11T14:00:00Z",
+      version: 2,
+    },
+    {
+      ...base,
+      id: ids.december,
+      chat_id: chatID,
+      author: people.igor.actor_id,
+      title: "Передать график на декабрь",
+      created_seq: 9,
+      created_at: "2026-11-11T07:00:00Z",
+      assignee: person(anna.id),
+      status: "done",
+      status_changed_at: "2026-11-11T07:05:00Z",
+      status_changed_by: anna.id,
+      due_at: null,
+      remind_before_due: false,
+      version: 2,
+    },
+    {
+      ...base,
+      id: ids.journalTask,
+      chat_id: otherChatID,
+      author: people.marina.actor_id,
+      title: "Сдать журнал инструктажа по технике безопасности",
+      created_seq: 2,
+      created_at: "2026-11-09T07:00:00Z",
+      assignee: person(anna.id),
+      status: "open",
+      due_at: "2026-11-10T15:00:00Z",
+      version: 1,
+    },
+  ];
+}
 
 export function fixtures() {
   const texts: TextRecord[] = [
@@ -274,7 +435,14 @@ export function fixtures() {
       version: 1,
     },
   ];
-  return { texts, requests, reminders };
+  return {
+    texts,
+    requests,
+    reminders,
+    tasks: [] as TaskRecord[],
+    pins: [] as string[],
+    scheduled: [] as Array<{ id: string; chat_id: string; body: string; send_at: string }>,
+  };
 }
 
 export async function mockWorkplace(
@@ -284,13 +452,25 @@ export async function mockWorkplace(
     /** HelloFrame.features; both by default. */
     features?: string[];
     data?: ReturnType<typeof fixtures>;
+    /** Who is signed in; Anna by default. */
+    me?: keyof typeof people;
+    /** chats.moderate and requests.address_groups, for the queue form. */
+    permissions?: string[];
   } = {},
 ) {
   const { theme = "light" } = options;
   const features = options.features ?? ["message_requests", "message_reminders"];
   const data = options.data ?? fixtures();
   const calls: Array<{ method: string; path: string; body: unknown }> = [];
-  const me = anna.id;
+  const me = people[options.me ?? "anna"].actor_id;
+  const meUser = {
+    ...anna,
+    id: me,
+    display_name: people[options.me ?? "anna"].display_name,
+    handle: people[options.me ?? "anna"].handle,
+    title: people[options.me ?? "anna"].title,
+    permissions: options.permissions ?? [],
+  };
   const allMembers = Object.values(people);
   const nowISO = now.toISOString();
   await page.clock.setFixedTime(now);
@@ -402,7 +582,66 @@ export async function mockWorkplace(
   };
   const authorOf = (actorID: string) =>
     allMembers.find((item) => item.actor_id === actorID)!;
-  const messageOf = (record: TextRecord | RequestRecord) => {
+  const chatMembers = (chat: string) =>
+    chat === otherChatID ? [people.anna, people.marina] : allMembers;
+  const inChat = (chat: string, actorID: string | null) =>
+    Boolean(actorID) &&
+    chatMembers(chat).some((member) => member.actor_id === actorID);
+  const taskOf = (r: TaskRecord) => {
+    const source = r.source_message_id
+      ? [...data.texts, ...data.requests].find(
+          (entry) => entry.id === r.source_message_id,
+        )
+      : null;
+    return {
+      title: r.title,
+      description: r.description,
+      status: r.status,
+      canceled_reason: r.canceled_reason,
+      status_changed_at: r.status_changed_at,
+      status_changed_by: r.status_changed_by,
+      assignee: {
+        ...r.assignee,
+        in_chat: inChat(r.chat_id, r.assignee.actor_id),
+      },
+      due_at: r.due_at,
+      remind_before_due: r.remind_before_due,
+      items: r.items.map((entry) => ({
+        ...entry,
+        assignee_in_chat: inChat(r.chat_id, entry.assignee_id),
+      })),
+      items_done: r.items.filter((entry) => entry.done_at).length,
+      source: r.source_message_id
+        ? {
+            message_id: r.source_message_id,
+            author_id: source?.author ?? anna.id,
+            excerpt: source ? source.body.slice(0, 140) : "",
+            deleted: !source,
+          }
+        : null,
+      last_nudge_at: r.last_nudge_at,
+      nudge_count: r.nudge_count,
+      version: r.version,
+    };
+  };
+  const taskMessage = (r: TaskRecord) => ({
+    id: r.id,
+    chat_id: r.chat_id,
+    actor_id: r.author,
+    client_msg_id: r.id.replace("4000-8000", "4000-9000"),
+    type: "task",
+    body: r.description ? `${r.title}\n\n${r.description}` : r.title,
+    body_format: "markdown",
+    version: 1,
+    created_seq: r.created_seq,
+    created_at: r.created_at,
+    mentioned_actor_ids: [],
+    files: [],
+    thread_reply_count: 0,
+    task: taskOf(r),
+  });
+  const messageOf = (record: TextRecord | RequestRecord | TaskRecord) => {
+    if ("assignee" in record) return taskMessage(record);
     const request = "recipients" in record ? record : null;
     return {
       id: record.id,
@@ -425,7 +664,7 @@ export async function mockWorkplace(
     };
   };
   const feed = (chat: string) =>
-    [...data.texts, ...data.requests]
+    [...data.texts, ...data.requests, ...data.tasks]
       .filter((item) => item.chat_id === chat)
       .sort((left, right) => left.created_seq - right.created_seq)
       .map(messageOf);
@@ -451,6 +690,41 @@ export async function mockWorkplace(
     data.requests.filter(
       (r) => r.status === "open" && r.recipients.includes(me) && !r.answers[me],
     );
+  const activeTask = (r: TaskRecord) =>
+    r.status === "open" || r.status === "in_progress";
+  const taskRoleOf = (r: TaskRecord, who = me) =>
+    r.assignee.actor_id === who
+      ? "responsible"
+      : r.items.some((entry) => entry.assignee_id === who && !entry.done_at)
+        ? "item"
+        : r.assignee.actor_id === null && r.assignee.candidate_ids.includes(who)
+          ? "candidate"
+          : r.author === who
+            ? "author"
+            : null;
+  const onMe = (r: TaskRecord) =>
+    activeTask(r) &&
+    ["responsible", "item", "candidate"].includes(taskRoleOf(r) ?? "") &&
+    inChat(r.chat_id, me);
+  const hot = (due: string | null) =>
+    Boolean(due) && Date.parse(due!) - now.getTime() < 24 * 3600_000;
+  const byDue = (left: TaskRecord, right: TaskRecord) =>
+    (left.due_at ? Date.parse(left.due_at) : Infinity) -
+      (right.due_at ? Date.parse(right.due_at) : Infinity) ||
+    right.created_seq - left.created_seq;
+  const tasksOn = features.includes("message_tasks");
+  const taskUnread = (chat: string) => {
+    if (!tasksOn) return {};
+    const mine = data.tasks.filter((r) => r.chat_id === chat && onMe(r));
+    const dues = mine
+      .map((r) => r.due_at)
+      .filter((value): value is string => Boolean(value))
+      .sort();
+    return {
+      tasks_mine_open: mine.length,
+      tasks_mine_next_due_at: dues[0] ?? null,
+    };
+  };
   const unread = () => {
     const waiting = waitingForMe();
     const dues = waiting
@@ -466,10 +740,32 @@ export async function mockWorkplace(
           mention_count: 0,
           requests_waiting: waiting.length,
           requests_next_due_at: dues[0] ?? null,
+          ...taskUnread(chatID),
         },
+        ...(tasksOn
+          ? [
+              {
+                chat_id: otherChatID,
+                last_read_seq: 1,
+                unread_count: 0,
+                mention_count: 0,
+                requests_waiting: 0,
+                requests_next_due_at: null,
+                ...taskUnread(otherChatID),
+              },
+            ]
+          : []),
       ],
       threads: [],
       requests_waiting_total: waiting.length,
+      ...(tasksOn
+        ? {
+            tasks_mine_open_total: data.tasks.filter(onMe).length,
+            tasks_mine_hot_total: data.tasks.filter(
+              (r) => onMe(r) && hot(r.due_at),
+            ).length,
+          }
+        : {}),
       reminders_fired_total: data.reminders.filter(
         (item) => item.state === "fired",
       ).length,
@@ -492,6 +788,253 @@ export async function mockWorkplace(
     };
   };
 
+  const savedAuthorOf = (actorID: string) => savedAuthor(actorID);
+  const chatRef = (chat: string) => ({
+    id: chat,
+    kind: "group",
+    display_name: chat === otherChatID ? "Общий" : "Инструкторы · зал",
+  });
+  const myTaskItem = (r: TaskRecord, role: string) => ({
+    message: taskMessage(r),
+    author: savedAuthorOf(r.author),
+    chat: chatRef(r.chat_id),
+    my_role: role,
+  });
+  const fail = (status: number, code: string, details: unknown = {}) => ({
+    status,
+    body: { code, message: code, details },
+  });
+  const isAdmin = false;
+  const canManage = (r: TaskRecord) => r.author === me || isAdmin;
+  const canWork = (r: TaskRecord) => canManage(r) || r.assignee.actor_id === me;
+  const bump = (r: TaskRecord) => {
+    r.version += 1;
+  };
+  let nextID = 200;
+  const taskRoute = (
+    method: string,
+    path: string,
+    url: URL,
+    input: { [key: string]: unknown } | null,
+  ): { status: number; body: unknown } => {
+    if (!tasksOn) return fail(501, "not_implemented");
+    const chatTasks = /^\/chats\/([^/]+)\/tasks$/.exec(path);
+    if (chatTasks && method === "POST") {
+      const assignee = input?.assignee as {
+        kind: "person" | "department" | "position";
+        actor_id?: string;
+        department_id?: string;
+        position_id?: string;
+      };
+      const items = (input?.items as { text: string; assignee_id?: string }[]) ?? [];
+      const queue = assignee.kind !== "person";
+      const created: TaskRecord = {
+        id: id((nextID += 1)),
+        chat_id: chatTasks[1]!,
+        author: me,
+        title: String(input?.title),
+        description: String(input?.description ?? ""),
+        created_seq: 20 + nextID,
+        created_at: nowISO,
+        assignee: queue
+          ? {
+              kind: assignee.kind,
+              actor_id: null,
+              label: assignee.kind === "department" ? "Зал ЛФК" : "Инструктор ЛФК",
+              candidate_ids: [people.oleg.actor_id, me],
+              department_id: assignee.department_id ?? null,
+              position_id: assignee.position_id ?? null,
+            }
+          : person(assignee.actor_id!),
+        status: "open",
+        status_changed_at: null,
+        status_changed_by: null,
+        canceled_reason: null,
+        due_at: (input?.due_at as string) ?? null,
+        remind_before_due: Boolean(input?.remind_before_due),
+        items: items.map((entry) => ({
+          id: id((nextID += 1)),
+          text: entry.text,
+          assignee_id: entry.assignee_id ?? null,
+          done_at: null,
+          done_by: null,
+        })),
+        source_message_id: (input?.source_message_id as string) ?? null,
+        last_nudge_at: null,
+        nudge_count: 0,
+        version: 1,
+      };
+      data.tasks.push(created);
+      return { status: 201, body: taskMessage(created) };
+    }
+    if (chatTasks) {
+      const state = url.searchParams.get("state") ?? "open";
+      const list = data.tasks
+        .filter((r) => r.chat_id === chatTasks[1])
+        .filter((r) =>
+          state === "open" ? activeTask(r) : r.status === state,
+        )
+        .sort(byDue);
+      const open = data.tasks.filter(
+        (r) => r.chat_id === chatTasks[1] && activeTask(r),
+      );
+      return {
+        status: 200,
+        body: {
+          items: list.map(taskMessage),
+          counts: {
+            open: open.length,
+            mine: open.filter(onMe).length,
+            mine_hot: open.filter((r) => onMe(r) && hot(r.due_at)).length,
+          },
+          next_cursor: null,
+        },
+      };
+    }
+    if (path === "/tasks/mine") {
+      const role = url.searchParams.get("role") ?? "assigned";
+      const state = url.searchParams.get("state") ?? "open";
+      const list = data.tasks.filter((r) =>
+        role === "authored"
+          ? r.author === me &&
+            (state === "done" ? r.status === "done" : activeTask(r))
+          : state === "done"
+            ? r.status === "done" &&
+              (r.assignee.actor_id === me ||
+                r.items.some((entry) => entry.assignee_id === me))
+            : onMe(r),
+      );
+      return {
+        status: 200,
+        body: {
+          items: list
+            .sort(byDue)
+            .map((r) =>
+              myTaskItem(r, role === "authored" ? "author" : (taskRoleOf(r) ?? "responsible")),
+            ),
+          next_cursor: null,
+        },
+      };
+    }
+    if (path === "/inbox/waiting") {
+      const kind = url.searchParams.get("kind") ?? "all";
+      const requests =
+        kind === "tasks"
+          ? []
+          : waitingForMe().map((r) => ({
+              kind: "request",
+              ...inboxItem(r),
+              due_at: r.due_at,
+              my_role: null,
+            }));
+      const tasks =
+        kind === "requests"
+          ? []
+          : data.tasks.filter(onMe).map((r) => ({
+              kind: "task",
+              message: taskMessage(r),
+              chat_id: r.chat_id,
+              author: savedAuthorOf(r.author),
+              chat: chatRef(r.chat_id),
+              due_at: r.due_at,
+              request: null,
+              viewer: null,
+              my_role: taskRoleOf(r),
+            }));
+      const items = [...requests, ...tasks].sort(
+        (left, right) =>
+          (left.due_at ? Date.parse(left.due_at) : Infinity) -
+          (right.due_at ? Date.parse(right.due_at) : Infinity),
+      );
+      return { status: 200, body: { items, next_cursor: null } };
+    }
+    const match =
+      /^\/tasks\/([^/]+)(?:\/(status|take|nudge|items)(?:\/([^/]+))?)?$/.exec(path);
+    const r = match ? data.tasks.find((entry) => entry.id === match[1]) : null;
+    if (!match || !r) return fail(404, "task_not_found");
+    const action = match[2];
+    if (!action && method === "GET") return { status: 200, body: taskMessage(r) };
+    if (!action && method === "PATCH") {
+      if (!canManage(r)) return fail(403, "task_forbidden");
+      if (input?.expected_version !== r.version)
+        return fail(409, "task_version_conflict", { task: taskOf(r) });
+      if (typeof input?.title === "string") r.title = input.title;
+      if (typeof input?.description === "string") r.description = input.description;
+      if (input && "due_at" in input) r.due_at = (input.due_at as string) ?? null;
+      if (typeof input?.remind_before_due === "boolean")
+        r.remind_before_due = input.remind_before_due;
+      const next = input?.assignee as { kind: string; actor_id?: string } | undefined;
+      if (next?.kind === "person" && next.actor_id) r.assignee = person(next.actor_id);
+      bump(r);
+      return { status: 200, body: taskMessage(r) };
+    }
+    if (action === "status") {
+      const to = input?.status as TaskRecord["status"];
+      const allowed =
+        to === "canceled" || (r.status === "canceled" && to === "open")
+          ? canManage(r)
+          : canWork(r);
+      if (!allowed) return fail(403, "task_forbidden");
+      if (r.status !== to) {
+        r.status = to;
+        r.status_changed_at = nowISO;
+        r.status_changed_by = me;
+        r.canceled_reason = to === "canceled" ? "author" : null;
+        bump(r);
+      }
+      return { status: 200, body: taskMessage(r) };
+    }
+    if (action === "take") {
+      if (r.assignee.actor_id)
+        return fail(409, "task_already_taken", { task: taskOf(r) });
+      if (!r.assignee.candidate_ids.includes(me)) return fail(403, "task_forbidden");
+      r.assignee = { ...r.assignee, actor_id: me };
+      bump(r);
+      return { status: 200, body: taskMessage(r) };
+    }
+    if (action === "nudge") {
+      r.nudge_count += 1;
+      r.last_nudge_at = nowISO;
+      bump(r);
+      return {
+        status: 200,
+        body: { next_nudge_at: new Date(now.getTime() + 2 * 3600_000).toISOString() },
+      };
+    }
+    if (action === "items") {
+      const itemID = match[3];
+      if (!itemID && method === "POST") {
+        r.items.push({
+          id: id((nextID += 1)),
+          text: String(input?.text),
+          assignee_id: (input?.assignee_id as string) ?? null,
+          done_at: null,
+          done_by: null,
+        });
+        bump(r);
+        return { status: 200, body: taskOf(r) };
+      }
+      const entry = r.items.find((value) => value.id === itemID);
+      if (!entry) return fail(404, "task_not_found");
+      if (method === "DELETE") {
+        r.items = r.items.filter((value) => value !== entry);
+        bump(r);
+        return { status: 204, body: undefined };
+      }
+      if (typeof input?.done === "boolean") {
+        if (!canWork(r) && entry.assignee_id !== me) return fail(403, "task_forbidden");
+        entry.done_at = input.done ? nowISO : null;
+        entry.done_by = input.done ? me : null;
+      }
+      if (typeof input?.text === "string") entry.text = input.text;
+      if (input && "assignee_id" in input)
+        entry.assignee_id = (input.assignee_id as string) ?? null;
+      bump(r);
+      return { status: 200, body: taskOf(r) };
+    }
+    return fail(404, "not_found");
+  };
+
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -504,7 +1047,8 @@ export async function mockWorkplace(
         return null;
       }
     })();
-    if (/request|reminder/.test(path)) calls.push({ method, path, body: input });
+    if (/request|reminder|task|inbox/.test(path))
+      calls.push({ method, path, body: input });
     let status = 200;
     let body: unknown = {};
     const requestMatch = /^\/requests\/([^/]+)(?:\/(answer|answers|remind|close))?$/.exec(path);
@@ -523,9 +1067,9 @@ export async function mockWorkplace(
       body = {
         access_token: "test",
         access_expires_at: "2026-11-12T00:00:00Z",
-        user: anna,
+        user: meUser,
       };
-    else if (path === "/me") body = anna;
+    else if (path === "/me") body = meUser;
     else if (path === "/preferences")
       body = {
         theme,
@@ -553,21 +1097,47 @@ export async function mockWorkplace(
     else if (path === "/unread") body = unread();
     else if (path === "/drafts") body = { drafts: [] };
     else if (path === "/agents") body = [];
-    else if (path === "/scheduled-messages") body = { scheduled_messages: [] };
+    else if (path === "/scheduled-messages")
+      body = {
+        scheduled_messages: data.scheduled.map((entry) => ({
+          ...entry,
+          thread_root_id: null,
+          reply_to_id: null,
+          client_msg_id: entry.id,
+          body_format: "markdown",
+          mentioned_actor_ids: [],
+          files: [],
+          silent: false,
+          status: "pending",
+          failure_reason: null,
+          message_id: null,
+          version: 1,
+          created_at: "2026-11-11T06:00:00Z",
+          updated_at: "2026-11-11T06:00:00Z",
+        })),
+      };
     else if (path === `/chats/${chatID}/members`) body = { members: allMembers };
     else if (path === `/chats/${otherChatID}/members`)
       body = { members: [people.anna, people.marina] };
+    else if (path === `/chats/${chatID}/pins`)
+      body = {
+        pins: data.pins.map((messageID) => ({
+          message_id: messageID,
+          pinned_by: people.marina.actor_id,
+          pinned_at: "2026-11-10T07:00:00Z",
+        })),
+      };
     else if (/^\/chats\/[^/]+\/pins$/.test(path)) body = { pins: [] };
     else if (/^\/chats\/[^/]+\/agents$/.test(path)) body = { agents: [] };
     else if (path === `/chats/${chatID}/messages`)
       body = { messages: feed(chatID), next_before_seq: null };
     else if (path === `/chats/${otherChatID}/messages`)
-      body = { messages: [], next_before_seq: null };
+      body = { messages: feed(otherChatID), next_before_seq: null };
     else if (/^\/chats\/[^/]+\/read$/.test(path))
       body = { chat_id: chatID, last_read_seq: 5, last_read_at: nowISO };
     else if (/^\/messages\/[^/]+\/context$/.test(path)) {
       const target = path.split("/")[2];
-      const record = [...data.texts, ...data.requests].find(
+      const record = [...data.texts, ...data.requests, ...data.tasks].find(
         (item) => item.id === target,
       );
       body = { messages: record ? feed(record.chat_id) : [] };
@@ -688,6 +1258,10 @@ export async function mockWorkplace(
         r.version += 1;
         body = { request: requestOf(r), viewer: viewerOf(r) };
       }
+    } else if (/^\/(tasks|inbox)\b|^\/chats\/[^/]+\/tasks$/.test(path)) {
+      const result = taskRoute(method, path, url, input);
+      status = result.status;
+      body = result.body;
     } else if (path.startsWith("/reminders/ids")) {
       const chat = url.searchParams.get("chat_id");
       body = {
@@ -752,6 +1326,7 @@ export async function mockWorkplace(
   return {
     calls,
     data,
+    taskMessage,
     emit: (frame: { [key: string]: unknown }) =>
       page.evaluate(
         (value) =>

@@ -146,7 +146,13 @@ export function ImportantDirectory({ selectedID }: { selectedID?: string }) {
       <DirectoryList
         title={t("important")}
         lead={
-          tab === "waiting" ? t("importantWaitingLead") : t("remindersLead")
+          tab === "waiting"
+            ? t(
+                features.includes("message_tasks")
+                  ? "importantWaitingLeadTasks"
+                  : "importantWaitingLead",
+              )
+            : t("remindersLead")
         }
         toolbar={tabRow}
         className="important-inbox"

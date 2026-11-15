@@ -95,6 +95,14 @@ export function Messenger({
   const requestID = selectedID
     ? (/^\/chat\/[^/]+\/requests\/([^/]+)/.exec(path)?.[1] ?? null)
     : null;
+  const taskPanel = useMemo(() => {
+    if (!selectedID) return null;
+    const match = /^\/chat\/[^/]+\/tasks(?:\/([^/?#]+))?\/?$/.exec(path);
+    if (!match) return null;
+    return match[1]
+      ? ({ kind: "task", messageID: match[1] } as const)
+      : ({ kind: "list" } as const);
+  }, [path, selectedID]);
   const selectedChat = useStore(store, (state) =>
     selectedID ? state.chats[selectedID] : undefined,
   );
@@ -196,6 +204,8 @@ export function Messenger({
       threadID={threadID}
       requestID={requestID}
       onOpenRequest={(id) => navigate(`/chat/${selectedID}/requests/${id}`)}
+      taskPanel={taskPanel}
+      onOpenTask={(id) => navigate(`/chat/${selectedID}/tasks/${id}`)}
       onBack={() => navigate("/chats")}
       onOpenThread={(id) => navigate(`/chat/${selectedID}/thread/${id}`)}
       onCloseThread={() => navigate(`/chat/${selectedID}`)}
@@ -293,7 +303,7 @@ export function Messenger({
             (directory?.id || knowledge?.collectionID) &&
               "messenger--detail-open",
             selectedID && "messenger--chat-open",
-            (threadID || requestID) && "messenger--thread-open",
+            (threadID || requestID || taskPanel) && "messenger--thread-open",
             (showAgents || activeSettings || user.must_change_password) &&
               "messenger--settings",
           )}

@@ -1,0 +1,745 @@
+/* Tasks («Задача») and the one slot under the chat header (phase 6.6,
+   wave 3). Sizes follow design/prototypes/workplace; colours come from
+   packages/tokens only, so both themes follow. */
+
+/* The round and square check -------------------------------------------- */
+.task-check {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1.5px solid var(--coma-border-strong);
+  border-radius: 6px;
+  background: var(--coma-surface);
+  color: var(--coma-on-primary);
+  cursor: pointer;
+}
+.task-check > svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2.6;
+}
+.task-check[aria-checked="true"] {
+  border-color: var(--coma-primary);
+  background: var(--coma-primary);
+}
+.task-check:disabled {
+  cursor: default;
+}
+.task-check:not(:disabled):hover {
+  border-color: var(--coma-primary);
+}
+.task-check:focus-visible {
+  outline: 2px solid var(--coma-primary);
+  outline-offset: 2px;
+}
+.task-check--round {
+  border-radius: 50%;
+}
+.task-check--round:not([aria-checked="true"]) > svg {
+  color: transparent;
+}
+.task-check--round:not(:disabled):not([aria-checked="true"]):hover > svg {
+  color: var(--coma-primary);
+}
+.task-check--static {
+  cursor: default;
+}
+
+/* The card in the feed ----------------------------------------------------- */
+.task-card {
+  display: grid;
+  gap: 6px;
+  max-width: 480px;
+  min-width: 0;
+  margin-block: 4px 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--coma-border);
+  border-radius: var(--coma-radius-lg);
+  background: var(--coma-surface);
+}
+.task-card__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--coma-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.task-card__head > svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.task-card__head > span:first-of-type {
+  flex: 1;
+  min-width: 0;
+}
+.task-card__more {
+  margin-block: -4px;
+  margin-inline-end: -6px;
+}
+.task-card__title {
+  color: var(--coma-foreground);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.task-card__title--closed {
+  color: var(--coma-muted);
+  text-decoration: line-through;
+}
+.task-card__desc {
+  margin-block-start: -2px;
+  color: var(--coma-muted);
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.task-card__desc p {
+  margin: 0;
+}
+.task-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  color: var(--coma-muted);
+  font-size: 13px;
+}
+.task-card__who,
+.task-card__due {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.task-card__who > svg,
+.task-card__due > svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.task-card__due--hot {
+  color: var(--coma-danger-text);
+  font-weight: 600;
+}
+.task-card__away {
+  color: var(--coma-warning);
+  font-size: 12px;
+}
+.task-card__items {
+  display: grid;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.task-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  font-size: 14px;
+}
+.task-item__text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.task-item--done .task-item__text {
+  color: var(--coma-muted);
+  text-decoration: line-through;
+}
+.task-item__who {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+}
+.task-card__source {
+  justify-self: start;
+  max-width: 100%;
+  margin-block-start: 2px;
+  padding: 0 0 0 8px;
+  border: 0;
+  border-inline-start: 2px solid var(--coma-border-strong);
+  background: transparent;
+  color: var(--coma-muted);
+  font: inherit;
+  font-size: 12px;
+  text-align: start;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.task-card__source:disabled {
+  cursor: default;
+}
+.task-card__source:not(:disabled):hover {
+  color: var(--coma-foreground);
+}
+.task-card__note {
+  color: var(--coma-muted);
+  font-size: 12px;
+}
+.task-card__note--warning {
+  color: var(--coma-warning);
+  font-weight: 500;
+}
+.task-card__note--ok {
+  color: var(--coma-success-text);
+  font-weight: 500;
+}
+.task-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-block-start: 4px;
+}
+.task-card__actions .ui-button > svg {
+  width: 14px;
+  height: 14px;
+}
+
+.task-pill {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-height: 20px;
+  padding: 1px 7px;
+  border-radius: 5px;
+  background: var(--coma-surface-hover);
+  color: var(--coma-muted);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.task-pill--in_progress {
+  background: var(--coma-primary-soft);
+  color: var(--coma-primary);
+}
+.task-pill--done {
+  background: var(--coma-success-soft);
+  color: var(--coma-success-text);
+}
+.task-pill--overdue {
+  background: var(--coma-danger-soft);
+  color: var(--coma-danger-text);
+}
+
+/* A row of a task list ---------------------------------------------------- */
+.task-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 14px;
+  border-block-end: 1px solid var(--coma-border);
+  background: var(--coma-surface);
+}
+.task-row > .task-check {
+  margin-block-start: 1px;
+}
+.task-row--mine {
+  box-shadow: inset 3px 0 0 var(--coma-danger);
+}
+.task-row__body {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.task-row__body:focus-visible {
+  outline: 2px solid var(--coma-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.task-row__title {
+  color: var(--coma-foreground);
+  font-size: 14px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.task-row__title--done {
+  color: var(--coma-muted);
+  text-decoration: line-through;
+}
+.task-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 0;
+  color: var(--coma-muted);
+  font-size: 12px;
+}
+.task-row__who {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.task-row__part {
+  white-space: pre;
+}
+.task-row__hot {
+  color: var(--coma-danger-text);
+  font-weight: 600;
+}
+.task-row__meta .task-pill {
+  margin-inline-start: 6px;
+  min-height: 18px;
+  font-size: 10.5px;
+}
+.task-row:hover {
+  background: var(--coma-surface-hover);
+}
+
+/* The slot under the chat header ------------------------------------------ */
+.chat-slot-wrap {
+  position: relative;
+  z-index: 4;
+  flex: none;
+}
+.chat-slot {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 46px;
+  padding: 5px 12px 5px 20px;
+  border-block-end: 1px solid var(--coma-border);
+  background: var(--coma-surface);
+}
+.chat-slot--danger {
+  background: var(--coma-danger-soft);
+}
+.chat-slot__icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--coma-muted);
+}
+.chat-slot__icon > svg {
+  width: 17px;
+  height: 17px;
+}
+.chat-slot--danger .chat-slot__icon {
+  color: var(--coma-danger-text);
+}
+.chat-slot--warning .chat-slot__icon {
+  color: var(--coma-warning);
+}
+.chat-slot--accent .chat-slot__icon {
+  color: var(--coma-primary);
+}
+.chat-slot__bars {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 2px;
+}
+.chat-slot__bars > i {
+  display: block;
+  width: 3px;
+  height: 9px;
+  border-radius: 2px;
+  background: var(--coma-border-strong);
+}
+.chat-slot__bars > i.chat-slot__bar--on {
+  background: var(--coma-primary);
+}
+.chat-slot__complete {
+  width: 22px;
+  height: 22px;
+  border-color: var(--coma-danger-text);
+}
+.chat-slot__main {
+  display: grid;
+  flex: 1;
+  gap: 1px;
+  min-width: 0;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--coma-foreground);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.chat-slot__main:focus-visible {
+  outline: 2px solid var(--coma-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.chat-slot__caption {
+  color: var(--coma-primary);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.chat-slot--danger .chat-slot__caption {
+  color: var(--coma-danger-text);
+}
+.chat-slot--warning .chat-slot__caption {
+  color: var(--coma-warning);
+}
+.chat-slot--neutral .chat-slot__caption {
+  color: var(--coma-muted);
+}
+.chat-slot__title {
+  font-size: 13.5px;
+}
+.chat-slot__chips {
+  display: flex;
+  flex: none;
+  gap: 2px;
+}
+.chat-slot__chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 30px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--coma-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.chat-slot__chip > svg {
+  width: 14px;
+  height: 14px;
+}
+.chat-slot__chip:hover {
+  background: var(--coma-surface-hover);
+}
+.chat-slot__chip--on {
+  background: var(--coma-surface-selected);
+  color: var(--coma-foreground);
+}
+.chat-slot--danger .chat-slot__chip--on,
+.chat-slot--danger .chat-slot__chip:hover {
+  background: var(--coma-surface);
+}
+.chat-slot__chip--danger {
+  color: var(--coma-danger-text);
+}
+.chat-slot__chip:focus-visible {
+  outline: 2px solid var(--coma-primary);
+  outline-offset: -2px;
+}
+.chat-slot__dot {
+  position: absolute;
+  inset-block-start: 4px;
+  inset-inline-end: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--coma-primary);
+}
+.chat-slot__dim {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  padding: 0;
+  border: 0;
+  background: var(--coma-overlay);
+  opacity: 0.5;
+  cursor: default;
+}
+.chat-tasks-drop {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: 100%;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  max-height: min(420px, 60vh);
+  border-block-end: 1px solid var(--coma-border);
+  border-radius: 0 0 var(--coma-radius-xl) var(--coma-radius-xl);
+  background: var(--coma-surface);
+  box-shadow: var(--coma-shadow-float);
+  overflow: hidden;
+}
+.chat-tasks-drop__scroll {
+  overflow-y: auto;
+}
+.chat-tasks-drop__section {
+  margin: 0;
+  padding: 12px 16px 6px;
+  color: var(--coma-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.chat-tasks-drop__section--mine {
+  color: var(--coma-danger-text);
+}
+.chat-tasks-drop__empty {
+  margin: 0;
+  padding: 16px;
+  color: var(--coma-muted);
+  font-size: 13px;
+}
+.chat-tasks-drop__foot {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px 12px;
+}
+.chat-tasks-drop__foot .ui-button {
+  flex: 1;
+}
+.chat-tasks-drop__foot .ui-button > svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* The form ------------------------------------------------------------------ */
+.task-dialog__title {
+  font-size: 14px;
+  font-weight: 600;
+}
+.task-dialog__source {
+  margin: 0;
+}
+.task-dialog__person {
+  gap: 6px;
+  padding-inline-start: 4px;
+}
+.task-dialog__more {
+  display: inline-flex;
+}
+.task-dialog__items {
+  display: grid;
+  gap: 6px;
+}
+.task-dialog__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.task-dialog__item > .request-input {
+  flex: 1;
+}
+.task-dialog__item-who {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px dashed var(--coma-border-strong);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--coma-muted);
+  cursor: pointer;
+}
+.task-dialog__item-who--set {
+  border: 0;
+}
+.task-dialog__item-who > svg {
+  width: 16px;
+  height: 16px;
+}
+.task-dialog__item-who:focus-visible {
+  outline: 2px solid var(--coma-primary);
+  outline-offset: 2px;
+}
+
+.task-picker {
+  padding: 8px;
+}
+.task-picker__search {
+  margin-block-end: 6px;
+}
+.task-picker__list {
+  display: grid;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.task-picker__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--coma-foreground);
+  font: inherit;
+  font-size: 13px;
+  text-align: start;
+  cursor: pointer;
+}
+.task-picker__row:hover,
+.task-picker__row:focus-visible {
+  background: var(--coma-surface-hover);
+  outline: 0;
+}
+.task-picker__row > svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--coma-primary);
+}
+.task-picker__row > .task-picker__none {
+  color: var(--coma-muted);
+}
+.task-picker__name {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.task-picker__name small {
+  color: var(--coma-muted);
+  font-size: 11.5px;
+}
+.task-picker__empty {
+  margin: 0;
+  padding: 8px;
+  color: var(--coma-muted);
+  font-size: 13px;
+}
+
+/* The panel ---------------------------------------------------------------- */
+.task-panel__scroll {
+  gap: 14px;
+  padding: 12px 16px;
+}
+.task-panel .task-card {
+  max-width: none;
+}
+.task-screen {
+  display: grid;
+  gap: 16px;
+}
+.task-screen__section {
+  margin: 0;
+  color: var(--coma-foreground);
+  font-size: 13px;
+  font-weight: 600;
+}
+.task-screen__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.task-screen__links .ui-button > svg {
+  width: 14px;
+  height: 14px;
+}
+.task-edit {
+  padding-block-start: 12px;
+  border-block-start: 1px solid var(--coma-border);
+}
+.task-edit__person {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--coma-control-md);
+  padding: 4px 10px;
+  border: 1px solid var(--coma-border-strong);
+  border-radius: var(--coma-radius-md);
+  background: var(--coma-surface);
+  color: var(--coma-foreground);
+  font: inherit;
+  font-size: 13px;
+  text-align: start;
+  cursor: pointer;
+}
+.task-edit__person > span {
+  flex: 1;
+}
+.task-edit__person small {
+  color: var(--coma-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+.task-edit__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.task-items-editor {
+  display: grid;
+  gap: 6px;
+  padding-block-start: 12px;
+  border-block-start: 1px solid var(--coma-border);
+}
+.task-list {
+  display: grid;
+  gap: 8px;
+}
+.task-list__rows {
+  border: 1px solid var(--coma-border);
+  border-radius: var(--coma-radius-lg);
+  overflow: hidden;
+}
+.task-list__rows > [role="listitem"]:last-child .task-row {
+  border-block-end: 0;
+}
+
+/* «Ждут вас» with tasks ----------------------------------------------------- */
+.waiting-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.waiting-filters__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.inbox__section--danger {
+  color: var(--coma-danger-text);
+}
+.inbox-task,
+.my-tasks__rows {
+  border: 1px solid var(--coma-border);
+  border-radius: var(--coma-radius-lg);
+  overflow: hidden;
+}
+.inbox-task .task-row,
+.my-tasks__rows > .task-row:last-child {
+  border-block-end: 0;
+}
+.my-tasks {
+  display: grid;
+  gap: 4px;
+}
+
+/* The chat list mark --------------------------------------------------------- */
+.chat-row__need--task {
+  background: var(--coma-danger-soft);
+  color: var(--coma-danger-text);
+}
+
+@media (max-width: 640px) {
+  .chat-slot {
+    padding-inline-start: 12px;
+  }
+  .chat-tasks-drop {
+    max-height: 65vh;
+  }
+}
+.waiting-filters .ui-segmented > button {
+  flex: none;
+  min-width: 96px;
+  padding-inline: 12px;
+}

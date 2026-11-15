@@ -8,43 +8,6 @@
   letter-spacing: 0.02em;
 }
 
-/* Strip under the chat header ------------------------------------------- */
-.scheduled-bar {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 8px;
-  min-height: 36px;
-  padding: 6px 20px;
-  border: 0;
-  border-block-end: 1px solid var(--coma-border);
-  background: var(--coma-primary-soft);
-  color: var(--coma-primary);
-  font-size: 13px;
-  font-weight: 500;
-  text-align: start;
-  cursor: pointer;
-  transition: background var(--coma-motion-fast) var(--coma-ease);
-}
-.scheduled-bar:hover {
-  background: var(--coma-surface-hover);
-}
-.scheduled-bar:focus-visible {
-  outline: 2px solid var(--coma-primary);
-  outline-offset: -2px;
-}
-.scheduled-bar > svg {
-  flex: none;
-  width: 16px;
-  height: 16px;
-}
-.scheduled-bar > span {
-  flex: 1;
-  min-width: 0;
-}
-.scheduled-bar__chevron {
-  opacity: 0.7;
-}
 
 /* Time picker ------------------------------------------------------------- */
 .schedule-dialog__form,
@@ -464,9 +427,6 @@
 }
 
 @media (max-width: 640px) {
-  .scheduled-bar {
-    padding-inline: 12px;
-  }
   .scheduled-page {
     background: var(--coma-surface);
   }

@@ -6,6 +6,7 @@ import {
   parseReminderEvent,
   reminderKeys,
   requestKeys,
+  taskKeys,
   type DurableEvent,
 } from "@comamessenger/core";
 
@@ -41,10 +42,15 @@ export function applyWorkplaceEvent(
     event.type === "request.assigned" ||
     event.type === "request.answer.updated" ||
     event.type === "request.updated"
-  )
+  ) {
     void queryClient.invalidateQueries({
       queryKey: [...requestKeys.all(userID), "inbox"],
     });
+    // With message_tasks Waiting for you reads one list of requests and tasks.
+    void queryClient.invalidateQueries({
+      queryKey: [...taskKeys.all(userID), "waiting"],
+    });
+  }
   // Who answered what is not in the events: the open panel reads it again.
   if (
     messageID &&
@@ -62,4 +68,5 @@ export function applyWorkplaceEvent(
 export function invalidateWorkplace(queryClient: QueryClient, userID: string) {
   void queryClient.invalidateQueries({ queryKey: requestKeys.all(userID) });
   void queryClient.invalidateQueries({ queryKey: reminderKeys.all(userID) });
+  void queryClient.invalidateQueries({ queryKey: taskKeys.all(userID) });
 }

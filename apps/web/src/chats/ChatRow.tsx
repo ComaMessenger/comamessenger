@@ -1,5 +1,5 @@
 import { useRef, useState, type MouseEvent, type PointerEvent } from "react";
-import { BellOff, MessageSquareMore, Pin } from "lucide-react";
+import { BellOff, ListChecks, MessageSquareMore, Pin } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   chatAvatarSource,
@@ -8,8 +8,10 @@ import {
   type Chat,
   type ChatFolder,
   type ChatRequestBadge,
+  type ChatTaskBadge,
 } from "@comamessenger/core";
 import { calendarLocale } from "../requests/format";
+import { formatTaskBadgeDue } from "../tasks/format";
 import { Avatar, Badge, countLabel, cx, type Presence } from "../ui";
 import { formatListTime } from "../lib/format";
 import { chatGlyph, isChatMuted, titleOf } from "../lib/chats";
@@ -35,6 +37,7 @@ export function ChatRow({
   unreadCount,
   mentionCount,
   requestBadge = null,
+  taskBadge = null,
   pinned,
   pinnedCount,
   presence,
@@ -53,6 +56,8 @@ export function ChatRow({
   mentionCount: number;
   /** answer by Fri or awaiting answer: requests wait for the reader here. */
   requestBadge?: ChatRequestBadge | null;
+  /** task by 12:00 / task overdue: wins over the request mark. */
+  taskBadge?: ChatTaskBadge | null;
   pinned: boolean;
   pinnedCount: number;
   presence?: Presence;
@@ -151,7 +156,16 @@ export function ChatRow({
               {preview.sender && <span className="chat-row__sender">{preview.sender}</span>}
               {preview.text}
             </span>
-            {requestBadge && (
+            {taskBadge ? (
+              <span className="chat-row__need chat-row__need--task">
+                <ListChecks aria-hidden="true" />
+                {taskBadge.kind === "overdue"
+                  ? t("taskBadgeOverdue")
+                  : t("taskBadgeDue", {
+                      when: formatTaskBadgeDue(taskBadge.at, new Date()),
+                    })}
+              </span>
+            ) : requestBadge && (
               <span className="chat-row__need">
                 <MessageSquareMore aria-hidden="true" />
                 {requestBadge.kind === "due"

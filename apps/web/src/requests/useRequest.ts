@@ -6,6 +6,7 @@ import {
   afterRemind,
   optimisticAnswer,
   requestKeys,
+  taskKeys,
   type Message,
   type MessageRequestViewer,
   type RequestState,
@@ -59,6 +60,9 @@ export function useRequestActions(messageID: string, chatID: string) {
       store.getState().setRequestState(messageID, state, chatID);
       void queryClient.invalidateQueries({
         queryKey: [...requestKeys.all(user.id), "inbox"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: [...taskKeys.all(user.id), "waiting"],
       });
       // What waits for me changed: the strip, the chat mark and the badge.
       scheduleReload();
