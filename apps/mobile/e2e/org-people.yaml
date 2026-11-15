@@ -87,6 +87,9 @@ appId: com.comamessenger.app
     id: department-lead
 - assertVisible: Ирина Лебедева
 - assertVisible: совм.
+# No chat yet: whoever runs the structure may create it.
+- assertVisible:
+    id: department-create-chat
 - takeScreenshot: org-department-${THEME}
 
 # «Входит в» leads up the structure.
@@ -98,6 +101,26 @@ appId: com.comamessenger.app
     timeout: 10000
 - assertVisible: Бассейн
 - takeScreenshot: org-department-parent-${THEME}
+
+# «Бассейн» has a chat without Анна Иванова: «В чате нет 1 сотрудника».
+- tapOn: Бассейн
+- extendedWaitUntil:
+    visible:
+      id: department-missing
+    timeout: 10000
+- assertVisible:
+    id: department-chat
+- takeScreenshot: org-department-missing-${THEME}
+- tapOn:
+    id: department-missing-add
+- extendedWaitUntil:
+    visible: Добавлен 1 сотрудник
+    timeout: 10000
+- tapOn: OK
+- assertNotVisible:
+    id: department-missing
+- tapOn:
+    id: department-back
 - tapOn:
     id: department-back
 

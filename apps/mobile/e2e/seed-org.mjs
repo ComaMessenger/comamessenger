@@ -8,6 +8,7 @@
 //              Пётр Морозов «совм.»)
 //     Бассейн (lead Пётр Морозов)
 //   Медицинская служба (lead Дарья Романова)
+//   «Бассейн» has a chat; Анна Иванова joins it as «совм.» afterwards.
 //   Нина Ковалёва — без отдела. Positions «Инструктор», «Врач».
 //
 // The departments and positions of the seed (and «E2E …» ones the admin flow
@@ -230,6 +231,18 @@ await call(
       position_id: position("Врач"),
     }),
   },
+  token,
+);
+
+// «Бассейн» has a chat without Анна Иванова, who joins the department
+// after it: its card shows «В чате нет 1 сотрудника отдела · Добавить».
+const pool = (await call("/api/v1/org", {}, token)).departments.find(
+  (item) => item.name === "Бассейн",
+).id;
+await call(`/api/v1/org/departments/${pool}/chat`, { method: "POST" }, token);
+await call(
+  `/api/v1/org/departments/${pool}/members/${ids["anna.iv"]}`,
+  { method: "PUT", body: JSON.stringify({ primary: false }) },
   token,
 );
 
