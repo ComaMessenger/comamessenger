@@ -239,6 +239,11 @@ func main() {
 	go messageService.BackfillShared(realtimeCtx, 200*time.Millisecond, func(err error) {
 		logger.Warn("shared media backfill batch failed; retrying", "error", err)
 	})
+	// Previews of turned phone photos made before EXIF Orientation was read
+	// (migration 00063): rebuilt in the background, resumed after a restart.
+	go fileService.BackfillPreviewOrientation(realtimeCtx, 500*time.Millisecond, func(err error) {
+		logger.Warn("preview orientation backfill batch failed; retrying", "error", err)
+	})
 	chatService := chat.NewService(pool, afterCommit)
 	orgService := orgstructure.NewService(pool, chatService, afterCommit)
 	workspaceService.SetAfterCommit(afterCommit)

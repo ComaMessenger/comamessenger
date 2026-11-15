@@ -4,6 +4,7 @@ import { Image } from "expo-image";
 import * as MediaLibrary from "expo-media-library";
 import * as LegacyLibrary from "expo-media-library/legacy";
 import { File } from "expo-file-system";
+import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import {
   Camera,
   ChartNoAxesColumn,
@@ -23,6 +24,7 @@ import { useTheme } from "@/lib/theme";
 import { BottomSheet } from "@/ui/BottomSheet";
 import { Text } from "@/ui/Text";
 import type { LocalFile } from "@/files/upload";
+import { recentPhotoPlan } from "@/files/recentPhoto";
 
 const icons: Record<ComposerMenuItemID, LucideIcon> = {
   photo: ImageIcon,
@@ -68,10 +70,28 @@ function useRecentPhotos(visible: boolean) {
 async function photoFile(asset: LegacyLibrary.Asset): Promise<LocalFile> {
   const info = await LegacyLibrary.getAssetInfoAsync(asset);
   const uri = info.localUri ?? asset.uri;
+  const plan = recentPhotoPlan(asset.filename, `photo-${Date.now()}.jpg`);
+  if (plan.reencode) {
+    // Drawn upright with its real size, as the system picker hands it over.
+    const image = await ImageManipulator.manipulate(uri).renderAsync();
+    const saved = await image.saveAsync({
+      format: SaveFormat.JPEG,
+      compress: 0.9,
+    });
+    return {
+      uri: saved.uri,
+      name: plan.name,
+      mime: plan.mime,
+      size: new File(saved.uri).size,
+      ...(saved.width > 0 && saved.height > 0
+        ? { width: saved.width, height: saved.height }
+        : {}),
+    };
+  }
   return {
     uri,
-    name: asset.filename || `photo-${Date.now()}.jpg`,
-    mime: /\.png$/i.test(asset.filename) ? "image/png" : "image/jpeg",
+    name: plan.name,
+    mime: plan.mime,
     size: new File(uri).size,
     ...(asset.width > 0 && asset.height > 0
       ? { width: asset.width, height: asset.height }

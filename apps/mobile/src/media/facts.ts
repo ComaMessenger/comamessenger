@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import Storage from "expo-sqlite/kv-store";
 import type { VideoThumbnail } from "expo-video";
+import { nextAspect, type AspectSource } from "./aspect";
 
 /**
  * What the phone learned about a photo or video that the server does not
@@ -10,7 +11,11 @@ import type { VideoThumbnail } from "expo-video";
  * length. Kept on disk by file id; the poster frame of a video stays in
  * memory for the session.
  */
-export type MediaFacts = { aspect?: number; durationMs?: number };
+export type MediaFacts = {
+  aspect?: number;
+  aspectFrom?: AspectSource;
+  durationMs?: number;
+};
 
 const prefix = "media-facts:";
 
@@ -50,10 +55,25 @@ export function mediaFacts(id: string): MediaFacts {
   return useFacts.getState().facts[id] ?? stored(id);
 }
 
-export function recordMediaFacts(id: string, change: MediaFacts) {
+/**
+ * `source` says what measured the aspect: a preview never overrides what
+ * the photo itself said (see aspect.ts).
+ */
+export function recordMediaFacts(
+  id: string,
+  change: { aspect?: number; durationMs?: number },
+  source: AspectSource = "full",
+) {
   const current = mediaFacts(id);
-  const next = { ...current, ...change };
-  if (next.aspect === current.aspect && next.durationMs === current.durationMs)
+  const next: MediaFacts = { ...current };
+  if (change.aspect !== undefined)
+    Object.assign(next, nextAspect(current, change.aspect, source) ?? {});
+  if (change.durationMs !== undefined) next.durationMs = change.durationMs;
+  if (
+    next.aspect === current.aspect &&
+    next.aspectFrom === current.aspectFrom &&
+    next.durationMs === current.durationMs
+  )
     return;
   useFacts.setState((state) => ({ facts: { ...state.facts, [id]: next } }));
   try {
