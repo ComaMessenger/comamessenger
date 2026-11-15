@@ -127,8 +127,8 @@ func (s *Store) PendingFor(ctx context.Context, appURL, ip string) (int, error) 
 // here.
 func (s *Store) InstallationByKey(ctx context.Context, keyHash []byte) (Installation, error) {
 	return scanInstallation(s.pool.QueryRow(ctx, `UPDATE mail_installations SET last_seen_at=now(),
-		status=CASE WHEN status='suspended' AND suspended_until IS NOT NULL AND suspended_until<=now() THEN 'active' ELSE status END,
-		status_reason=CASE WHEN status='suspended' AND suspended_until IS NOT NULL AND suspended_until<=now() THEN '' ELSE status_reason END
+		status=CASE WHEN status='suspended' AND activated_at IS NOT NULL AND suspended_until IS NOT NULL AND suspended_until<=now() THEN 'active' ELSE status END,
+		status_reason=CASE WHEN status='suspended' AND activated_at IS NOT NULL AND suspended_until IS NOT NULL AND suspended_until<=now() THEN '' ELSE status_reason END
 		WHERE key_hash=$1 RETURNING `+installationColumns, keyHash))
 }
 
@@ -168,10 +168,20 @@ func (s *Store) SetStatus(ctx context.Context, id, status, reason string) error 
 	return err
 }
 
-// SuspendSite stops every live installation of a site until the given time.
+// SuspendSite stops every verified installation of a site until the given
+// time. Unverified registrations stay pending: lifting a suspension must
+// never activate a key whose address was not checked.
 func (s *Store) SuspendSite(ctx context.Context, site, reason string, until time.Time) error {
-	_, err := s.pool.Exec(ctx, `UPDATE mail_installations SET status='suspended',status_reason=$2,suspended_until=$3,updated_at=now() WHERE app_site=$1 AND status IN ('active','pending','suspended')`, site, reason, until)
+	_, err := s.pool.Exec(ctx, `UPDATE mail_installations SET status='suspended',status_reason=$2,suspended_until=$3,updated_at=now() WHERE app_site=$1 AND status IN ('active','suspended') AND activated_at IS NOT NULL`, site, reason, until)
 	return err
+}
+
+// SiteActivatedAt is when the site's first installation was verified; a
+// reinstalled server keeps the age of its site.
+func (s *Store) SiteActivatedAt(ctx context.Context, site string) (*time.Time, error) {
+	var first *time.Time
+	err := s.pool.QueryRow(ctx, `SELECT min(activated_at) FROM mail_installations WHERE app_site=$1`, site).Scan(&first)
+	return first, err
 }
 
 func (s *Store) SetLimit(ctx context.Context, id string, limit *int) error {
@@ -239,13 +249,13 @@ func (s *Store) Revoke(ctx context.Context, id, reason string) error {
 func (s *Store) Restore(ctx context.Context, id string) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var site string
-		if err := tx.QueryRow(ctx, `UPDATE mail_installations SET status='active',status_reason='',suspended_until=NULL,activated_at=COALESCE(activated_at,now()),updated_at=now() WHERE id::text=$1 RETURNING app_site`, id).Scan(&site); err != nil {
+		if err := tx.QueryRow(ctx, `UPDATE mail_installations SET status='active',status_reason='',suspended_until=NULL,updated_at=now() WHERE id::text=$1 AND activated_at IS NOT NULL RETURNING app_site`, id).Scan(&site); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return ErrNotFound
 			}
 			return err
 		}
-		_, err := tx.Exec(ctx, `UPDATE mail_installations SET status='active',status_reason='',suspended_until=NULL,updated_at=now() WHERE app_site=$1 AND status='suspended'`, site)
+		_, err := tx.Exec(ctx, `UPDATE mail_installations SET status='active',status_reason='',suspended_until=NULL,updated_at=now() WHERE app_site=$1 AND status='suspended' AND activated_at IS NOT NULL`, site)
 		return err
 	})
 }

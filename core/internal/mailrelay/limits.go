@@ -20,9 +20,11 @@ type Limits struct {
 	NewRecipientsNew     int
 	NewRecipientsDefault int
 	NewPeriod            time.Duration
-	// NewInstallationsBudget caps letters of all installations younger than
-	// NewPeriod together: many fresh sites cannot add up to a spam run.
-	NewInstallationsBudget int
+	// Platform limits apply to hosts under a private public suffix
+	// (pages.dev, github.io, onrender.com…), where anyone gets a fresh site
+	// for free. They never graduate to the default tier.
+	PlatformDaily         int
+	PlatformNewRecipients int
 }
 
 func DefaultLimits() Limits {
@@ -32,22 +34,28 @@ func DefaultLimits() Limits {
 			mailtemplate.Invitation: 2, mailtemplate.PasswordReset: 3, mailtemplate.EmailConfirmation: 3,
 			mailtemplate.EmailChangeNotice: 3, mailtemplate.Digest: 2,
 		},
-		PerRecipientGlobal:     10,
-		InstallationNew:        100,
-		InstallationDefault:    500,
-		NewRecipientsNew:       50,
-		NewRecipientsDefault:   300,
-		NewPeriod:              14 * 24 * time.Hour,
-		NewInstallationsBudget: 2000,
+		PerRecipientGlobal:    10,
+		InstallationNew:       100,
+		InstallationDefault:   500,
+		NewRecipientsNew:      50,
+		NewRecipientsDefault:  300,
+		NewPeriod:             14 * 24 * time.Hour,
+		PlatformDaily:         30,
+		PlatformNewRecipients: 10,
 	}
 }
 
 // DailyLimit is the installation's cap: an operator override or the tier.
+// The age is the site's (SiteActivatedAt), copied into ActivatedAt by the
+// caller.
 func (l Limits) DailyLimit(installation Installation, now time.Time) int {
 	if installation.DailyLimit != nil {
 		return *installation.DailyLimit
 	}
-	if installation.ActivatedAt == nil || now.Sub(*installation.ActivatedAt) < l.NewPeriod {
+	if mailtemplate.OnPlatform(installation.AppHost) {
+		return l.PlatformDaily
+	}
+	if l.isNew(installation, now) {
 		return l.InstallationNew
 	}
 	return l.InstallationDefault
@@ -58,6 +66,9 @@ func (l Limits) isNew(installation Installation, now time.Time) bool {
 }
 
 func (l Limits) newRecipientLimit(installation Installation, now time.Time) int {
+	if mailtemplate.OnPlatform(installation.AppHost) {
+		return l.PlatformNewRecipients
+	}
 	if l.isNew(installation, now) {
 		return l.NewRecipientsNew
 	}
@@ -165,15 +176,6 @@ func (s *Store) Reserve(ctx context.Context, limits Limits, installation Install
 			return errInstallationLimit
 		}
 		young := limits.isNew(installation, now)
-		if young && limits.NewInstallationsBudget > 0 {
-			var budget int
-			if err := tx.QueryRow(ctx, `SELECT count(*) FROM mail_sends WHERE new_installation AND created_at>$1 AND `+counted, since).Scan(&budget); err != nil {
-				return err
-			}
-			if budget >= limits.NewInstallationsBudget {
-				return errInstallationLimit
-			}
-		}
 		if _, err := tx.Exec(ctx, `INSERT INTO mail_sends(id,installation_id,app_site,kind,recipient_hash,new_recipient,new_installation,idempotency_key,payload_hash,status,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'reserved',$10)`,
 			sendID, installation.ID, installation.AppSite, string(kind), recipientHash, fresh, young, idempotencyKey, payloadHash, now); err != nil {
 			return err

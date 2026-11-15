@@ -29,5 +29,11 @@ func CanonicalRecipient(address string) string {
 	if domain == "gmail.com" {
 		local = strings.ReplaceAll(local, ".", "")
 	}
+	// Yandex delivers one mailbox under all its domains, and «.» equals «-».
+	switch domain {
+	case "ya.ru", "yandex.ru", "yandex.com", "yandex.by", "yandex.kz", "yandex.ua", "yandex.com.tr", "narod.ru":
+		domain = "yandex.ru"
+		local = strings.ReplaceAll(local, ".", "-")
+	}
 	return local + "@" + domain
 }

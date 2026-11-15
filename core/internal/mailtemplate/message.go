@@ -227,21 +227,31 @@ func checkLink(base *url.URL, raw, path, query string) error {
 // e-mail, word.word (any letters, so «сайт.рф» and «ПОРТАЛ.ГОСУСЛУГИ» too),
 // spelled-out dots and messenger handles. It runs on NFKC text with every
 // dot look-alike folded to «.».
-var linkLike = regexp.MustCompile(`(?i)(://|www\.|@|[\p{L}\p{N}-]+\s*(\.|\[\.\]|\(\.\)|\[dot\]|\(dot\)|\sdot\s|\sточка\s)\s*[\p{L}]{2,}|https?|ftp:|t\.me|wa\.me|telegram|whatsapp|viber|\btg\b)`)
+var linkLike = regexp.MustCompile(`(?i)(://|www\.|@|[\p{L}\p{N}-]+(\.|\[\.\]|\(\.\)|\[dot\]|\(dot\)|\sdot\s|\sточка\s)[\p{L}]{2,}|https?|ftp:|t\.me|wa\.me|telegram|whatsapp|viber|\btg\b)`)
+
+// spacedDomain catches «name . ru» written apart. It is case-sensitive and
+// limited to common zones, so «Acme Inc. Team» and «Т.Г. Иванова» stay.
+var spacedDomain = regexp.MustCompile(`[\p{L}\p{N}-]+\s*[.,]\s*(ru|com|net|org|su|рф|info|io|me|xyz|online|site|pro|biz|shop|app|dev)(\s|$|[^\p{L}])`)
 
 // dotLike are characters mail clients may render or linkify as a dot.
-var dotLike = strings.NewReplacer("\u3002", ".", "\uFF0E", ".", "\uFF61", ".", "\u2024", ".", "\u00B7", ".", "\u2027", ".", "\u2219", ".", "\u0701", ".", "\u0702", ".", "\uFE52", ".", "\u06D4", ".", "\u2E3C", ".")
+var dotLike = strings.NewReplacer("\u3002", ".", "\uFF0E", ".", "\uFF61", ".", "\u2024", ".", "\u00B7", ".", "\u2027", ".", "\u2219", ".", "\u0701", ".", "\u0702", ".", "\uFE52", ".", "\u06D4", ".", "\u2E3C", ".", "\u055D", ".", "\uA60E", ".", "\u2E31", ".", "\u0589", ".", "\u3002", ".", "\u1362", ".", "\u0F0B", ".", "\u30FB", ".", "\uFF65", ".", "\u2E30", ".")
 
-// contactLike reports a name that carries a phone number: seven digits or
-// more in total.
+// contactLike reports a name that carries a phone number: ten digits or
+// more in one run of digits, spaces, dashes, dots and brackets.
 func contactLike(value string) bool {
 	digits := 0
 	for _, character := range value {
-		if unicode.IsDigit(character) {
-			digits++
+		switch {
+		case unicode.IsDigit(character):
+			if digits++; digits >= 10 {
+				return true
+			}
+		case character == ' ' || character == '-' || character == '(' || character == ')' || character == '+' || character == '.':
+		default:
+			digits = 0
 		}
 	}
-	return digits >= 7
+	return false
 }
 
 // CleanName prepares user-controlled text for a subject, the From display
@@ -273,7 +283,8 @@ func CleanName(value, fallback string) string {
 		runes := []rune(cleaned)
 		cleaned = strings.TrimSpace(string(runes[:maxNameRunes-1])) + "…"
 	}
-	if cleaned == "" || linkLike.MatchString(dotLike.Replace(cleaned)) || contactLike(cleaned) {
+	folded := dotLike.Replace(cleaned)
+	if cleaned == "" || linkLike.MatchString(folded) || spacedDomain.MatchString(folded) || contactLike(cleaned) {
 		return fallback
 	}
 	return cleaned

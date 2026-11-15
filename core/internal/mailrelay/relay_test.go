@@ -521,27 +521,48 @@ func TestNewRecipientLimitCoversEveryType(t *testing.T) {
 	}
 }
 
-func TestNewInstallationsShareBudget(t *testing.T) {
+func TestPlatformSubdomainsGetSmallLimits(t *testing.T) {
 	h := newHarness(t)
-	h.server.options.Limits.NewInstallationsBudget = 2
-	sent := 0
-	for index := 0; index < 3; index++ {
-		appURL := fmt.Sprintf("https://chat.site%d.ru", index)
-		_, key := h.install(appURL)
-		message := resetMessage(fmt.Sprintf("u%d@b.ru", index))
-		message.Data.Link = appURL + "/reset-password?token=" + linkToken
-		if response := h.do(http.MethodPost, "/v1/messages", key, nextKey(), message); response.Code == http.StatusAccepted {
-			sent++
+	_, key := h.install("https://victim-reset.pages.dev")
+	var quota map[string]any
+	_ = json.Unmarshal(h.do(http.MethodGet, "/v1/quota", key, "", nil).Body.Bytes(), &quota)
+	if quota["daily_limit"].(float64) != 30 {
+		t.Fatalf("platform quota: %v", quota)
+	}
+	for _, appURL := range []string{"https://1.1.1.1", "https://[2606:4700:4700::1111]", "https://chat.example.ru/call88005553535", "https://chat.example.ru/a/b"} {
+		if response := h.do(http.MethodPost, "/v1/installations", "", "", map[string]string{"app_url": appURL}); response.Code != http.StatusBadRequest {
+			t.Errorf("%s accepted: %d", appURL, response.Code)
 		}
 	}
-	if sent != 2 {
-		t.Fatalf("new installations sent %d letters, budget 2", sent)
+}
+
+func TestLiftingSuspensionNeverActivatesUnverifiedKey(t *testing.T) {
+	h := newHarness(t)
+	_, owner := h.install("https://chat.victim.ru")
+	response := h.do(http.MethodPost, "/v1/installations", "", "", map[string]string{"app_url": "https://chat.victim.ru"})
+	var created map[string]string
+	_ = json.Unmarshal(response.Body.Bytes(), &created)
+	ctx := context.Background()
+	if err := h.store.SuspendSite(ctx, "victim.ru", "auto_complaints", time.Now().Add(-time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if response := h.do(http.MethodPost, "/v1/messages", created["key"], nextKey(), resetMessage("a@b.ru")); response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), "installation_pending") {
+		t.Fatalf("unverified key after the suspension: %d %s", response.Code, response.Body)
+	}
+	ownerMessage := resetMessage("a@b.ru")
+	ownerMessage.Data.Link = "https://chat.victim.ru/reset-password?token=" + linkToken
+	if response := h.do(http.MethodPost, "/v1/messages", owner, nextKey(), ownerMessage); response.Code != http.StatusAccepted {
+		t.Fatalf("verified key after the suspension: %d %s", response.Code, response.Body)
+	}
+	if err := h.store.Restore(ctx, created["installation_id"]); err == nil {
+		t.Fatal("restore activated an unverified key")
 	}
 }
 
 func TestRecipientSpellingsShareLimitAndSuppression(t *testing.T) {
 	for input, want := range map[string]string{
 		"V.I.C.T.I.M+promo@GoogleMail.com": "victim@gmail.com",
+		"ivan.petrov+x@ya.ru":              "ivan-petrov@yandex.ru",
 		"anna+x@пример.рф":                 "anna@xn--e1afmkfd.xn--p1ai",
 		"a.b@mail.ru":                      "a.b@mail.ru",
 	} {

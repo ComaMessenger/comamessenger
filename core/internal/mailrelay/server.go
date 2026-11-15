@@ -130,7 +130,9 @@ func (s *Server) recipientHash(address string) []byte {
 	return mac.Sum(nil)
 }
 
-var basePathPattern = regexp.MustCompile(`^(/[a-z0-9][a-z0-9-]{0,31}){0,3}$`)
+// basePathPattern allows one short segment of letters and dashes: a path
+// is shown in the plain-text letter and must not carry a message of its own.
+var basePathPattern = regexp.MustCompile(`^(/[a-z][a-z-]{0,23})?$`)
 
 // NormalizeAppURL accepts an https origin on port 443 with an optional
 // short base path (lower-case letters, digits and dashes) and returns it in
@@ -158,7 +160,10 @@ func NormalizeAppURL(raw string, allowInsecure bool) (*url.URL, error) {
 	}
 	path := strings.TrimRight(parsed.EscapedPath(), "/")
 	if !allowInsecure && !basePathPattern.MatchString(path) {
-		return nil, errors.New("app_url path may hold only up to three short lower-case segments")
+		return nil, errors.New("app_url path may hold at most one short segment of lower-case letters and dashes")
+	}
+	if !allowInsecure && net.ParseIP(strings.Trim(parsed.Hostname(), "[]")) != nil {
+		return nil, errors.New("app_url must use a domain name, not an IP address")
 	}
 	return &url.URL{Scheme: parsed.Scheme, Host: host, Path: path}, nil
 }
@@ -295,6 +300,10 @@ func (s *Server) quota(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := s.options.Now()
+	if err := s.siteAge(r.Context(), &installation); err != nil {
+		s.internal(w, "site age", err)
+		return
+	}
 	used, err := s.options.Store.Usage(r.Context(), installation.AppSite, now)
 	if err != nil {
 		s.internal(w, "usage", err)
@@ -361,6 +370,10 @@ func (s *Server) send(w http.ResponseWriter, r *http.Request) {
 	payloadHash := sha256.Sum256(canonical)
 	recipient := s.recipientHash(CanonicalRecipient(message.To))
 	now := s.options.Now()
+	if err := s.siteAge(r.Context(), &installation); err != nil {
+		s.internal(w, "site age", err)
+		return
+	}
 	reserved, err := s.options.Store.Reserve(r.Context(), s.options.Limits, installation, message.Kind, recipient, idempotencyKey, payloadHash[:], uuid.NewString(), now)
 	switch {
 	case errors.Is(err, errConflict):
@@ -516,6 +529,19 @@ func (s *Server) handleEvent(ctx context.Context, event webhookEvent) error {
 		}
 		s.logger.Warn("installation suspended", "site", site, "reason", reason, "sent", sent, "bounced", bounced, "complained", complained)
 		return s.options.Store.SuspendSite(ctx, site, reason, s.options.Now().Add(72*time.Hour))
+	}
+	return nil
+}
+
+// siteAge replaces the key's activation time with the site's first one, so
+// re-registering does not reset the age and the age is shared by the site.
+func (s *Server) siteAge(ctx context.Context, installation *Installation) error {
+	first, err := s.options.Store.SiteActivatedAt(ctx, installation.AppSite)
+	if err != nil {
+		return err
+	}
+	if first != nil {
+		installation.ActivatedAt = first
 	}
 	return nil
 }

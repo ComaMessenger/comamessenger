@@ -56,3 +56,17 @@ func Site(host string) string {
 	}
 	return site
 }
+
+// OnPlatform reports a host under a private public suffix such as
+// pages.dev or github.io, where subdomains are free for anyone.
+func OnPlatform(host string) bool {
+	hostname := host
+	if parsed, _, err := net.SplitHostPort(host); err == nil {
+		hostname = parsed
+	}
+	if net.ParseIP(strings.Trim(hostname, "[]")) != nil {
+		return false
+	}
+	_, icann := publicsuffix.PublicSuffix(hostname)
+	return !icann
+}
