@@ -26,6 +26,7 @@ func Summaries(ctx context.Context, q querier, orgID string, messageIDs []string
 	rows, err := q.Query(ctx, `
 		SELECT r.message_id, r.status, r.closed_reason, r.answer_preset, r.custom_options, r.allow_comment,
 			r.due_at, r.auto_remind_at, r.audience_kind, r.audience_label, r.answered_count, r.version,
+			r.audience_department_id, r.audience_position_id,
 			(SELECT count(*) FROM message_request_recipients rr `+recipientInChat+`
 			 WHERE rr.message_id = r.message_id AND rr.answered_at IS NULL)
 		FROM message_requests r
@@ -40,6 +41,7 @@ func Summaries(ctx context.Context, q querier, orgID string, messageIDs []string
 		var options []string
 		if err := rows.Scan(&messageID, &item.Status, &item.ClosedReason, &item.Answer.Preset, &options, &item.AllowComment,
 			&item.DueAt, &item.AutoRemindAt, &item.Audience.Kind, &item.Audience.Label, &item.AnsweredCount, &item.Version,
+			&item.Audience.DepartmentID, &item.Audience.PositionID,
 			&item.WaitingCount); err != nil {
 			return nil, fmt.Errorf("scan request: %w", err)
 		}

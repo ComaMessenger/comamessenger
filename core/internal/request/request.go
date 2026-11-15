@@ -150,6 +150,10 @@ type CreateSpec struct {
 type Plan struct {
 	AudienceKind string
 	ActorIDs     []string
+	// DepartmentID and PositionID: the addressed group of the department
+	// and position kinds, in canonical form; empty otherwise.
+	DepartmentID string
+	PositionID   string
 	Answer       AnswerSpec
 	AllowComment bool
 	DueAt        *time.Time
@@ -164,7 +168,9 @@ func Normalize(spec CreateSpec, now time.Time) (Plan, error) {
 	}
 	switch spec.Audience.Kind {
 	case "department", "position":
-		return Plan{}, ErrAudienceUnavailable
+		if err := normalizeGroupAudience(spec.Audience, &plan); err != nil {
+			return Plan{}, err
+		}
 	case "chat":
 		if len(spec.Audience.ActorIDs) > 0 || spec.Audience.DepartmentID != nil || spec.Audience.PositionID != nil {
 			return Plan{}, invalid("audience", "audience chat takes no actor_ids")
@@ -194,7 +200,7 @@ func Normalize(spec CreateSpec, now time.Time) (Plan, error) {
 		}
 		sort.Strings(plan.ActorIDs)
 	default:
-		return Plan{}, invalid("audience.kind", "audience kind must be people or chat")
+		return Plan{}, invalid("audience.kind", "audience kind must be people, chat, department or position")
 	}
 
 	plan.Answer.Preset = spec.Answer.Preset
@@ -275,6 +281,13 @@ func (p Plan) Fingerprint() string {
 	}
 	b.WriteByte(0)
 	b.WriteString(strconv.FormatBool(p.AutoRemindAt != nil))
+	// Only for the group kinds, so earlier fingerprints stay as they were.
+	if p.DepartmentID != "" || p.PositionID != "" {
+		b.WriteByte(0)
+		b.WriteString(p.DepartmentID)
+		b.WriteByte(0)
+		b.WriteString(p.PositionID)
+	}
 	sum := sha256.Sum256([]byte(b.String()))
 	return "\x00request\x00" + hex.EncodeToString(sum[:])
 }
@@ -298,6 +311,10 @@ type Audience struct {
 	Kind  string `json:"kind"`
 	Label string `json:"label"`
 	Count int    `json:"count"`
+	// DepartmentID and PositionID: the addressed group of the department
+	// and position kinds; nil once it is deleted. See MarshalJSON.
+	DepartmentID *string `json:"department_id,omitempty"`
+	PositionID   *string `json:"position_id,omitempty"`
 }
 
 // Viewer is what one reader may do with a request

@@ -142,7 +142,16 @@ func TestRequestsE2E(t *testing.T) {
 		}
 		return body
 	}
-	expectError(question(map[string]any{"audience": map[string]any{"kind": "department", "department_id": uuid.NewString()}}), standardhttp.StatusUnprocessableEntity, "request_audience_unavailable", "")
+	// The owner may address groups (phase 6.5); an unknown department is 404.
+	expectError(question(map[string]any{"audience": map[string]any{"kind": "department", "department_id": uuid.NewString()}}), standardhttp.StatusNotFound, "department_not_found", "")
+	// A member without requests.address_groups: 403, whatever the department.
+	var forbidden api.Error
+	e2eRequest(t, client, standardhttp.MethodPost, endpoint, member.AccessToken, map[string]any{"client_msg_id": uuid.NewString(), "body": "Всем врачам",
+		"audience": map[string]any{"kind": "position", "position_id": uuid.NewString()}, "answer": map[string]any{"preset": "ack"}}, standardhttp.StatusForbidden, &forbidden)
+	if forbidden.Code != "request_audience_forbidden" {
+		t.Fatalf("member to a position: %+v", forbidden)
+	}
+	expectError(question(map[string]any{"mentioned_department_ids": []string{uuid.NewString()}}), standardhttp.StatusUnprocessableEntity, "request_invalid", "mentioned_department_ids")
 	expectError(question(map[string]any{"answer": map[string]any{"preset": "custom", "options": []string{"один"}}}), standardhttp.StatusUnprocessableEntity, "request_invalid", "answer.options")
 	expectError(question(map[string]any{"auto_remind": true}), standardhttp.StatusUnprocessableEntity, "request_invalid", "auto_remind")
 

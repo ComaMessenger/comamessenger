@@ -27,6 +27,8 @@ func TestPayloadsMatchContract(t *testing.T) {
 		{"request.reminded", remindedEvent{MessageID: "0198c17d-b55b-78d5-b099-f973dd1f265c", ChatID: "0198c17d-a0ac-71f0-aeef-96228a975b85", Kind: "auto"}, &api.RealtimeRequestRemindedEventV1{}},
 		{"request.auto_reminded", autoRemindedEvent{MessageID: "0198c17d-b55b-78d5-b099-f973dd1f265c", ChatID: "0198c17d-a0ac-71f0-aeef-96228a975b85", Reminded: 2, AnsweredCount: 1, WaitingCount: 2}, &api.RealtimeRequestAutoRemindedEventV1{}},
 		{"MessageRequest", Summary{Status: "open", Answer: AnswerSpec{Preset: "custom", Options: []string{"a", "b"}}, Audience: Audience{Kind: "chat"}, Version: 1}, &api.MessageRequest{}},
+		{"MessageRequest department", Summary{Status: "open", Answer: AnswerSpec{Preset: "ack"}, Audience: Audience{Kind: "department", Label: "Зал ЛФК", Count: 2, DepartmentID: ptrString("0198c17d-b55b-78d5-b099-f973dd1f265c")}, Version: 1}, &api.MessageRequest{}},
+		{"MessageRequest deleted position", Summary{Status: "open", Answer: AnswerSpec{Preset: "ack"}, Audience: Audience{Kind: "position", Label: "Врач", Count: 2}, Version: 1}, &api.MessageRequest{}},
 		{"RequestState", State{
 			Request: Summary{Status: "open", Answer: AnswerSpec{Preset: "ack"}, Audience: Audience{Kind: "people", Label: "Анна", Count: 1}, Version: 1},
 			Viewer:  Viewer{Role: "recipient", Answer: &ViewerAnswer{Option: 0, AnsweredAt: now, Version: 2}, CanAnswer: true},
@@ -46,3 +48,5 @@ func TestPayloadsMatchContract(t *testing.T) {
 		}
 	}
 }
+
+func ptrString(value string) *string { return &value }

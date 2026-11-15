@@ -134,21 +134,23 @@ type ScheduledMessage struct {
 	ThreadRootID *string `json:"thread_root_id"`
 	ReplyToID    *string `json:"reply_to_id"`
 	// ClientMsgID is the client's idempotency key for the scheduling request.
-	ClientMsgID       string       `json:"client_msg_id"`
-	Body              string       `json:"body"`
-	BodyFormat        string       `json:"body_format"`
-	MentionedActorIDs []string     `json:"mentioned_actor_ids"`
-	Files             []files.File `json:"files"`
-	Silent            bool         `json:"silent"`
-	SendAt            time.Time    `json:"send_at"`
-	Status            string       `json:"status"`
-	FailureReason     *string      `json:"failure_reason"`
-	MessageID         *string      `json:"message_id"`
-	Version           int          `json:"version"`
-	CreatedAt         time.Time    `json:"created_at"`
-	UpdatedAt         time.Time    `json:"updated_at"`
-	SentAt            *time.Time   `json:"sent_at"`
-	FailedAt          *time.Time   `json:"failed_at"`
+	ClientMsgID       string   `json:"client_msg_id"`
+	Body              string   `json:"body"`
+	BodyFormat        string   `json:"body_format"`
+	MentionedActorIDs []string `json:"mentioned_actor_ids"`
+	// MentionedDepartmentIDs: expanded into people only when sent.
+	MentionedDepartmentIDs []string     `json:"mentioned_department_ids"`
+	Files                  []files.File `json:"files"`
+	Silent                 bool         `json:"silent"`
+	SendAt                 time.Time    `json:"send_at"`
+	Status                 string       `json:"status"`
+	FailureReason          *string      `json:"failure_reason"`
+	MessageID              *string      `json:"message_id"`
+	Version                int          `json:"version"`
+	CreatedAt              time.Time    `json:"created_at"`
+	UpdatedAt              time.Time    `json:"updated_at"`
+	SentAt                 *time.Time   `json:"sent_at"`
+	FailedAt               *time.Time   `json:"failed_at"`
 
 	orgID, authorID    string
 	messageClientMsgID string
@@ -159,22 +161,24 @@ type ScheduledMessage struct {
 }
 
 type CreateInput struct {
-	ClientMsgID       string    `json:"client_msg_id"`
-	Body              string    `json:"body"`
-	BodyFormat        string    `json:"body_format"`
-	ReplyToID         *string   `json:"reply_to_id"`
-	ThreadRootID      *string   `json:"thread_root_id"`
-	MentionedActorIDs []string  `json:"mentioned_actor_ids"`
-	FileIDs           []string  `json:"file_ids"`
-	SendAt            time.Time `json:"send_at"`
-	Silent            bool      `json:"silent"`
+	ClientMsgID            string    `json:"client_msg_id"`
+	Body                   string    `json:"body"`
+	BodyFormat             string    `json:"body_format"`
+	ReplyToID              *string   `json:"reply_to_id"`
+	ThreadRootID           *string   `json:"thread_root_id"`
+	MentionedActorIDs      []string  `json:"mentioned_actor_ids"`
+	MentionedDepartmentIDs []string  `json:"mentioned_department_ids"`
+	FileIDs                []string  `json:"file_ids"`
+	SendAt                 time.Time `json:"send_at"`
+	Silent                 bool      `json:"silent"`
 }
 
 type UpdateInput struct {
-	ExpectedVersion   int       `json:"expected_version"`
-	Body              *string   `json:"body"`
-	BodyFormat        *string   `json:"body_format"`
-	MentionedActorIDs *[]string `json:"mentioned_actor_ids"`
+	ExpectedVersion        int       `json:"expected_version"`
+	Body                   *string   `json:"body"`
+	BodyFormat             *string   `json:"body_format"`
+	MentionedActorIDs      *[]string `json:"mentioned_actor_ids"`
+	MentionedDepartmentIDs *[]string `json:"mentioned_department_ids"`
 	// FileIDs replaces the attachments. Files no longer listed become
 	// unattached again and fall under the ordinary cleanup.
 	FileIDs *[]string  `json:"file_ids"`
@@ -211,13 +215,13 @@ func (s *Service) SetLimits(limits Limits)          { s.limits = limits }
 
 const selectColumns = `sm.id, sm.org_id, sm.author_id, sm.chat_id, sm.thread_root_id, sm.reply_to_id, sm.client_msg_id,
 	sm.message_client_msg_id, sm.session_family_id, sm.security_epoch,
-	sm.body, sm.body_format, sm.mentioned_actor_ids, sm.silent, sm.send_at, sm.status,
+	sm.body, sm.body_format, sm.mentioned_actor_ids, sm.mentioned_department_ids, sm.silent, sm.send_at, sm.status,
 	sm.failure_reason, sm.message_id, sm.river_job_id, sm.version, sm.created_at, sm.updated_at, sm.sent_at, sm.failed_at`
 
 func scan(row pgx.Row, item *ScheduledMessage, extra ...any) error {
 	return row.Scan(append([]any{&item.ID, &item.orgID, &item.authorID, &item.ChatID, &item.ThreadRootID, &item.ReplyToID, &item.ClientMsgID,
 		&item.messageClientMsgID, &item.sessionFamilyID, &item.securityEpoch,
-		&item.Body, &item.BodyFormat, &item.MentionedActorIDs, &item.Silent, &item.SendAt, &item.Status,
+		&item.Body, &item.BodyFormat, &item.MentionedActorIDs, &item.MentionedDepartmentIDs, &item.Silent, &item.SendAt, &item.Status,
 		&item.FailureReason, &item.MessageID, &item.riverJobID, &item.Version, &item.CreatedAt, &item.UpdatedAt, &item.SentAt, &item.FailedAt}, extra...)...)
 }
 
@@ -285,7 +289,8 @@ func (s *Service) Create(ctx context.Context, author Author, chatID string, inpu
 	draft := message.CreateInput{
 		ClientMsgID: input.ClientMsgID, Body: input.Body, BodyFormat: input.BodyFormat,
 		ReplyToID: input.ReplyToID, ThreadRootID: input.ThreadRootID,
-		MentionedActorIDs: input.MentionedActorIDs, FileIDs: input.FileIDs, Silent: input.Silent,
+		MentionedActorIDs: input.MentionedActorIDs, MentionedDepartmentIDs: input.MentionedDepartmentIDs,
+		FileIDs: input.FileIDs, Silent: input.Silent,
 	}
 	if err := s.messages.ValidateCreate(chatID, &draft); err != nil {
 		return ScheduledMessage{}, false, fromMessageError(err)
@@ -331,6 +336,9 @@ func (s *Service) Create(ctx context.Context, author Author, chatID string, inpu
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return ScheduledMessage{}, false, fmt.Errorf("find idempotent scheduled message: %w", err)
 	}
+	if err := s.messages.ClassifyMentionsTx(ctx, tx, user.OrgID, &draft); err != nil {
+		return ScheduledMessage{}, false, fromMessageError(err)
+	}
 	if err := s.messages.AuthorizeCreateTx(ctx, tx, user, chatID, draft); err != nil {
 		return ScheduledMessage{}, false, fromMessageError(err)
 	}
@@ -345,11 +353,11 @@ func (s *Service) Create(ctx context.Context, author Author, chatID string, inpu
 	err = scan(tx.QueryRow(ctx, `
 		INSERT INTO scheduled_messages AS sm (id, org_id, author_id, chat_id, thread_root_id, reply_to_id, client_msg_id,
 			message_client_msg_id, create_fingerprint, session_family_id, security_epoch,
-			body, body_format, mentioned_actor_ids, silent, send_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+			body, body_format, mentioned_actor_ids, silent, send_at, mentioned_department_ids)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
 		RETURNING `+selectColumns, scheduledID, user.OrgID, user.ActorID, chatID, draft.ThreadRootID, draft.ReplyToID, draft.ClientMsgID,
 		MessageClientID(scheduledID), fingerprint[:], granted.familyID, granted.epoch,
-		draft.Body, draft.BodyFormat, draft.MentionedActorIDs, draft.Silent, sendAt), &result)
+		draft.Body, draft.BodyFormat, draft.MentionedActorIDs, draft.Silent, sendAt, departmentIDs(draft.MentionedDepartmentIDs)), &result)
 	if err != nil {
 		return ScheduledMessage{}, false, fmt.Errorf("insert scheduled message: %w", err)
 	}
@@ -468,7 +476,7 @@ func (s *Service) Update(ctx context.Context, author Author, scheduledID string,
 	if input.ExpectedVersion < 1 {
 		return ScheduledMessage{}, fmt.Errorf("%w: expected_version must be positive", ErrInvalid)
 	}
-	if input.Body == nil && input.BodyFormat == nil && input.MentionedActorIDs == nil && input.FileIDs == nil && input.SendAt == nil && input.Silent == nil {
+	if input.Body == nil && input.BodyFormat == nil && input.MentionedActorIDs == nil && input.MentionedDepartmentIDs == nil && input.FileIDs == nil && input.SendAt == nil && input.Silent == nil {
 		return ScheduledMessage{}, fmt.Errorf("%w: nothing to change", ErrInvalid)
 	}
 	tx, err := s.pool.Begin(ctx)
@@ -506,8 +514,15 @@ func (s *Service) Update(ctx context.Context, author Author, scheduledID string,
 	if input.BodyFormat != nil {
 		draft.BodyFormat = *input.BodyFormat
 	}
-	if input.MentionedActorIDs != nil {
-		draft.MentionedActorIDs = *input.MentionedActorIDs
+	if input.MentionedActorIDs != nil || input.MentionedDepartmentIDs != nil {
+		// Mentions are replaced together, as in an edit of a sent message.
+		draft.MentionedActorIDs, draft.MentionedDepartmentIDs = nil, nil
+		if input.MentionedActorIDs != nil {
+			draft.MentionedActorIDs = *input.MentionedActorIDs
+		}
+		if input.MentionedDepartmentIDs != nil {
+			draft.MentionedDepartmentIDs = *input.MentionedDepartmentIDs
+		}
 	}
 	if input.FileIDs != nil {
 		draft.FileIDs = append([]string{}, (*input.FileIDs)...)
@@ -524,6 +539,9 @@ func (s *Service) Update(ctx context.Context, author Author, scheduledID string,
 		if err := s.validateSendAt(sendAt); err != nil {
 			return ScheduledMessage{}, err
 		}
+	}
+	if err := s.messages.ClassifyMentionsTx(ctx, tx, user.OrgID, &draft); err != nil {
+		return ScheduledMessage{}, fromMessageError(err)
 	}
 	status := current.Status
 	if current.Status == StatusFailed {
@@ -548,13 +566,13 @@ func (s *Service) Update(ctx context.Context, author Author, scheduledID string,
 	var result ScheduledMessage
 	err = scan(tx.QueryRow(ctx, `
 		UPDATE scheduled_messages sm SET body=$4, body_format=$5, mentioned_actor_ids=$6, silent=$7, send_at=$8,
-			session_family_id=$9, security_epoch=$10, status=$11,
+			session_family_id=$9, security_epoch=$10, status=$11, mentioned_department_ids=$12,
 			failure_reason=CASE WHEN $11='failed' THEN failure_reason END,
 			failed_at=CASE WHEN $11='failed' THEN failed_at END,
 			version=version+1, updated_at=now()
 		WHERE sm.org_id=$1 AND sm.author_id=$2 AND sm.id=$3
 		RETURNING `+selectColumns, user.OrgID, user.ActorID, scheduledID, draft.Body, draft.BodyFormat,
-		draft.MentionedActorIDs, draft.Silent, sendAt, granted.familyID, granted.epoch, status), &result)
+		draft.MentionedActorIDs, draft.Silent, sendAt, granted.familyID, granted.epoch, status, departmentIDs(draft.MentionedDepartmentIDs)), &result)
 	if err != nil {
 		return ScheduledMessage{}, fmt.Errorf("update scheduled message: %w", err)
 	}
@@ -842,7 +860,7 @@ func (s *Service) Deliver(ctx context.Context, scheduledID string, jobID int64) 
 	}
 	var result ScheduledMessage
 	err = scan(tx.QueryRow(ctx, `
-		UPDATE scheduled_messages sm SET status='sent', message_id=$2, sent_at=now(), body='', mentioned_actor_ids='{}',
+		UPDATE scheduled_messages sm SET status='sent', message_id=$2, sent_at=now(), body='', mentioned_actor_ids='{}', mentioned_department_ids='{}',
 			version=version+1, updated_at=now()
 		WHERE sm.id=$1 RETURNING `+selectColumns, scheduledID, sent.ID), &result)
 	if err != nil {
@@ -1151,8 +1169,16 @@ func (item ScheduledMessage) messageInput() message.CreateInput {
 	return message.CreateInput{
 		ClientMsgID: item.messageClientMsgID, Body: item.Body, BodyFormat: item.BodyFormat,
 		ReplyToID: item.ReplyToID, ThreadRootID: item.ThreadRootID,
-		MentionedActorIDs: mentions, FileIDs: fileIDs, Silent: item.Silent,
+		MentionedActorIDs: mentions, MentionedDepartmentIDs: append([]string{}, item.MentionedDepartmentIDs...),
+		FileIDs: fileIDs, Silent: item.Silent,
 	}
+}
+
+func departmentIDs(ids []string) []string {
+	if ids == nil {
+		return []string{}
+	}
+	return ids
 }
 
 func lockOrganization(ctx context.Context, tx pgx.Tx, orgID string) error {
@@ -1239,6 +1265,9 @@ func hydrateFiles(ctx context.Context, tx pgx.Tx, orgID string, items []Schedule
 		items[i].Files = []files.File{}
 		if items[i].MentionedActorIDs == nil {
 			items[i].MentionedActorIDs = []string{}
+		}
+		if items[i].MentionedDepartmentIDs == nil {
+			items[i].MentionedDepartmentIDs = []string{}
 		}
 	}
 	rows, err := tx.Query(ctx, `

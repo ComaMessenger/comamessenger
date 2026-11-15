@@ -170,9 +170,12 @@ func (h *identityHandlers) writeRequestInvalid(w standardhttp.ResponseWriter, r 
 func (h *identityHandlers) requestError(w standardhttp.ResponseWriter, r *standardhttp.Request, err error) {
 	var invalidField *request.InvalidError
 	var tooSoon *request.RemindTooSoonError
+	var invalidMessageField *message.FieldError
 	switch {
 	case errors.As(err, &invalidField):
 		h.writeRequestInvalid(w, r, invalidField.Field, invalidField.Message)
+	case errors.As(err, &invalidMessageField):
+		h.writeRequestInvalid(w, r, invalidMessageField.Field, invalidMessageField.Message)
 	case errors.As(err, &tooSoon):
 		w.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(tooSoon.RetryAfter.Seconds()))))
 		h.writeError(w, r, standardhttp.StatusTooManyRequests, "request_remind_too_soon", "Those who have not answered were reminded recently; try again later.")
@@ -180,6 +183,12 @@ func (h *identityHandlers) requestError(w standardhttp.ResponseWriter, r *standa
 		h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "request_audience_empty", "Nobody in the chat matches the audience.")
 	case errors.Is(err, request.ErrTooManyRecipients):
 		h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "request_too_many_recipients", "A request may ask at most 500 people.")
+	case errors.Is(err, request.ErrAudienceForbidden):
+		h.writeError(w, r, standardhttp.StatusForbidden, "request_audience_forbidden", "Addressing a department or a position needs the permission to address groups.")
+	case errors.Is(err, request.ErrDepartmentMissing):
+		h.writeError(w, r, standardhttp.StatusNotFound, "department_not_found", "The department was not found.")
+	case errors.Is(err, request.ErrPositionMissing):
+		h.writeError(w, r, standardhttp.StatusNotFound, "position_not_found", "The position was not found.")
 	case errors.Is(err, request.ErrAudienceUnavailable):
 		h.writeError(w, r, standardhttp.StatusUnprocessableEntity, "request_audience_unavailable", "Departments and positions are not available yet.")
 	case errors.Is(err, request.ErrNotMember):

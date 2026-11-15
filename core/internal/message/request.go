@@ -29,15 +29,16 @@ type requestCreation struct {
 
 // CreateRequestInput is createRequest: the message part and the request part.
 type CreateRequestInput struct {
-	ClientMsgID       string                `json:"client_msg_id"`
-	Body              string                `json:"body"`
-	BodyFormat        string                `json:"body_format"`
-	MentionedActorIDs []string              `json:"mentioned_actor_ids"`
-	Audience          request.AudienceInput `json:"audience"`
-	Answer            request.AnswerSpec    `json:"answer"`
-	AllowComment      *bool                 `json:"allow_comment"`
-	DueAt             *time.Time            `json:"due_at"`
-	AutoRemind        bool                  `json:"auto_remind"`
+	ClientMsgID            string                `json:"client_msg_id"`
+	Body                   string                `json:"body"`
+	BodyFormat             string                `json:"body_format"`
+	MentionedActorIDs      []string              `json:"mentioned_actor_ids"`
+	MentionedDepartmentIDs []string              `json:"mentioned_department_ids,omitempty"`
+	Audience               request.AudienceInput `json:"audience"`
+	Answer                 request.AnswerSpec    `json:"answer"`
+	AllowComment           *bool                 `json:"allow_comment"`
+	DueAt                  *time.Time            `json:"due_at"`
+	AutoRemind             bool                  `json:"auto_remind"`
 }
 
 // CreateRequest sends a request message. People only: agents and API keys
@@ -68,8 +69,8 @@ func (s *Service) CreateRequest(ctx context.Context, user identity.User, chatID 
 	}
 	draft := CreateInput{
 		ClientMsgID: input.ClientMsgID, Body: input.Body, BodyFormat: input.BodyFormat,
-		MentionedActorIDs: input.MentionedActorIDs,
-		request:           &requestCreation{plan: plan},
+		MentionedActorIDs: input.MentionedActorIDs, MentionedDepartmentIDs: input.MentionedDepartmentIDs,
+		request: &requestCreation{plan: plan},
 	}
 	if err := s.validateCreate(chatID, &draft); err != nil {
 		return Message{}, false, err
