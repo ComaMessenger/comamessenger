@@ -1,0 +1,21 @@
+{
+  "op": "event",
+  "seq": 4020,
+  "type": "actor.away.updated",
+  "occurred_at": "2026-11-19T18:00:00Z",
+  "actor_id": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+  "chat_id": null,
+  "subject_id": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+  "data": {
+    "actor_id": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+    "away": {
+      "kind": "vacation",
+      "label": "",
+      "starts_at": "2026-11-20T00:00:00+03:00",
+      "ends_at": "2026-12-01T00:00:00+03:00",
+      "active": false,
+      "substitute_id": "0198c180-5e6f-7a8b-8c9d-9e0f1a2b3c45",
+      "notifications_off": true
+    }
+  }
+}

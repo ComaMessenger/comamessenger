@@ -193,6 +193,16 @@ type TaskNudgeResult = Schemas["TaskNudgeResult"];
 type ChatTaskPage = Schemas["ChatTaskPage"];
 type MyTaskPage = Schemas["MyTaskPage"];
 type WaitingInboxPage = Schemas["WaitingInboxPage"];
+// Polls and «Отсутствую» (phase 6.7 wave 4): named here until package K4
+// grows polls.ts and away.ts and re-exports them from types.ts.
+type CreatePollRequest = Schemas["CreatePollRequest"];
+type VotePollRequest = Schemas["VotePollRequest"];
+type PollState = Schemas["PollState"];
+type PollVoterPage = Schemas["PollVoterPage"];
+type PollRemindResult = Schemas["PollRemindResult"];
+type AwayStatus = Schemas["AwayStatus"];
+type SetAwayRequest = Schemas["SetAwayRequest"];
+type SubstitutingEntry = Schemas["SubstitutingEntry"];
 type APIErrorPayload = components["schemas"]["Error"];
 type APIErrorCode = components["schemas"]["ErrorCode"] | "request_failed";
 export type RefreshStrategy = (
@@ -1159,9 +1169,18 @@ export class MessengerAPI {
       method: "DELETE",
     });
   }
-  actors(query = "", afterID = ""): Promise<ActorPage> {
+  /**
+   * People and agents of the workspace. presence («На месте» / «Отсутствуют»)
+   * only for servers that announce actor_away.
+   */
+  actors(
+    query = "",
+    afterID = "",
+    presence?: "here" | "away",
+  ): Promise<ActorPage> {
     const values = new URLSearchParams();
     if (query) values.set("q", query);
+    if (presence) values.set("presence", presence);
     if (afterID) values.set("after_id", afterID);
     return this.request(`/api/v1/actors${values.size ? `?${values}` : ""}`);
   }
@@ -1784,12 +1803,14 @@ export class MessengerAPI {
     return this.request(`/api/v1/tasks/mine${suffix}`);
   }
   /**
-   * «Ждут вас» as one list of requests and tasks. Only on servers that
-   * announce message_tasks; older ones keep requestInbox.
+   * «Ждут вас» as one list of requests and tasks, and with message_polls
+   * also polls with a due date. Only on servers that announce
+   * message_tasks; older ones keep requestInbox. kind=polls only with
+   * message_polls.
    */
   waitingInbox(
     options: {
-      kind?: "all" | "requests" | "tasks";
+      kind?: "all" | "requests" | "tasks" | "polls";
       cursor?: string;
       limit?: number;
     } = {},
@@ -1801,6 +1822,105 @@ export class MessengerAPI {
     ].filter(Boolean);
     const suffix = query.length ? `?${query.join("&")}` : "";
     return this.request(`/api/v1/inbox/waiting${suffix}`);
+  }
+  /**
+   * Sends a poll («Опрос») to the chat feed; replays by client_msg_id return
+   * the original message. The server builds body from the question and the
+   * options. Only with message_polls.
+   */
+  createPoll(chatID: string, input: CreatePollRequest): Promise<Message> {
+    return this.request(`/api/v1/chats/${encodeURIComponent(chatID)}/polls`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+  /** The poll and what the reader may see; 404 poll_not_found for others. */
+  messagePoll(messageID: string): Promise<PollState> {
+    return this.request(`/api/v1/polls/${encodeURIComponent(messageID)}`);
+  }
+  /**
+   * Casts or changes the vote. In an anonymous poll only the first vote is
+   * accepted: another gets 409 poll_vote_final.
+   */
+  votePoll(messageID: string, input: VotePollRequest): Promise<PollState> {
+    return this.request(`/api/v1/polls/${encodeURIComponent(messageID)}/vote`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    });
+  }
+  /** «Отменить голос» in an ordinary poll; anonymous polls answer 409 poll_vote_final. */
+  retractPollVote(messageID: string): Promise<void> {
+    return this.request(`/api/v1/polls/${encodeURIComponent(messageID)}/vote`, {
+      method: "DELETE",
+    });
+  }
+  /**
+   * «Кто голосовал»: who chose an option (can_view_voters) or who has not
+   * voted (can_view_waiting). Anonymous polls always answer 403.
+   */
+  pollVoters(
+    messageID: string,
+    options: {
+      filter: "waiting" | `option:${number}`;
+      cursor?: string;
+      limit?: number;
+    },
+  ): Promise<PollVoterPage> {
+    // Built by hand: React Native's URLSearchParams cannot set values.
+    const query = [
+      `filter=${encodeURIComponent(options.filter)}`,
+      options.cursor && `cursor=${encodeURIComponent(options.cursor)}`,
+      options.limit && `limit=${options.limit}`,
+    ].filter(Boolean);
+    return this.request(
+      `/api/v1/polls/${encodeURIComponent(messageID)}/voters?${query.join("&")}`,
+    );
+  }
+  /** «Напомнить не ответившим»; 429 poll_remind_too_soon carries Retry-After. */
+  remindPoll(messageID: string): Promise<PollRemindResult> {
+    return this.request(
+      `/api/v1/polls/${encodeURIComponent(messageID)}/remind`,
+      { method: "POST" },
+    );
+  }
+  /** Closes the poll for good; repeating it returns the closed poll. */
+  closePoll(messageID: string): Promise<PollState> {
+    return this.request(
+      `/api/v1/polls/${encodeURIComponent(messageID)}/close`,
+      { method: "POST" },
+    );
+  }
+  /**
+   * The own away status («Отсутствую») with the private settings; null when
+   * there is none. Only with actor_away.
+   */
+  async away(): Promise<AwayStatus | null> {
+    const status = await this.request<AwayStatus | undefined>(
+      "/api/v1/me/away",
+    );
+    return status ?? null;
+  }
+  /**
+   * Sets the own away status, replacing the whole record; 409
+   * away_version_conflict when expected_version is stale.
+   */
+  setAway(input: SetAwayRequest): Promise<AwayStatus> {
+    return this.request("/api/v1/me/away", {
+      method: "PUT",
+      body: JSON.stringify(input),
+    });
+  }
+  /** «Снять»; repeating it is harmless. */
+  clearAway(): Promise<void> {
+    return this.request("/api/v1/me/away", { method: "DELETE" });
+  }
+  /** Whom the current person substitutes («Вы замещаете …»). */
+  async substituting(): Promise<SubstitutingEntry[]> {
+    return (
+      await this.request<{ items: SubstitutingEntry[] }>(
+        "/api/v1/me/substituting",
+      )
+    ).items;
   }
   /**
    * The org structure. With the version of the cached structure the server

@@ -63,7 +63,13 @@
         "reminder.fired",
         "org.updated",
         "task.updated",
-        "task.notified"
+        "task.notified",
+        "poll.updated",
+        "poll.vote.updated",
+        "poll.notified",
+        "actor.away.updated",
+        "away.substitute.assigned",
+        "away.substitute.removed"
       ]
     },
     "CloseCode": {
@@ -200,7 +206,7 @@
         "ack_batch_size": { "type": "integer", "minimum": 1 },
         "max_unacked_events": { "type": "integer", "minimum": 1 },
         "features": {
-          "description": "Optional protocol additions this server accepts. typing_actions: the action field on typing frames. message_requests: requests («Запрос») — the request REST routes, Message.request and the request.* events. message_reminders: personal reminders («Напомнить мне») — the reminder REST routes and the reminder.* events. org_structure: departments and positions («Оргструктура») — the org REST routes, the org fields of ActorSummary, OrganizationMember and Message, mentioned_department_ids in message, request and scheduled message bodies, the department and position request audiences and the org.updated event. message_tasks: tasks («Задача») — the task REST routes, GET /api/v1/inbox/waiting, Message.task, the task fields of the unread snapshot and the task.updated and task.notified events. A client hides a feature the server does not list.",
+          "description": "Optional protocol additions this server accepts. typing_actions: the action field on typing frames. message_requests: requests («Запрос») — the request REST routes, Message.request and the request.* events. message_reminders: personal reminders («Напомнить мне») — the reminder REST routes and the reminder.* events. org_structure: departments and positions («Оргструктура») — the org REST routes, the org fields of ActorSummary, OrganizationMember and Message, mentioned_department_ids in message, request and scheduled message bodies, the department and position request audiences and the org.updated event. message_tasks: tasks («Задача») — the task REST routes, GET /api/v1/inbox/waiting, Message.task, the task fields of the unread snapshot and the task.updated and task.notified events. message_polls: polls («Опрос») — the poll REST routes, Message.poll and Message.poll_viewer, kind=polls of GET /api/v1/inbox/waiting, the poll fields of the unread snapshot and the poll.updated, poll.vote.updated and poll.notified events. actor_away: «Отсутствую» — GET/PUT/DELETE /api/v1/me/away, GET /api/v1/me/substituting, the away field of User, ActorSummary, ChatMember and OrganizationMember, presence on GET /api/v1/actors, Message.auto_reply and the actor.away.updated, away.substitute.assigned and away.substitute.removed events. A client hides a feature the server does not list.",
           "type": "array",
           "maxItems": 32,
           "items": { "type": "string", "maxLength": 64 }
@@ -227,13 +233,16 @@
           "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
         },
         "occurred_at": { "type": "string", "format": "date-time" },
-        "actor_id": { "$ref": "#/$defs/UUID" },
+        "actor_id": {
+          "$ref": "#/$defs/NullableUUID",
+          "description": "Who caused the event. null when the server must not or cannot tell: always for poll.updated (a vote must not reveal the voter) and for poll.notified with kind closed_expired, which the server sends by itself. Clients never rely on it being set."
+        },
         "chat_id": { "$ref": "#/$defs/NullableUUID" },
         "subject_id": { "$ref": "#/$defs/UUID" },
         "data": {
           "type": "object",
           "additionalProperties": true,
-          "description": "Event payload. For message.created, message.updated and message.deleted it is the message in the shape of the REST feed (components/schemas/Message: files with metadata and no links, thread_reply_count, mentioned_actor_ids, blocks, agent_provenance and request when present; never request_viewer, which is per reader), read when the event is delivered, plus silent on message.created and thread_root_reply_count on thread replies. A frame that would exceed the frame limit (WS_MAX_FRAME_BYTES) is never sent as is: its data becomes a stub with truncated: true — for message.* the Message shape with an empty body, no files and no blocks, for other events only their short scalar fields — and the client loads the record by REST. The data of request.* and reminder.* events is described by the RequestAssignedEvent … ReminderFiredEvent definitions: it never carries message text, notes, comments or who answered what. The data of org.updated is OrgUpdatedEvent: only the new version and a reason, never names or people. Frames are encoded without HTML escaping."
+          "description": "Event payload. For message.created, message.updated and message.deleted it is the message in the shape of the REST feed (components/schemas/Message: files with metadata and no links, thread_reply_count, mentioned_actor_ids, blocks, agent_provenance and request when present; never request_viewer, which is per reader), read when the event is delivered, plus silent on message.created and thread_root_reply_count on thread replies. A frame that would exceed the frame limit (WS_MAX_FRAME_BYTES) is never sent as is: its data becomes a stub with truncated: true — for message.* the Message shape with an empty body, no files and no blocks, for other events only their short scalar fields — and the client loads the record by REST. The data of request.* and reminder.* events is described by the RequestAssignedEvent … ReminderFiredEvent definitions: it never carries message text, notes, comments or who answered what. The data of org.updated is OrgUpdatedEvent: only the new version and a reason, never names or people. message.* frames of a poll carry poll (MessagePoll: never the counts of an open poll) and never poll_viewer; the data of poll.* events is PollUpdatedEvent, PollVoteUpdatedEvent and PollNotifiedEvent: never anyone's choice but the recipient's own, and no choice at all in an anonymous poll. The data of actor.away.updated and away.substitute.* is ActorAwayUpdatedEvent, AwaySubstituteAssignedEvent and AwaySubstituteRemovedEvent: never the auto-reply text or mute_push. Frames are encoded without HTML escaping."
         }
       }
     },
@@ -516,6 +525,127 @@
           "description": "Who acted; null for due_soon and overdue, which the server sends by itself."
         },
         "due_at": { "type": ["string", "null"], "format": "date-time" }
+      }
+    },
+    "AwayPublic": {
+      "description": "An away status («Отсутствую», phase 6.7) as everyone in the workspace sees it. Never carries the auto-reply text, mute_push or a substitute others must not see; the owner gets those in AwayStatus (GET /api/v1/me/away).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "label", "starts_at", "ends_at", "active", "substitute_id", "notifications_off"],
+      "properties": {
+        "kind": { "type": "string", "enum": ["vacation", "appointment", "trip", "dnd", "other"] },
+        "label": { "type": "string", "maxLength": 40, "description": "The own text of kind other; empty for the other kinds." },
+        "starts_at": { "type": "string", "format": "date-time" },
+        "ends_at": { "type": "string", "format": "date-time" },
+        "active": { "type": "boolean", "description": "starts_at <= now < ends_at at the moment the response or the event was made; clients recheck it against the clock." },
+        "substitute_id": { "$ref": "#/$defs/NullableUUID", "description": "Whom to write instead; null without one and while the substitute is deactivated or away themselves (checked on every read)." },
+        "notifications_off": { "type": "boolean", "description": "Push is off while the status is active: the mention hint says «уведомление не придёт»." }
+      }
+    },
+    "PollUpdatedEvent": {
+      "description": "data of poll.updated, sent to the whole chat (subject_id is the message id; the frame actor_id is always null): a vote or a retraction that changes voter_count, closing, a member joining or leaving that changes member_count. Only the counters every member may see: final_counts is set only once the poll is closed. Clients that may see the results reload getPoll (after about 1 s, only while the card is on screen).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["message_id", "chat_id", "status", "closed_reason", "voter_count", "member_count", "final_counts", "version"],
+      "properties": {
+        "message_id": { "$ref": "#/$defs/UUID" },
+        "chat_id": { "$ref": "#/$defs/UUID" },
+        "status": { "type": "string", "enum": ["open", "closed"] },
+        "closed_reason": { "type": ["string", "null"], "enum": ["author", "moderator", "expired", "message_deleted", null] },
+        "voter_count": { "type": "integer", "minimum": 0 },
+        "member_count": { "type": "integer", "minimum": 0 },
+        "final_counts": {
+          "type": ["array", "null"],
+          "maxItems": 10,
+          "items": { "type": "integer", "minimum": 0 },
+          "description": "Votes per option of a closed poll; null while it is open."
+        },
+        "version": { "type": "integer", "minimum": 1 }
+      },
+      "if": { "properties": { "status": { "const": "open" } } },
+      "then": { "properties": { "final_counts": { "type": "null" }, "closed_reason": { "type": "null" } } }
+    },
+    "PollVoteUpdatedEvent": {
+      "description": "data of poll.vote.updated, sent only to the person who voted, to all their devices (subject_id is the message id): their own vote changed. In an ordinary poll it carries the chosen options (empty after «Отменить голос»); in an anonymous poll only voted: true, because the server does not know the choice.",
+      "oneOf": [
+        { "$ref": "#/$defs/PollVoteChosenEvent" },
+        { "$ref": "#/$defs/PollVoteAnonymousEvent" }
+      ]
+    },
+    "PollVoteChosenEvent": {
+      "description": "poll.vote.updated of an ordinary poll.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["message_id", "chat_id", "options", "version"],
+      "properties": {
+        "message_id": { "$ref": "#/$defs/UUID" },
+        "chat_id": { "$ref": "#/$defs/UUID" },
+        "options": {
+          "type": "array",
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 0, "maximum": 9 },
+          "description": "The person's choice; empty after the vote was retracted."
+        },
+        "version": { "type": "integer", "minimum": 1, "description": "MessagePoll.version after the change." }
+      }
+    },
+    "PollVoteAnonymousEvent": {
+      "description": "poll.vote.updated of an anonymous poll: no choice at all.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["message_id", "chat_id", "voted", "version"],
+      "properties": {
+        "message_id": { "$ref": "#/$defs/UUID" },
+        "chat_id": { "$ref": "#/$defs/UUID" },
+        "voted": { "type": "boolean", "const": true },
+        "version": { "type": "integer", "minimum": 1, "description": "MessagePoll.version after the change." }
+      }
+    },
+    "PollNotifiedEvent": {
+      "description": "data of poll.notified, sent to one person only (audience_actor_id; subject_id is the message id): the reason for a push about a poll. Never carries the question, the options or counts. kinds: reminded — a person of the chat who has not voted, «Напомнить не ответившим» by the author (frame actor_id is the author); closed_expired — the author, the poll closed by its due date (frame actor_id null), only when the author is active, still in the chat and the chat is not archived.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["message_id", "chat_id", "kind"],
+      "properties": {
+        "message_id": { "$ref": "#/$defs/UUID" },
+        "chat_id": { "$ref": "#/$defs/UUID" },
+        "kind": { "type": "string", "enum": ["reminded", "closed_expired"] }
+      }
+    },
+    "ActorAwayUpdatedEvent": {
+      "description": "data of actor.away.updated, sent to the whole workspace like actor.status.updated (chat_id null, subject_id is the person): the away status was set, changed or removed, a planned one started, or one ended. away is null when there is none any more.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor_id", "away"],
+      "properties": {
+        "actor_id": { "$ref": "#/$defs/UUID" },
+        "away": {
+          "oneOf": [
+            { "$ref": "#/$defs/AwayPublic" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "AwaySubstituteAssignedEvent": {
+      "description": "data of away.substitute.assigned, sent only to the substitute (audience_actor_id; subject_id is the person who is away): they were named substitute or the dates changed. Triggers a push «Вы замещаете …» (category system).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor_id", "starts_at", "ends_at"],
+      "properties": {
+        "actor_id": { "$ref": "#/$defs/UUID", "description": "The person who is away." },
+        "starts_at": { "type": "string", "format": "date-time" },
+        "ends_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "AwaySubstituteRemovedEvent": {
+      "description": "data of away.substitute.removed, sent only to the former substitute (audience_actor_id; subject_id is the person who was away): another substitute was named, the status was removed or it ended. No push.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor_id"],
+      "properties": {
+        "actor_id": { "$ref": "#/$defs/UUID", "description": "The person who was away." }
       }
     },
     "ServerFrame": {

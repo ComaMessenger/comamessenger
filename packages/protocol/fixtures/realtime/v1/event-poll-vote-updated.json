@@ -1,0 +1,15 @@
+{
+  "op": "event",
+  "seq": 4003,
+  "type": "poll.vote.updated",
+  "occurred_at": "2026-11-18T09:05:00Z",
+  "actor_id": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+  "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+  "subject_id": "0198c181-9fa0-7b12-8c3d-4e5f6a7b8c9d",
+  "data": {
+    "message_id": "0198c181-9fa0-7b12-8c3d-4e5f6a7b8c9d",
+    "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+    "options": [0, 2],
+    "version": 2
+  }
+}

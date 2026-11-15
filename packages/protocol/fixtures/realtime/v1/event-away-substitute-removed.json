@@ -1,0 +1,12 @@
+{
+  "op": "event",
+  "seq": 4023,
+  "type": "away.substitute.removed",
+  "occurred_at": "2026-12-01T00:00:30+03:00",
+  "actor_id": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+  "chat_id": null,
+  "subject_id": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23",
+  "data": {
+    "actor_id": "0198c180-3c4d-7e5f-8a6b-7c8d9e0f1a23"
+  }
+}
