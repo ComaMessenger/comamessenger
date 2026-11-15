@@ -524,6 +524,15 @@ h3 { font-size: 20px; line-height: 1.25; font-weight: 600; letter-spacing: -.01e
 .form .err { color: var(--danger); font-size: 13.5px; }
 .ok-box { grid-column: 1 / -1; display: flex; gap: 12px; padding: 16px; border-radius: 14px; background: var(--success-soft); }
 .ok-box .ic { color: var(--success); width: 24px; height: 24px; }
+.req { margin-top: 24px; padding: 24px; }
+.req h3 { margin: 0 0 14px; font-size: 18px; }
+.req-scroll { overflow-x: auto; }
+.req table { width: 100%; border-collapse: collapse; font-size: 14.5px; min-width: 420px; }
+.req th, .req td { text-align: left; padding: 10px 12px 10px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
+.req thead th { color: var(--muted); font-weight: 600; font-size: 13px; }
+.req tbody th { font-weight: 600; width: 22%; }
+.req tbody tr:last-child th, .req tbody tr:last-child td { border-bottom: 0; }
+.req-note { margin: 14px 0 0; color: var(--muted); font-size: 13.5px; }
 .tg-lead { max-width: 640px; }
 .tg-lead .cta { margin-top: 24px; display: inline-grid; justify-items: start; }
 .contacts { margin-top: 28px; display: grid; gap: 12px; color: var(--muted); }
@@ -1135,6 +1144,21 @@ h3 { font-size: 20px; line-height: 1.25; font-weight: 600; letter-spacing: -.01e
 <span class="p">$ </span>docker compose --env-file .env -f deploy/compose.yaml --profile agents up -d</pre>
     </div>
     <div class="term-cap"><span>Три команды: скачать код, создать секреты, запустить сервер с базой и агентами.</span><a class="link-arrow" href="https://github.com/ComaMessenger/comamessenger#readme" target="_blank" rel="noopener">Инструкция по установке <svg class="ic"><use href="#i-arrow"/></svg></a></div>
+    <div class="card req rv" id="requirements">
+      <h3>Требования к серверу</h3>
+      <div class="req-scroll">
+        <table>
+          <thead><tr><th scope="col"></th><th scope="col">До 100 сотрудников</th><th scope="col">До 500 сотрудников</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Процессор</th><td>2 vCPU</td><td>4 vCPU</td></tr>
+            <tr><th scope="row">Память</th><td>4 ГБ</td><td>8 ГБ</td></tr>
+            <tr><th scope="row">Диск</th><td>40 ГБ SSD и место под файлы</td><td>100 ГБ SSD и место под файлы</td></tr>
+            <tr><th scope="row">Система</th><td colspan="2">Linux с Docker и Docker Compose, домен, открытые порты 80 и 443</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="req-note">Это ориентиры, уточняем их на нагрузочных тестах. Агенты на внешних моделях почти не нагружают сервер. Своей модели через Ollama или vLLM нужен отдельный сервер с видеокартой.</p>
+    </div>
   </div>
 </section>
 
