@@ -60,7 +60,8 @@
         "reminder.created",
         "reminder.updated",
         "reminder.deleted",
-        "reminder.fired"
+        "reminder.fired",
+        "org.updated"
       ]
     },
     "CloseCode": {
@@ -197,7 +198,7 @@
         "ack_batch_size": { "type": "integer", "minimum": 1 },
         "max_unacked_events": { "type": "integer", "minimum": 1 },
         "features": {
-          "description": "Optional protocol additions this server accepts. typing_actions: the action field on typing frames. message_requests: requests («Запрос») — the request REST routes, Message.request and the request.* events. message_reminders: personal reminders («Напомнить мне») — the reminder REST routes and the reminder.* events. A client hides a feature the server does not list.",
+          "description": "Optional protocol additions this server accepts. typing_actions: the action field on typing frames. message_requests: requests («Запрос») — the request REST routes, Message.request and the request.* events. message_reminders: personal reminders («Напомнить мне») — the reminder REST routes and the reminder.* events. org_structure: departments and positions («Оргструктура») — the org REST routes, the org fields of ActorSummary, OrganizationMember and Message, mentioned_department_ids in message, request and scheduled message bodies, the department and position request audiences and the org.updated event. A client hides a feature the server does not list.",
           "type": "array",
           "maxItems": 32,
           "items": { "type": "string", "maxLength": 64 }
@@ -230,7 +231,7 @@
         "data": {
           "type": "object",
           "additionalProperties": true,
-          "description": "Event payload. For message.created, message.updated and message.deleted it is the message in the shape of the REST feed (components/schemas/Message: files with metadata and no links, thread_reply_count, mentioned_actor_ids, blocks, agent_provenance and request when present; never request_viewer, which is per reader), read when the event is delivered, plus silent on message.created and thread_root_reply_count on thread replies. A frame that would exceed the frame limit (WS_MAX_FRAME_BYTES) is never sent as is: its data becomes a stub with truncated: true — for message.* the Message shape with an empty body, no files and no blocks, for other events only their short scalar fields — and the client loads the record by REST. The data of request.* and reminder.* events is described by the RequestAssignedEvent … ReminderFiredEvent definitions: it never carries message text, notes, comments or who answered what. Frames are encoded without HTML escaping."
+          "description": "Event payload. For message.created, message.updated and message.deleted it is the message in the shape of the REST feed (components/schemas/Message: files with metadata and no links, thread_reply_count, mentioned_actor_ids, blocks, agent_provenance and request when present; never request_viewer, which is per reader), read when the event is delivered, plus silent on message.created and thread_root_reply_count on thread replies. A frame that would exceed the frame limit (WS_MAX_FRAME_BYTES) is never sent as is: its data becomes a stub with truncated: true — for message.* the Message shape with an empty body, no files and no blocks, for other events only their short scalar fields — and the client loads the record by REST. The data of request.* and reminder.* events is described by the RequestAssignedEvent … ReminderFiredEvent definitions: it never carries message text, notes, comments or who answered what. The data of org.updated is OrgUpdatedEvent: only the new version and a reason, never names or people. Frames are encoded without HTML escaping."
         }
       }
     },
@@ -466,6 +467,19 @@
         "fired_at": { "type": "string", "format": "date-time" },
         "late": { "type": "boolean" },
         "version": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "OrgUpdatedEvent": {
+      "description": "data of org.updated, sent to the whole workspace (chat_id null, subject_id is the organization id) once per transaction that changed the org structure, including deactivating or reactivating a person who had a membership, a position or led a department. Carries no content: the client reloads GET /api/v1/org with If-None-Match (after about 500 ms, to merge bursts) and drops the event when version is not greater than the cached one.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "reason"],
+      "properties": {
+        "version": { "type": "integer", "format": "int64", "minimum": 1 },
+        "reason": {
+          "type": "string",
+          "enum": ["department", "position", "membership", "person_status"]
+        }
       }
     },
     "ServerFrame": {

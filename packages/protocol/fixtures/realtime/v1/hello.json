@@ -12,6 +12,7 @@
     "typing_actions",
     "presence_snapshot",
     "message_requests",
-    "message_reminders"
+    "message_reminders",
+    "org_structure"
   ]
 }

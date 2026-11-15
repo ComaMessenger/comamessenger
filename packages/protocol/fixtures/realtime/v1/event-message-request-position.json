@@ -1,0 +1,47 @@
+{
+  "op": "event",
+  "seq": 2102,
+  "type": "message.created",
+  "occurred_at": "2026-11-17T09:00:00Z",
+  "actor_id": "0198c17d-88ba-7ac2-8867-3f71d7722791",
+  "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+  "subject_id": "0198c17e-5e6f-7071-8283-9e0f1a2b3c45",
+  "data": {
+    "id": "0198c17e-5e6f-7071-8283-9e0f1a2b3c45",
+    "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+    "actor_id": "0198c17d-88ba-7ac2-8867-3f71d7722791",
+    "client_msg_id": "0198c17e-6f70-7182-9394-af1a2b3c4d56",
+    "type": "request",
+    "body": "Все врачи — ознакомьтесь с новым графиком",
+    "body_format": "plain",
+    "reply_to_id": null,
+    "thread_root_id": null,
+    "version": 1,
+    "created_seq": 2102,
+    "created_at": "2026-11-17T09:00:00Z",
+    "edited_at": null,
+    "deleted_at": null,
+    "mentioned_actor_ids": [],
+    "thread_reply_count": 0,
+    "files": [],
+    "request": {
+      "status": "open",
+      "closed_reason": null,
+      "answer": {
+        "preset": "ack"
+      },
+      "allow_comment": true,
+      "due_at": null,
+      "auto_remind_at": null,
+      "audience": {
+        "kind": "position",
+        "label": "Врач",
+        "count": 4,
+        "position_id": "0198c17e-7081-7293-a4a5-b02b3c4d5e67"
+      },
+      "answered_count": 0,
+      "waiting_count": 4,
+      "version": 1
+    }
+  }
+}

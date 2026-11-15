@@ -18,6 +18,93 @@ export const realtimeV1Fixtures = {
     "access_token": "fixture-access-token",
     "last_seq": 1842
   } as const satisfies Schemas["RealtimeAuthFrameV1"],
+  "event-message-department-mention": {
+    "op": "event",
+    "seq": 2101,
+    "type": "message.created",
+    "occurred_at": "2026-11-17T09:00:00Z",
+    "actor_id": "0198c17d-88ba-7ac2-8867-3f71d7722791",
+    "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+    "subject_id": "0198c17e-3c4d-7e5f-a061-7c8d9e0f1a23",
+    "data": {
+      "id": "0198c17e-3c4d-7e5f-a061-7c8d9e0f1a23",
+      "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+      "actor_id": "0198c17d-88ba-7ac2-8867-3f71d7722791",
+      "client_msg_id": "0198c17e-4d5e-7f60-b172-8d9e0f1a2b34",
+      "type": "text",
+      "body": "@[Зал ЛФК](0198c17e-1a2b-7c3d-8e4f-5a6b7c8d9e01), завтра в 8:30 планёрка",
+      "body_format": "plain",
+      "reply_to_id": null,
+      "thread_root_id": null,
+      "version": 1,
+      "created_seq": 2101,
+      "created_at": "2026-11-17T09:00:00Z",
+      "edited_at": null,
+      "deleted_at": null,
+      "mentioned_actor_ids": [
+        "0198c17d-9a31-7d4e-b0f2-5c8e1a7b6d01",
+        "0198c17e-2b3c-7d4e-9f50-6b7c8d9e0f12"
+      ],
+      "thread_reply_count": 0,
+      "files": [],
+      "mentioned_department_ids": [
+        "0198c17e-1a2b-7c3d-8e4f-5a6b7c8d9e01"
+      ],
+      "mentioned_departments": [
+        {
+          "department_id": "0198c17e-1a2b-7c3d-8e4f-5a6b7c8d9e01",
+          "notified_count": 2
+        }
+      ]
+    }
+  } as const satisfies Schemas["RealtimeDurableEventFrameV1"] & { data: Schemas["Message"] },
+  "event-message-request-position": {
+    "op": "event",
+    "seq": 2102,
+    "type": "message.created",
+    "occurred_at": "2026-11-17T09:00:00Z",
+    "actor_id": "0198c17d-88ba-7ac2-8867-3f71d7722791",
+    "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+    "subject_id": "0198c17e-5e6f-7071-8283-9e0f1a2b3c45",
+    "data": {
+      "id": "0198c17e-5e6f-7071-8283-9e0f1a2b3c45",
+      "chat_id": "0198c17d-a0ac-71f0-aeef-96228a975b85",
+      "actor_id": "0198c17d-88ba-7ac2-8867-3f71d7722791",
+      "client_msg_id": "0198c17e-6f70-7182-9394-af1a2b3c4d56",
+      "type": "request",
+      "body": "Все врачи — ознакомьтесь с новым графиком",
+      "body_format": "plain",
+      "reply_to_id": null,
+      "thread_root_id": null,
+      "version": 1,
+      "created_seq": 2102,
+      "created_at": "2026-11-17T09:00:00Z",
+      "edited_at": null,
+      "deleted_at": null,
+      "mentioned_actor_ids": [],
+      "thread_reply_count": 0,
+      "files": [],
+      "request": {
+        "status": "open",
+        "closed_reason": null,
+        "answer": {
+          "preset": "ack"
+        },
+        "allow_comment": true,
+        "due_at": null,
+        "auto_remind_at": null,
+        "audience": {
+          "kind": "position",
+          "label": "Врач",
+          "count": 4,
+          "position_id": "0198c17e-7081-7293-a4a5-b02b3c4d5e67"
+        },
+        "answered_count": 0,
+        "waiting_count": 4,
+        "version": 1
+      }
+    }
+  } as const satisfies Schemas["RealtimeDurableEventFrameV1"] & { data: Schemas["Message"] },
   "event-message-request": {
     "op": "event",
     "seq": 2001,
@@ -64,6 +151,19 @@ export const realtimeV1Fixtures = {
       }
     }
   } as const satisfies Schemas["RealtimeDurableEventFrameV1"] & { data: Schemas["Message"] },
+  "event-org-updated": {
+    "op": "event",
+    "seq": 2103,
+    "type": "org.updated",
+    "occurred_at": "2026-11-17T09:05:00Z",
+    "actor_id": "0198c17d-9a31-7d4e-b0f2-5c8e1a7b6d01",
+    "chat_id": null,
+    "subject_id": "0198c17c-0000-7000-8000-000000000001",
+    "data": {
+      "version": 42,
+      "reason": "membership"
+    }
+  } as const satisfies Schemas["RealtimeDurableEventFrameV1"] & { data: Schemas["RealtimeOrgUpdatedEventV1"] },
   "event-reminder-created": {
     "op": "event",
     "seq": 2007,
@@ -258,7 +358,8 @@ export const realtimeV1Fixtures = {
       "typing_actions",
       "presence_snapshot",
       "message_requests",
-      "message_reminders"
+      "message_reminders",
+      "org_structure"
     ]
   } as const satisfies Schemas["RealtimeHelloFrameV1"],
   "presence-snapshot": {

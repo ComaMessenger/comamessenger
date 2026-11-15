@@ -164,6 +164,23 @@ type SetReminderRequest = Schemas["SetReminderRequest"];
 type Reminder = Schemas["Reminder"];
 type ReminderPage = Schemas["ReminderPage"];
 type ReminderIdEntry = Schemas["ReminderIdEntry"];
+// Org structure (phase 6.5 wave 2): named here until package K2 grows
+// org.ts and re-exports them from types.ts.
+type OrgStructure = Schemas["OrgStructure"];
+type CreateDepartmentRequest = Schemas["CreateDepartmentRequest"];
+type UpdateDepartmentRequest = Schemas["UpdateDepartmentRequest"];
+type DepartmentWrite = Schemas["DepartmentWrite"];
+type SetDepartmentMemberRequest = Schemas["SetDepartmentMemberRequest"];
+type SetPersonOrgRequest = Schemas["SetPersonOrgRequest"];
+type OrgPersonWrite = Schemas["OrgPersonWrite"];
+type AssignPeopleOrgRequest = Schemas["AssignPeopleOrgRequest"];
+type AssignPeopleOrgResult = Schemas["AssignPeopleOrgResult"];
+type PositionWrite = Schemas["PositionWrite"];
+type CreatePositionsResult = Schemas["CreatePositionsResult"];
+type UpdatePositionRequest = Schemas["UpdatePositionRequest"];
+type TitleSuggestion = Schemas["TitleSuggestion"];
+type ActorSummary = Schemas["ActorSummary"];
+type DepartmentChatResult = Schemas["DepartmentChatResult"];
 type APIErrorPayload = components["schemas"]["Error"];
 type APIErrorCode = components["schemas"]["ErrorCode"] | "request_failed";
 export type RefreshStrategy = (
@@ -1444,9 +1461,7 @@ export class MessengerAPI {
   }
   /** Numbers on the media, files, voice and links tabs of chat info. */
   sharedCounts(chatID: string): Promise<ChatSharedCounts> {
-    return this.request(
-      `/api/v1/chats/${encodeURIComponent(chatID)}/shared`,
-    );
+    return this.request(`/api/v1/chats/${encodeURIComponent(chatID)}/shared`);
   }
   /** One page of a chat's attachments of a kind, newest first. */
   sharedAttachments(
@@ -1641,6 +1656,171 @@ export class MessengerAPI {
         `/api/v1/reminders/ids?chat_id=${encodeURIComponent(chatID)}`,
       )
     ).reminders;
+  }
+  /**
+   * The org structure. With the version of the cached structure the server
+   * may answer 304, and then this returns null: the cache is current.
+   */
+  async orgStructure(cachedVersion?: number): Promise<OrgStructure | null> {
+    const headers: Record<string, string> = {};
+    if (cachedVersion !== undefined)
+      headers["If-None-Match"] = `"org-${cachedVersion}"`;
+    try {
+      return await this.request<OrgStructure>("/api/v1/org", { headers });
+    } catch (error) {
+      if (error instanceof APIError && error.status === 304) return null;
+      throw error;
+    }
+  }
+  createDepartment(input: CreateDepartmentRequest): Promise<DepartmentWrite> {
+    return this.request("/api/v1/org/departments", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+  /** Renames, moves under another parent (null — top level) or sets the lead. */
+  updateDepartment(
+    id: string,
+    input: UpdateDepartmentRequest,
+  ): Promise<DepartmentWrite> {
+    return this.request(`/api/v1/org/departments/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+  }
+  /** One place up or down among the siblings. */
+  moveDepartment(
+    id: string,
+    direction: "up" | "down",
+  ): Promise<DepartmentWrite> {
+    return this.request(
+      `/api/v1/org/departments/${encodeURIComponent(id)}/move`,
+      { method: "POST", body: JSON.stringify({ direction }) },
+    );
+  }
+  /**
+   * Deletes a department. membersTo is where its primary members go: a
+   * department id or "none"; left out — the parent.
+   */
+  deleteDepartment(id: string, membersTo?: string): Promise<void> {
+    const suffix =
+      membersTo === undefined
+        ? ""
+        : `?members_to=${encodeURIComponent(membersTo)}`;
+    return this.request(
+      `/api/v1/org/departments/${encodeURIComponent(id)}${suffix}`,
+      { method: "DELETE" },
+    );
+  }
+  setDepartmentMember(
+    departmentID: string,
+    actorID: string,
+    input: SetDepartmentMemberRequest,
+  ): Promise<OrgPersonWrite> {
+    return this.request(
+      `/api/v1/org/departments/${encodeURIComponent(departmentID)}/members/${encodeURIComponent(actorID)}`,
+      { method: "PUT", body: JSON.stringify(input) },
+    );
+  }
+  removeDepartmentMember(departmentID: string, actorID: string): Promise<void> {
+    return this.request(
+      `/api/v1/org/departments/${encodeURIComponent(departmentID)}/members/${encodeURIComponent(actorID)}`,
+      { method: "DELETE" },
+    );
+  }
+  /** The whole assignment of one person: departments and position. */
+  setPersonOrg(
+    actorID: string,
+    input: SetPersonOrgRequest,
+  ): Promise<OrgPersonWrite> {
+    return this.request(`/api/v1/org/people/${encodeURIComponent(actorID)}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    });
+  }
+  /** Mass assignment: «Назначить отдел / должность» for up to 200 people. */
+  assignPeopleOrg(
+    input: AssignPeopleOrgRequest,
+  ): Promise<AssignPeopleOrgResult> {
+    return this.request("/api/v1/org/people/assign", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+  createPosition(name: string): Promise<PositionWrite> {
+    return this.request("/api/v1/org/positions", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    });
+  }
+  /** Several positions at once; existing names are skipped. */
+  createPositions(names: string[]): Promise<CreatePositionsResult> {
+    return this.request("/api/v1/org/positions/bulk", {
+      method: "POST",
+      body: JSON.stringify({ names }),
+    });
+  }
+  updatePosition(
+    id: string,
+    input: UpdatePositionRequest,
+  ): Promise<PositionWrite> {
+    return this.request(`/api/v1/org/positions/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+  }
+  deletePosition(id: string): Promise<void> {
+    return this.request(`/api/v1/org/positions/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+  }
+  /** «Должности из подписей профилей». */
+  async titleSuggestions(): Promise<TitleSuggestion[]> {
+    return (
+      await this.request<{ suggestions: TitleSuggestion[] }>(
+        "/api/v1/org/title-suggestions",
+      )
+    ).suggestions;
+  }
+  /** «Создать чат отдела»: a private group with the department's people. */
+  createDepartmentChat(departmentID: string): Promise<DepartmentChatResult> {
+    return this.request(
+      `/api/v1/org/departments/${encodeURIComponent(departmentID)}/chat`,
+      { method: "POST" },
+    );
+  }
+  /** «Привязать чат»: links a group the caller owns or administers. */
+  linkDepartmentChat(
+    departmentID: string,
+    chatID: string,
+  ): Promise<DepartmentWrite> {
+    return this.request(
+      `/api/v1/org/departments/${encodeURIComponent(departmentID)}/chat`,
+      { method: "PUT", body: JSON.stringify({ chat_id: chatID }) },
+    );
+  }
+  unlinkDepartmentChat(departmentID: string): Promise<void> {
+    return this.request(
+      `/api/v1/org/departments/${encodeURIComponent(departmentID)}/chat`,
+      { method: "DELETE" },
+    );
+  }
+  /** Active people of the department who are not in its chat. */
+  async departmentChatMissing(departmentID: string): Promise<ActorSummary[]> {
+    return (
+      await this.request<{ actors: ActorSummary[] }>(
+        `/api/v1/org/departments/${encodeURIComponent(departmentID)}/chat/missing`,
+      )
+    ).actors;
+  }
+  /** «В чате нет N сотрудников · Добавить»; returns how many were added. */
+  async addDepartmentChatMissing(departmentID: string): Promise<number> {
+    return (
+      await this.request<{ added: number }>(
+        `/api/v1/org/departments/${encodeURIComponent(departmentID)}/chat/add-missing`,
+        { method: "POST" },
+      )
+    ).added;
   }
   forward(id: string, chatID: string, clientMsgID: string): Promise<Message> {
     return this.request(`/api/v1/messages/${id}/forward`, {

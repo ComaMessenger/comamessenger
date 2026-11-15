@@ -719,6 +719,512 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/AuditPage" }
         "403": { $ref: "#/components/responses/Error" }
+  # --- org structure («Оргструктура», phase 6.5 wave 2; keep this block together) ---
+  /api/v1/org:
+    get:
+      operationId: getOrgStructure
+      description: >-
+        The whole org structure of the workspace in one response: departments,
+        positions and the assignment of active people. Any active member may
+        read it. Deactivated people, agents and people with neither a
+        membership nor a position are left out of people; a lead who is not
+        active is reported as null. chat_id of a department is given only to
+        members of that chat (has_chat tells the others a chat exists). The
+        response carries ETag "org-{version}"; a request with a matching
+        If-None-Match gets 304 without a body. Until the server announces the
+        org_structure feature the route answers 501 not_implemented.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: If-None-Match
+          in: header
+          required: false
+          description: The ETag of the cached structure, "org-{version}".
+          schema: { type: string, maxLength: 64 }
+      responses:
+        "200":
+          description: The current structure.
+          headers:
+            ETag:
+              description: '"org-{version}"'
+              schema: { type: string }
+          content:
+            application/json:
+              { schema: { $ref: "#/components/schemas/OrgStructure" } }
+        "304":
+          description: The cached structure is current.
+          headers:
+            ETag: { schema: { type: string } }
+        "429": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
+  /api/v1/org/departments:
+    post:
+      operationId: createDepartment
+      description: >-
+        Creates a department. Needs org.manage or members.manage (403
+        forbidden otherwise). members with primary true move the person's
+        primary department here and drop the membership in the previous
+        primary one; additional departments are not touched. primary false
+        adds the department as an additional one. A lead who is not among
+        members becomes an additional member. Only people (not agents) may be
+        members (422 org_invalid, details.field actor_id). Depth is limited to
+        8 levels (422 org_depth_exceeded), the workspace to 500 departments
+        and a person to 10 additional departments (409 org_limit_reached).
+        Names are unique among siblings ignoring case (409 org_name_taken).
+        Writes of the org structure are limited to 120 a minute per person
+        (429 rate_limited). Emits org.updated.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            { schema: { $ref: "#/components/schemas/CreateDepartmentRequest" } }
+      responses:
+        "201":
+          description: The new department and the org version after the write.
+          content:
+            application/json:
+              { schema: { $ref: "#/components/schemas/DepartmentWrite" } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
+  /api/v1/org/departments/{department_id}:
+    patch:
+      operationId: updateDepartment
+      description: >-
+        Renames a department, moves it under another parent (parent_id null —
+        to the top level) or sets its lead (lead_actor_id null — no lead). A
+        lead outside the department becomes an additional member. A parent
+        that is the department itself or its descendant gets 409 org_cycle.
+        expected_version is the department's version (409
+        org_version_conflict when stale). Needs org.manage or members.manage.
+        Emits org.updated.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/DepartmentId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            { schema: { $ref: "#/components/schemas/UpdateDepartmentRequest" } }
+      responses:
+        "200":
+          description: The department and the org version after the write.
+          content:
+            application/json:
+              { schema: { $ref: "#/components/schemas/DepartmentWrite" } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteDepartment
+      description: >-
+        Deletes a department. Its subdepartments move to its parent. Primary
+        members move to members_to (by default the parent); with none, or
+        without a parent, a person's oldest additional department becomes
+        primary, otherwise the person is left without a department.
+        Additional memberships are dropped. The department chat stays, only
+        the link is removed. Past requests to the department keep their
+        label. Needs org.manage or members.manage. Emits org.updated.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/DepartmentId" }
+        - name: members_to
+          in: query
+          required: false
+          description: >-
+            Department id that becomes the primary department of the primary
+            members, or none. Absent means the parent. It must not be the
+            deleted department or one of its descendants (422 org_invalid).
+          schema:
+            oneOf:
+              - { type: string, format: uuid }
+              - { type: string, enum: [none] }
+      responses:
+        "204": { description: Deleted. }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
+  /api/v1/org/departments/{department_id}/move:
+    post:
+      operationId: moveDepartment
+      description: >-
+        Moves a department one place up or down among its siblings. The first
+        manual move sets sort_key for all siblings (until then they go by
+        name). Moving the first one up or the last one down changes nothing.
+        Needs org.manage or members.manage. Emits org.updated when the order
+        changes.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/DepartmentId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            { schema: { $ref: "#/components/schemas/MoveDepartmentRequest" } }
+      responses:
+        "200":
+          description: The department and the org version after the move; siblings changed too.
+          content:
+            application/json:
+              { schema: { $ref: "#/components/schemas/DepartmentWrite" } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
+  /api/v1/org/departments/{department_id}/members/{actor_id}:
+    put:
+      operationId: setDepartmentMember
+      description: >-
+        Adds a person to a department or changes the kind of membership.
+        primary true moves the person's primary department here; the previous
+        primary one becomes additional with keep_previous true, otherwise
+        that membership is dropped. primary false makes it an additional
+        department; turning the primary department into an additional one
+        promotes the person's oldest other additional department, if any.
+        Needs org.manage or members.manage. Emits org.updated.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/DepartmentId" }
+        - { $ref: "#/components/parameters/ActorId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            {
+              schema:
+                { $ref: "#/components/schemas/SetDepartmentMemberRequest" },
+            }
+      responses:
+        "200":
+          description: The person's assignment and the org version after the write.
+          content:
+            application/json:
+              { schema: { $ref: "#/components/schemas/OrgPersonWrite" } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: removeDepartmentMember
+      description: >-
+        Removes a person from a department. When it was the primary one, the
+        oldest additional department becomes primary. When the person led
+        the department, the lead is cleared in the same write. Removing a
+        person who is not a member changes nothing. Needs org.manage or
+        members.manage. Emits org.updated.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/DepartmentId" }
+        - { $ref: "#/components/parameters/ActorId" }
+      responses:
+        "204": { description: Removed. }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
+  /api/v1/org/people/{actor_id}:
+    put:
+      operationId: setPersonOrg
+      description: >-
+        Sets the whole assignment of one person at once: primary department,
+        additional departments and position. Departments the person leads but
+        is no longer a member of lose their lead. additional_department_ids
+        must not contain the primary one and needs a primary one (422
+        org_invalid). expected_org_version, when given, must equal the
+        current org version (409 org_version_conflict). Needs org.manage or
+        members.manage. Emits org.updated.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/ActorId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            { schema: { $ref: "#/components/schemas/SetPersonOrgRequest" } }
+      responses:
+        "200":
+          description: The person's assignment and the org version after the write.
+          content:
+            application/json:
+              { schema: { $ref: "#/components/schemas/OrgPersonWrite" } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
+  /api/v1/org/people/assign:
+    post:
+      operationId: assignPeopleOrg
+      description: >-
+        Mass assignment for up to 200 people in one transaction and one
+        org.updated event. Fields left out are not touched.
+        primary_department_id moves the primary department as
+        setDepartmentMember with keep_previous false; add_department_id adds
+        an additional department (people for whom it is already primary keep
+        it as primary); position_id sets the position, null clears it. All
+        people must be active people of the workspace (422 org_invalid,
+        details.field actor_ids). Needs org.manage or members.manage.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            { schema: { $ref: "#/components/schemas/AssignPeopleOrgRequest" } }
+      responses:
+        "200":
+          description: The assignments of the people and the org version after the write.
+          content:
+            application/json:
+              { schema: { $ref: "#/components/schemas/AssignPeopleOrgResult" } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
+  /api/v1/org/positions:
+    post:
+      operationId: createPosition
+      description: >-
+        Adds a position to the directory. Names are unique ignoring case (409
+        org_name_taken); at most 300 positions (409 org_limit_reached). Needs
+        org.manage or members.manage. Emits org.updated.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            { schema: { $ref: "#/components/schemas/CreatePositionRequest" } }
+      responses:
+        "201":
+          description: The new position and the org version after the write.
+          content:
+            application/json:
+              { schema: { $ref: "#/components/schemas/PositionWrite" } }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
+  /api/v1/org/positions/bulk:
+    post:
+      operationId: createPositions
+      description: >-
+        Adds several positions at once, for «Должности из подписей профилей».
+        Names that already exist (ignoring case) or repeat in the request are
+        skipped, not rejected. One org.updated event. Needs org.manage or
+        members.manage.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            { schema: { $ref: "#/components/schemas/CreatePositionsRequest" } }
+      responses:
+        "200":
+          description: Created and skipped names and the org version after the write.
+          content:
+            application/json:
+              { schema: { $ref: "#/components/schemas/CreatePositionsResult" } }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
+  /api/v1/org/positions/{position_id}:
+    patch:
+      operationId: updatePosition
+      description: >-
+        Renames a position. expected_version is the position's version (409
+        org_version_conflict when stale). Past requests to the position keep
+        the old label. Needs org.manage or members.manage. Emits org.updated.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/PositionId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            { schema: { $ref: "#/components/schemas/UpdatePositionRequest" } }
+      responses:
+        "200":
+          description: The position and the org version after the write.
+          content:
+            application/json:
+              { schema: { $ref: "#/components/schemas/PositionWrite" } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deletePosition
+      description: >-
+        Deletes a position; people who held it are left without one. Past
+        requests to the position keep their label. Needs org.manage or
+        members.manage. Emits org.updated.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/PositionId" }
+      responses:
+        "204": { description: Deleted. }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
+  /api/v1/org/title-suggestions:
+    get:
+      operationId: listTitleSuggestions
+      description: >-
+        «Должности из подписей профилей»: distinct profile titles of active
+        people (trimmed, compared ignoring case) that do not match a position
+        yet, with the people who carry each, most frequent first. After
+        createPositions the client may assign the new positions to them with
+        assignPeopleOrg. Needs org.manage or members.manage.
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Suggestions, at most 200.
+          content:
+            application/json:
+              { schema: { $ref: "#/components/schemas/TitleSuggestionList" } }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
+  /api/v1/org/departments/{department_id}/chat:
+    post:
+      operationId: createDepartmentChat
+      description: >-
+        «Создать чат отдела»: creates a private group named after the
+        department with all active people of the department and its
+        subdepartments, as an ordinary group creation (the same member limit,
+        chat.created and member.joined events). The caller owns the chat, the
+        lead is its administrator. Allowed to the department lead and to
+        holders of org.manage or members.manage (403 forbidden otherwise).
+        409 department_chat_exists when the department already has a chat,
+        archived included. Emits org.updated.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/DepartmentId" }
+      responses:
+        "201":
+          description: The chat, the department with the link and the org version.
+          content:
+            application/json:
+              { schema: { $ref: "#/components/schemas/DepartmentChatResult" } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
+    put:
+      operationId: linkDepartmentChat
+      description: >-
+        «Привязать чат»: links an existing group. It must be a group (not a
+        direct chat or a channel), not archived, and the caller must be its
+        owner or administrator (422 department_chat_invalid otherwise). 409
+        department_chat_exists when the chat is linked to another department
+        or this department already has a chat. Allowed to the lead and to
+        holders of org.manage or members.manage. Emits org.updated.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/DepartmentId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            { schema: { $ref: "#/components/schemas/LinkDepartmentChatRequest" } }
+      responses:
+        "200":
+          description: The department with the link and the org version.
+          content:
+            application/json:
+              { schema: { $ref: "#/components/schemas/DepartmentWrite" } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: unlinkDepartmentChat
+      description: >-
+        Removes the link between the department and its chat; the chat stays
+        as it is. Allowed to the lead and to holders of org.manage or
+        members.manage. Emits org.updated.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/DepartmentId" }
+      responses:
+        "204": { description: Unlinked, or there was no chat. }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
+  /api/v1/org/departments/{department_id}/chat/missing:
+    get:
+      operationId: listDepartmentChatMissing
+      description: >-
+        Active people of the department and its subdepartments who are not
+        members of the department chat, those who left on their own
+        included. Only for a member of the chat who may add members there
+        and is the lead or holds org.manage or members.manage (403
+        forbidden); 404 department_not_found when the department has no
+        chat.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/DepartmentId" }
+      responses:
+        "200":
+          description: The missing people.
+          content:
+            application/json:
+              { schema: { $ref: "#/components/schemas/DepartmentChatMissing" } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
+  /api/v1/org/departments/{department_id}/chat/add-missing:
+    post:
+      operationId: addDepartmentChatMissing
+      description: >-
+        «Добавить»: adds the people listDepartmentChatMissing returns, as
+        ordinary member additions with member.joined events and the usual
+        group member limit (409 limit_reached). Agents and deactivated people
+        are never added. The same access as listDepartmentChatMissing.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: "#/components/parameters/DepartmentId" }
+      responses:
+        "200":
+          description: How many people were added.
+          content:
+            application/json:
+              {
+                schema:
+                  { $ref: "#/components/schemas/DepartmentChatAddMissingResult" },
+              }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
+  # --- end of org structure paths ---
   /api/v1/invitations:
     get:
       operationId: listInvitations
@@ -850,7 +1356,13 @@ paths:
       operationId: listActors
       security: [{ bearerAuth: [] }]
       parameters:
-        - { name: q, in: query, schema: { type: string, maxLength: 120 } }
+        - name: q
+          in: query
+          description: >-
+            Matches the name, handle and title; with the org_structure
+            feature also the position name and the names of the person's
+            departments (primary and additional).
+          schema: { type: string, maxLength: 120 }
         - { name: after_id, in: query, schema: { type: string, format: uuid } }
         - {
             name: limit,
@@ -1588,9 +2100,10 @@ paths:
         send one (the same check as createMessage). The audience is turned
         into a fixed list of people at the moment of sending: the author,
         agents and deactivated people are left out, and whoever joins the
-        chat later is not asked. Wave 1 accepts only the audiences people
-        and chat; department and position are part of the contract but get
-        422 request_audience_unavailable until wave 2. Requests go to the
+        chat later is not asked. The audiences department and position need
+        the org_structure feature (422 request_audience_unavailable without
+        it) and requests.address_groups (403 request_audience_forbidden).
+        Requests go to the
         main chat feed only, not into threads. A replay with the same
         client_msg_id and the same content returns the original message
         (200); the same key with other content gets 409
@@ -4414,6 +4927,16 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    DepartmentId:
+      name: department_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PositionId:
+      name: position_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     UploadId:
       name: upload_id
       in: path
@@ -4565,6 +5088,17 @@ components:
         - request_not_found
         - request_remind_too_soon
         - request_too_many_recipients
+        - request_audience_forbidden
+        - org_invalid
+        - org_name_taken
+        - org_cycle
+        - org_depth_exceeded
+        - org_limit_reached
+        - org_version_conflict
+        - department_not_found
+        - position_not_found
+        - department_chat_exists
+        - department_chat_invalid
     File:
       type: object
       additionalProperties: false
@@ -5039,6 +5573,8 @@ components:
       $ref: "./schemas/realtime/v1.schema.json#/$defs/ReminderEvent"
     RealtimeReminderFiredEventV1:
       $ref: "./schemas/realtime/v1.schema.json#/$defs/ReminderFiredEvent"
+    RealtimeOrgUpdatedEventV1:
+      $ref: "./schemas/realtime/v1.schema.json#/$defs/OrgUpdatedEvent"
     BootstrapStatus:
       type: object
       required: [bootstrapped]
@@ -6947,6 +7483,8 @@ components:
         - audit.read
         - chats.moderate
         - knowledge.manage
+        - org.manage
+        - requests.address_groups
     TokenResponse:
       type: object
       required: [access_token, access_expires_at, user]
@@ -7193,6 +7731,19 @@ components:
         status_text: { type: string, maxLength: 100 }
         status_expires_at: { type: [string, "null"], format: date-time }
         avatar_version: { type: integer, format: int64, minimum: 0 }
+        position_id:
+          type: [string, "null"]
+          format: uuid
+          description: >-
+            The position from the org structure (people only); null without
+            one. Present when the server announces org_structure.
+        primary_department_id:
+          type: [string, "null"]
+          format: uuid
+          description: >-
+            The primary department (people only); null without one. Present
+            when the server announces org_structure; the rest of the
+            assignment is in getOrgStructure.
     UpdateOrganizationMemberRequest:
       type: object
       additionalProperties: false
@@ -7200,7 +7751,18 @@ components:
         role: { type: [string, "null"], enum: [admin, member, null] }
         status: { type: [string, "null"], enum: [active, deactivated, null] }
         permissions:
-          description: "Replaces explicit permissions. The owner sets them for administrators and members. An administrator with members.manage may set only member-grantable permissions (knowledge.manage), only for regular members other than themselves, without a role change, and only while holding those permissions personally."
+          description: >-
+            Replaces explicit permissions. The owner sets them for
+            administrators and members. An administrator with members.manage
+            may set only member-grantable permissions (knowledge.manage,
+            org.manage, requests.address_groups), only for regular members
+            other than themselves and without a role change. The server
+            compares the old and the new set code by code: every permission
+            the call turns on or off must be held by the administrator
+            personally (403 forbidden otherwise); the member's other
+            permissions are left as they are. requests.address_groups is
+            never granted to administrators automatically; the owner always
+            has it.
           type: [array, "null"]
           uniqueItems: true
           items: { $ref: "#/components/schemas/Permission" }
@@ -7412,6 +7974,19 @@ components:
           type: string
           enum: [recently, within_week, within_month, long_ago]
           description: Direct chat peer only — rough last seen used instead of last_seen_at when the person or the viewer hides the exact time.
+        position_id:
+          type: [string, "null"]
+          format: uuid
+          description: >-
+            The position from the org structure (people only); null without
+            one. Present when the server announces org_structure.
+        primary_department_id:
+          type: [string, "null"]
+          format: uuid
+          description: >-
+            The primary department (people only); null without one. Present
+            when the server announces org_structure; the rest of the
+            assignment is in getOrgStructure.
     ActorPage:
       type: object
       additionalProperties: false
@@ -7631,6 +8206,24 @@ components:
           type: array
           items: { type: string, format: uuid }
           uniqueItems: true
+        mentioned_department_ids:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          items: { type: string, format: uuid }
+          description: >-
+            Departments mentioned in the body (phase 6.5 wave 2). Their
+            people who were chat members at the moment of sending or of the
+            last edit are already in mentioned_actor_ids, which is the union
+            of people mentioned directly and expanded departments. Absent
+            from servers without the org_structure feature.
+        mentioned_departments:
+          type: array
+          maxItems: 10
+          items: { $ref: "#/components/schemas/MessageDepartmentMention" }
+          description: >-
+            One entry per mentioned department: how many people it notified.
+            Same for every reader; clients show the note to the author only.
         thread_reply_count:
           type: integer
           format: int64
@@ -7891,6 +8484,8 @@ components:
           type: array
           items: { type: string, format: uuid }
           uniqueItems: true
+        mentioned_department_ids:
+          { $ref: "#/components/schemas/MentionedDepartmentIds" }
         file_ids:
           type: array
           maxItems: 10
@@ -7918,6 +8513,8 @@ components:
           type: array
           items: { type: string, format: uuid }
           uniqueItems: true
+        mentioned_department_ids:
+          { $ref: "#/components/schemas/MentionedDepartmentIds" }
     ForwardAttribution:
       type: object
       additionalProperties: false
@@ -8254,6 +8851,15 @@ components:
           type: array
           items: { type: string, format: uuid }
           uniqueItems: true
+        mentioned_department_ids:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          items: { type: string, format: uuid }
+          description: >-
+            Mentioned departments, expanded into people only when the message
+            is sent. Cleared after sending, like the other mentions. Absent
+            from servers without the org_structure feature.
         files:
           type: array
           maxItems: 10
@@ -8315,6 +8921,8 @@ components:
           type: array
           items: { type: string, format: uuid }
           uniqueItems: true
+        mentioned_department_ids:
+          { $ref: "#/components/schemas/MentionedDepartmentIds" }
         file_ids:
           type: array
           maxItems: 10
@@ -8341,6 +8949,8 @@ components:
           type: array
           items: { type: string, format: uuid }
           uniqueItems: true
+        mentioned_department_ids:
+          { $ref: "#/components/schemas/MentionedDepartmentIds" }
         file_ids:
           type: array
           maxItems: 10
@@ -8413,9 +9023,14 @@ components:
       type: string
       enum: [people, chat, department, position]
       description: >-
-        Whom the request asks. Wave 1 serves people and chat only:
-        department and position get 422 request_audience_unavailable until
-        wave 2 and clients do not offer them.
+        Whom the request asks. people and chat: any member who may write to
+        the chat. department and position (phase 6.5 wave 2) are served by
+        servers that announce org_structure; others answer 422
+        request_audience_unavailable and clients do not offer them. They need
+        requests.address_groups in the author's effective permissions (the
+        owner always has it) and get 403 request_audience_forbidden
+        otherwise; the permission is checked when the request is created
+        only.
     RequestAudienceInput:
       type: object
       additionalProperties: false
@@ -8435,11 +9050,18 @@ components:
         department_id:
           type: string
           format: uuid
-          description: Wave 2. Rejected with 422 request_audience_unavailable in wave 1.
+          description: >-
+            Required for department. Expanded into the active people of the
+            department and its subdepartments (primary and additional
+            members) who are active members of the chat, the author left
+            out. 404 department_not_found for an unknown department.
         position_id:
           type: string
           format: uuid
-          description: Wave 2. Rejected with 422 request_audience_unavailable in wave 1.
+          description: >-
+            Required for position. Expanded into the active people with the
+            position who are active members of the chat, the author left
+            out. 404 position_not_found for an unknown position.
     RequestAudience:
       type: object
       additionalProperties: false
@@ -8450,9 +9072,10 @@ components:
           type: string
           maxLength: 60
           description: >-
-            The name of the only recipient (or, from wave 2, of the
-            department or position) at the moment of sending; empty for chat
-            and for several people. Never lists names.
+            The name of the only recipient, or of the department or
+            position, at the moment of sending; empty for chat and for
+            several people. Never lists names. Kept when the department or
+            position is renamed or deleted later.
         count:
           type: integer
           minimum: 0
@@ -8460,6 +9083,19 @@ components:
             Current denominator of «N из M»: recipients who are still active
             members of the chat plus those who answered. A recipient who left
             without answering drops out of it.
+        department_id:
+          type: [string, "null"]
+          format: uuid
+          description: >-
+            department only: the addressed department for a link to its
+            card; null once the department is deleted. Absent for other
+            kinds and from servers without org_structure.
+        position_id:
+          type: [string, "null"]
+          format: uuid
+          description: >-
+            position only: the addressed position; null once it is deleted.
+            Absent for other kinds and from servers without org_structure.
     CreateRequestRequest:
       type: object
       additionalProperties: false
@@ -8475,6 +9111,8 @@ components:
           type: array
           items: { type: string, format: uuid }
           uniqueItems: true
+        mentioned_department_ids:
+          { $ref: "#/components/schemas/MentionedDepartmentIds" }
         audience: { $ref: "#/components/schemas/RequestAudienceInput" }
         answer: { $ref: "#/components/schemas/RequestAnswerSpec" }
         allow_comment: { type: boolean, default: true }
@@ -8752,6 +9390,331 @@ components:
         reminders:
           { type: array, items: { $ref: "#/components/schemas/ReminderIdEntry" } }
     # --- end of reminders schemas ---
+    # --- org structure («Оргструктура», phase 6.5 wave 2) ---
+    OrgName:
+      type: string
+      minLength: 1
+      maxLength: 60
+      description: 1–60 characters (Unicode code points) after trimming.
+    OrgDepartment:
+      type: object
+      additionalProperties: false
+      required:
+        [id, parent_id, name, lead_actor_id, chat_id, has_chat, chat_archived, sort_key, version]
+      properties:
+        id: { type: string, format: uuid }
+        parent_id:
+          type: [string, "null"]
+          format: uuid
+          description: null for a top-level department.
+        name: { type: string }
+        lead_actor_id:
+          type: [string, "null"]
+          format: uuid
+          description: The lead, always a member of the department; null without one or while the lead is not active.
+        chat_id:
+          type: [string, "null"]
+          format: uuid
+          description: The department chat, only when the reader is a member of it; null otherwise.
+        has_chat:
+          type: boolean
+          description: The department has a linked chat, whether or not the reader is a member.
+        chat_archived:
+          type: boolean
+          description: The linked chat is archived («Чат в архиве»); false without a chat.
+        sort_key:
+          type: [integer, "null"]
+          description: Manual order among siblings; null — by name until the first manual move.
+        version: { type: integer, minimum: 1 }
+    OrgPosition:
+      type: object
+      additionalProperties: false
+      required: [id, name, sort_key, version]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        sort_key:
+          type: [integer, "null"]
+          description: Manual order; null — by name.
+        version: { type: integer, minimum: 1 }
+    OrgPerson:
+      type: object
+      additionalProperties: false
+      description: The org assignment of one active person.
+      required: [actor_id, primary_department_id, additional_department_ids, position_id]
+      properties:
+        actor_id: { type: string, format: uuid }
+        primary_department_id: { type: [string, "null"], format: uuid }
+        additional_department_ids:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          items: { type: string, format: uuid }
+          description: Oldest membership first. Empty without a primary department.
+        position_id: { type: [string, "null"], format: uuid }
+    OrgStructure:
+      type: object
+      additionalProperties: false
+      required: [version, departments, positions, people]
+      properties:
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Grows by one with every write of the structure; org.updated carries it.
+        departments:
+          type: array
+          maxItems: 500
+          items: { $ref: "#/components/schemas/OrgDepartment" }
+        positions:
+          type: array
+          maxItems: 300
+          items: { $ref: "#/components/schemas/OrgPosition" }
+        people:
+          type: array
+          description: Active people with a membership or a position; everyone else has none.
+          items: { $ref: "#/components/schemas/OrgPerson" }
+    DepartmentMemberInput:
+      type: object
+      additionalProperties: false
+      required: [actor_id, primary]
+      properties:
+        actor_id: { type: string, format: uuid }
+        primary:
+          type: boolean
+          description: true moves the person's primary department here; false adds it as an additional one.
+    CreateDepartmentRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { $ref: "#/components/schemas/OrgName" }
+        parent_id: { type: string, format: uuid }
+        lead_actor_id: { type: string, format: uuid }
+        members:
+          type: array
+          maxItems: 200
+          items: { $ref: "#/components/schemas/DepartmentMemberInput" }
+          description: Each person at most once (422 org_invalid).
+    UpdateDepartmentRequest:
+      type: object
+      additionalProperties: false
+      required: [expected_version]
+      minProperties: 2
+      description: Fields left out are not changed.
+      properties:
+        name: { $ref: "#/components/schemas/OrgName" }
+        parent_id:
+          type: [string, "null"]
+          format: uuid
+          description: null moves the department to the top level.
+        lead_actor_id:
+          type: [string, "null"]
+          format: uuid
+          description: null clears the lead.
+        expected_version: { type: integer, minimum: 1 }
+    MoveDepartmentRequest:
+      type: object
+      additionalProperties: false
+      required: [direction]
+      properties:
+        direction: { type: string, enum: [up, down] }
+    DepartmentWrite:
+      type: object
+      additionalProperties: false
+      required: [department, version]
+      properties:
+        department: { $ref: "#/components/schemas/OrgDepartment" }
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+          description: The org version after the write.
+    SetDepartmentMemberRequest:
+      type: object
+      additionalProperties: false
+      required: [primary]
+      properties:
+        primary: { type: boolean }
+        keep_previous:
+          type: boolean
+          default: false
+          description: With primary true — keep the previous primary department as an additional one instead of leaving it.
+    SetPersonOrgRequest:
+      type: object
+      additionalProperties: false
+      required: [primary_department_id, additional_department_ids, position_id]
+      properties:
+        primary_department_id: { type: [string, "null"], format: uuid }
+        additional_department_ids:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          items: { type: string, format: uuid }
+        position_id: { type: [string, "null"], format: uuid }
+        expected_org_version:
+          type: integer
+          format: int64
+          minimum: 1
+          description: The org version the client saw; 409 org_version_conflict when the structure changed since.
+    OrgPersonWrite:
+      type: object
+      additionalProperties: false
+      required: [person, version]
+      properties:
+        person: { $ref: "#/components/schemas/OrgPerson" }
+        version: { type: integer, format: int64, minimum: 1 }
+    AssignPeopleOrgRequest:
+      type: object
+      additionalProperties: false
+      required: [actor_ids]
+      minProperties: 2
+      properties:
+        actor_ids:
+          type: array
+          minItems: 1
+          maxItems: 200
+          uniqueItems: true
+          items: { type: string, format: uuid }
+        primary_department_id: { type: string, format: uuid }
+        add_department_id: { type: string, format: uuid }
+        position_id:
+          type: [string, "null"]
+          format: uuid
+          description: null clears the position.
+    AssignPeopleOrgResult:
+      type: object
+      additionalProperties: false
+      required: [people, version]
+      properties:
+        people:
+          type: array
+          items: { $ref: "#/components/schemas/OrgPerson" }
+        version: { type: integer, format: int64, minimum: 1 }
+    CreatePositionRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { $ref: "#/components/schemas/OrgName" }
+    CreatePositionsRequest:
+      type: object
+      additionalProperties: false
+      required: [names]
+      properties:
+        names:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: "#/components/schemas/OrgName" }
+    UpdatePositionRequest:
+      type: object
+      additionalProperties: false
+      required: [expected_version]
+      minProperties: 2
+      properties:
+        name: { $ref: "#/components/schemas/OrgName" }
+        expected_version: { type: integer, minimum: 1 }
+    PositionWrite:
+      type: object
+      additionalProperties: false
+      required: [position, version]
+      properties:
+        position: { $ref: "#/components/schemas/OrgPosition" }
+        version: { type: integer, format: int64, minimum: 1 }
+    CreatePositionsResult:
+      type: object
+      additionalProperties: false
+      required: [created, skipped, version]
+      properties:
+        created:
+          type: array
+          items: { $ref: "#/components/schemas/OrgPosition" }
+        skipped:
+          type: array
+          items: { type: string }
+          description: Names left out because a position with that name exists or the name repeats.
+        version: { type: integer, format: int64, minimum: 1 }
+    TitleSuggestion:
+      type: object
+      additionalProperties: false
+      required: [title, count, actor_ids]
+      properties:
+        title: { type: string }
+        count: { type: integer, minimum: 1 }
+        actor_ids:
+          type: array
+          uniqueItems: true
+          items: { type: string, format: uuid }
+          description: Active people whose title it is; candidates for the position once created.
+    TitleSuggestionList:
+      type: object
+      additionalProperties: false
+      required: [suggestions]
+      properties:
+        suggestions:
+          type: array
+          maxItems: 200
+          items: { $ref: "#/components/schemas/TitleSuggestion" }
+    LinkDepartmentChatRequest:
+      type: object
+      additionalProperties: false
+      required: [chat_id]
+      properties:
+        chat_id: { type: string, format: uuid }
+    DepartmentChatResult:
+      type: object
+      additionalProperties: false
+      required: [chat, department, version]
+      properties:
+        chat: { $ref: "#/components/schemas/Chat" }
+        department: { $ref: "#/components/schemas/OrgDepartment" }
+        version: { type: integer, format: int64, minimum: 1 }
+    DepartmentChatMissing:
+      type: object
+      additionalProperties: false
+      required: [actors]
+      properties:
+        actors:
+          type: array
+          items: { $ref: "#/components/schemas/ActorSummary" }
+    DepartmentChatAddMissingResult:
+      type: object
+      additionalProperties: false
+      required: [added]
+      properties:
+        added: { type: integer, minimum: 0 }
+    MessageDepartmentMention:
+      type: object
+      additionalProperties: false
+      required: [department_id, notified_count]
+      properties:
+        department_id: { type: string, format: uuid }
+        notified_count:
+          type: integer
+          minimum: 0
+          description: >-
+            Active people of the department and its subdepartments who are
+            members of the chat, the author left out, at the moment of
+            sending or of the last edit. Clients show «Уведомлены N человек»
+            to the author only.
+    MentionedDepartmentIds:
+      type: array
+      maxItems: 10
+      uniqueItems: true
+      items: { type: string, format: uuid }
+      description: >-
+        Departments mentioned with the same token as a person,
+        @[Name](department id). The server expands each into the active
+        people of the department and its subdepartments who are members of
+        the chat, without the author, and adds them to mentioned_actor_ids.
+        More than 10 get 422 validation_failed (details.field
+        mentioned_department_ids). A department id sent in
+        mentioned_actor_ids by an older client is moved here instead of
+        being rejected. Servers without the org_structure feature reject the
+        unknown field, so clients send it only when the server announces
+        the feature.
+    # --- end of org structure schemas ---
     ChatUnread:
       type: object
       additionalProperties: false

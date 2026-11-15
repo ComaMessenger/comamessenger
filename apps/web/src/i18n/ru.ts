@@ -153,6 +153,8 @@ export const ru = {
   permissionAuditRead: "Журнал аудита",
   permissionChatsModerate: "Модерация чатов",
   permissionKnowledgeManage: "Управление базой знаний",
+  permissionOrgManage: "Вести оргструктуру",
+  permissionRequestsAddressGroups: "Обращаться к отделам и ролям",
   personalPreferences: "Личные настройки",
   appearance: "Внешний вид",
   privacy: "Приватность",

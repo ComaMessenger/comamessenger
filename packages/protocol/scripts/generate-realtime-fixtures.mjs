@@ -29,6 +29,9 @@ const schemaByFixture = {
   "event-reminder-updated": "RealtimeDurableEventFrameV1",
   "event-reminder-deleted": "RealtimeDurableEventFrameV1",
   "event-reminder-fired": "RealtimeDurableEventFrameV1",
+  "event-message-department-mention": "RealtimeDurableEventFrameV1",
+  "event-message-request-position": "RealtimeDurableEventFrameV1",
+  "event-org-updated": "RealtimeDurableEventFrameV1",
 };
 // Typed data of durable events: the fixture's data must also satisfy it.
 const dataSchemaByEventType = {
@@ -43,6 +46,7 @@ const dataSchemaByEventType = {
   "reminder.updated": "RealtimeReminderEventV1",
   "reminder.deleted": "RealtimeReminderEventV1",
   "reminder.fired": "RealtimeReminderFiredEventV1",
+  "org.updated": "RealtimeOrgUpdatedEventV1",
 };
 
 const files = (await readdir(fixtureRoot))

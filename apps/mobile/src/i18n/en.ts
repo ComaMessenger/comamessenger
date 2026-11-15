@@ -977,6 +977,8 @@ export const en: Record<keyof typeof ru, string> = {
   permissionIntegrationsManage: "Connections",
   permissionInvitationsManage: "Invitations",
   permissionKnowledgeManage: "Knowledge base management",
+  permissionOrgManage: "Manage the org structure",
+  permissionRequestsAddressGroups: "Address departments and positions",
   permissionMembersManage: "Members",
   permissionWorkspacePolicies: "Policies",
   permissionWorkspaceSettings: "General settings",
