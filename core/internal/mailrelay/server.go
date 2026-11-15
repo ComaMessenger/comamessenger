@@ -34,6 +34,8 @@ import (
 
 const keyPrefix = "cmr_"
 
+var providerKeyNamespace = uuid.MustParse("6f1f3c52-31d6-4c9b-9a59-6c0d3b0e7a10")
+
 var (
 	idempotencyPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{8,128}$`)
 	keyPattern         = regexp.MustCompile(`^cmr_[A-Za-z0-9_-]{43}$`)
@@ -128,24 +130,37 @@ func (s *Server) recipientHash(address string) []byte {
 	return mac.Sum(nil)
 }
 
-// NormalizeAppURL accepts an https origin with an optional base path and
-// returns it without a trailing slash.
+var basePathPattern = regexp.MustCompile(`^(/[a-z0-9][a-z0-9-]{0,31}){0,3}$`)
+
+// NormalizeAppURL accepts an https origin on port 443 with an optional
+// short base path (lower-case letters, digits and dashes) and returns it in
+// canonical form: host lower-cased, IDN in punycode, no trailing dot, no
+// default port, no trailing slash. allowInsecure (tests, local runs) also
+// accepts http and other ports.
 func NormalizeAppURL(raw string, allowInsecure bool) (*url.URL, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || len(raw) > 512 {
 		return nil, errors.New("app_url is empty or too long")
 	}
 	parsed, err := url.Parse(raw)
-	if err != nil || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Opaque != "" {
+	if err != nil || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Opaque != "" || parsed.ForceQuery {
 		return nil, errors.New("app_url must be an absolute URL without credentials, query or fragment")
 	}
 	if parsed.Scheme != "https" && !(allowInsecure && parsed.Scheme == "http") {
 		return nil, errors.New("app_url must use https")
 	}
-	parsed.Host = strings.ToLower(parsed.Host)
-	parsed.Path = strings.TrimRight(parsed.Path, "/")
-	parsed.RawPath = ""
-	return parsed, nil
+	host, err := mailtemplate.CanonicalHost(parsed)
+	if err != nil {
+		return nil, errors.New("app_url host is invalid")
+	}
+	if !allowInsecure && parsed.Port() != "" && parsed.Port() != "443" {
+		return nil, errors.New("app_url must use port 443")
+	}
+	path := strings.TrimRight(parsed.EscapedPath(), "/")
+	if !allowInsecure && !basePathPattern.MatchString(path) {
+		return nil, errors.New("app_url path may hold only up to three short lower-case segments")
+	}
+	return &url.URL{Scheme: parsed.Scheme, Host: host, Path: path}, nil
 }
 
 func (s *Server) createInstallation(w http.ResponseWriter, r *http.Request) {
@@ -169,7 +184,8 @@ func (s *Server) createInstallation(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	host := appURL.Host
-	blocked, err := s.options.Store.HostBlocked(ctx, host)
+	site := mailtemplate.Site(host)
+	blocked, err := s.options.Store.SiteBlocked(ctx, site)
 	if err != nil {
 		s.internal(w, "check host", err)
 		return
@@ -178,10 +194,12 @@ func (s *Server) createInstallation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "installation_revoked", "Coma mail is disabled for this address.")
 		return
 	}
-	if pending, err := s.options.Store.PendingForHost(ctx, host); err != nil {
+	// Unverified registrations cost nothing; count them per address and
+	// client so nobody can lock another installation out.
+	if pending, err := s.options.Store.PendingFor(ctx, appURL.String(), s.clientIP(r)); err != nil {
 		s.internal(w, "count pending", err)
 		return
-	} else if pending >= 10 {
+	} else if pending >= 5 {
 		writeError(w, http.StatusTooManyRequests, "rate_limited", "Too many unverified registrations for this address.")
 		return
 	}
@@ -197,7 +215,7 @@ func (s *Server) createInstallation(w http.ResponseWriter, r *http.Request) {
 	}
 	id := uuid.NewString()
 	key := keyPrefix + secret
-	if err := s.options.Store.CreateInstallation(ctx, id, hashKey(key), appURL.String(), host, challenge, s.clientIP(r)); err != nil {
+	if err := s.options.Store.CreateInstallation(ctx, id, hashKey(key), appURL.String(), host, site, challenge, s.clientIP(r)); err != nil {
 		s.internal(w, "create installation", err)
 		return
 	}
@@ -241,7 +259,7 @@ func (s *Server) verifyInstallation(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "active"})
 		return
 	case "suspended", "revoked":
-		writeError(w, http.StatusForbidden, "installation_revoked", "Coma mail is disabled for this installation.")
+		s.writeRevoked(w, installation)
 		return
 	}
 	if !s.verify.allow("installation:" + installation.ID) {
@@ -256,14 +274,14 @@ func (s *Server) verifyInstallation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, "origin_unverified", "The installation address did not return the expected challenge.")
 		return
 	}
-	if blocked, err := s.options.Store.HostBlocked(ctx, installation.AppHost); err != nil {
+	if blocked, err := s.options.Store.SiteBlocked(ctx, installation.AppSite); err != nil {
 		s.internal(w, "check host", err)
 		return
 	} else if blocked {
 		writeError(w, http.StatusForbidden, "installation_revoked", "Coma mail is disabled for this address.")
 		return
 	}
-	if err := s.options.Store.Activate(ctx, installation.ID, installation.AppHost); err != nil {
+	if err := s.options.Store.Activate(ctx, installation.ID, installation.AppURL, installation.AppSite); err != nil {
 		s.internal(w, "activate installation", err)
 		return
 	}
@@ -277,7 +295,7 @@ func (s *Server) quota(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := s.options.Now()
-	used, err := s.options.Store.Usage(r.Context(), installation.AppHost, now)
+	used, err := s.options.Store.Usage(r.Context(), installation.AppSite, now)
 	if err != nil {
 		s.internal(w, "usage", err)
 		return
@@ -301,10 +319,10 @@ func (s *Server) send(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "installation_pending", "The installation address is not verified yet.")
 		return
 	case "suspended", "revoked":
-		writeError(w, http.StatusForbidden, "installation_revoked", "Coma mail is disabled for this installation.")
+		s.writeRevoked(w, installation)
 		return
 	}
-	if !s.perKey.allow("installation:" + installation.AppHost) {
+	if !s.perKey.allow("site:" + installation.AppSite) {
 		w.Header().Set("Retry-After", "5")
 		writeError(w, http.StatusTooManyRequests, "rate_limited", "Too many requests.")
 		return
@@ -341,7 +359,7 @@ func (s *Server) send(w http.ResponseWriter, r *http.Request) {
 	}
 	canonical, _ := json.Marshal(message)
 	payloadHash := sha256.Sum256(canonical)
-	recipient := s.recipientHash(message.To)
+	recipient := s.recipientHash(CanonicalRecipient(message.To))
 	now := s.options.Now()
 	reserved, err := s.options.Store.Reserve(r.Context(), s.options.Limits, installation, message.Kind, recipient, idempotencyKey, payloadHash[:], uuid.NewString(), now)
 	switch {
@@ -374,7 +392,9 @@ func (s *Server) send(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 25*time.Second)
 	defer cancel()
 	result, err := s.options.Provider.Send(ctx, Envelope{
-		IdempotencyKey: reserved.ID, FromAddress: s.options.FromAddress, FromName: rendered.FromName, To: message.To,
+		// Stable across retries of the same request, so RuSender itself drops
+		// a duplicate when an earlier answer was lost on the way back.
+		IdempotencyKey: uuid.NewSHA1(providerKeyNamespace, []byte(installation.ID+"\x00"+idempotencyKey)).String(), FromAddress: s.options.FromAddress, FromName: rendered.FromName, To: message.To,
 		Subject: rendered.Subject, Preview: rendered.Preview, Text: rendered.Text, HTML: rendered.HTML,
 	})
 	if err != nil {
@@ -476,40 +496,38 @@ func (s *Server) handleEvent(ctx context.Context, event webhookEvent) error {
 	if event.EventID == "" || event.Payload.EmailID == "" {
 		return nil
 	}
-	send, err := s.options.Store.SendByProviderID(ctx, event.Payload.EmailID)
-	if errors.Is(err, ErrNotFound) {
-		// Another sender on the same RuSender account; not ours to judge.
-		return nil
+	site, applied, err := s.options.Store.ApplyEvent(ctx, event.EventID, event.Payload.EmailID, status, reason)
+	if err != nil || !applied || status == "" {
+		return err
 	}
+	sent, bounced, complained, complainers, err := s.options.Store.Reputation(ctx, site)
 	if err != nil {
 		return err
 	}
-	first, err := s.options.Store.FirstEvent(ctx, event.EventID)
-	if err != nil || !first {
-		return err
-	}
-	if err := s.options.Store.Suppress(ctx, send.RecipientHash, reason); err != nil {
-		return err
-	}
-	if status == "" {
-		return nil
-	}
-	if err := s.options.Store.MarkSend(ctx, send.ID, status); err != nil {
-		return err
-	}
-	sent, bounced, complained, err := s.options.Store.Reputation(ctx, send.AppHost)
-	if err != nil {
-		return err
-	}
-	if complained >= 3 || (sent >= 30 && bounced*10 > sent) {
+	// Three different people complaining, at least 0.3 % of the week's
+	// letters; or more than 10 % hard bounces among 30 letters or more. The
+	// suspension lasts three days; the operator decides on anything longer.
+	byComplaints := complainers >= 3 && complained*1000 >= sent*3
+	byBounces := sent >= 30 && bounced*10 > sent
+	if byComplaints || byBounces {
 		reason := "auto_complaints"
-		if complained < 3 {
+		if !byComplaints {
 			reason = "auto_bounces"
 		}
-		s.logger.Warn("installation suspended", "host", send.AppHost, "reason", reason, "sent", sent, "bounced", bounced, "complained", complained)
-		return s.options.Store.SuspendHost(ctx, send.AppHost, reason)
+		s.logger.Warn("installation suspended", "site", site, "reason", reason, "sent", sent, "bounced", bounced, "complained", complained)
+		return s.options.Store.SuspendSite(ctx, site, reason, s.options.Now().Add(72*time.Hour))
 	}
 	return nil
+}
+
+// writeRevoked tells a reinstalled server to register again and everyone
+// else that Coma mail is off for them.
+func (s *Server) writeRevoked(w http.ResponseWriter, installation Installation) {
+	if installation.Status == "revoked" && installation.Reason == "replaced" {
+		writeError(w, http.StatusForbidden, "installation_replaced", "A newer registration of this address replaced this key.")
+		return
+	}
+	writeError(w, http.StatusForbidden, "installation_revoked", "Coma mail is disabled for this installation.")
 }
 
 func (s *Server) internal(w http.ResponseWriter, action string, err error) {
@@ -552,6 +570,18 @@ func (l *limiter) allow(key string) bool {
 			}
 		}
 	}
+	if len(l.buckets) >= 100_000 {
+		// Still full after dropping idle buckets: forget an arbitrary half
+		// rather than growing without bound.
+		dropped := 0
+		for name := range l.buckets {
+			delete(l.buckets, name)
+			delete(l.seen, name)
+			if dropped++; dropped >= 50_000 {
+				break
+			}
+		}
+	}
 	bucket, ok := l.buckets[key]
 	if !ok {
 		bucket = rate.NewLimiter(l.every, l.burst)
@@ -569,7 +599,7 @@ func (s *Server) clientIP(r *http.Request) string {
 		host = r.RemoteAddr
 	}
 	if !s.isTrusted(host) {
-		return host
+		return clientKey(host)
 	}
 	forwarded := strings.Split(strings.Join(r.Header.Values("X-Forwarded-For"), ","), ",")
 	for index := len(forwarded) - 1; index >= 0; index-- {
@@ -578,10 +608,25 @@ func (s *Server) clientIP(r *http.Request) string {
 			break
 		}
 		if !s.isTrusted(address.String()) {
-			return address.Unmap().String()
+			return clientKey(address.Unmap().String())
 		}
 	}
-	return host
+	return clientKey(host)
+}
+
+// clientKey keys IPv6 clients by their /64: one subscriber gets a whole
+// prefix and could otherwise pick a fresh address for every request.
+func clientKey(host string) string {
+	address, err := netip.ParseAddr(host)
+	if err != nil {
+		return host
+	}
+	address = address.Unmap()
+	if address.Is6() {
+		prefix, _ := address.Prefix(64)
+		return prefix.String()
+	}
+	return address.String()
 }
 
 func (s *Server) isTrusted(host string) bool {

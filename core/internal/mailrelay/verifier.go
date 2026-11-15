@@ -49,6 +49,7 @@ func (v HTTPVerifier) Challenge(ctx context.Context, appURL string) (string, str
 			return "", "", err
 		}
 		client = policy.Client(10 * time.Second)
+		defer client.CloseIdleConnections()
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, base.String()+ChallengePath, nil)
 	if err != nil {

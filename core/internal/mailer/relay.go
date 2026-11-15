@@ -140,12 +140,14 @@ func (m *Mailer) ensureRegistration(ctx context.Context) error {
 	case "active":
 		return nil
 	case "revoked":
-		// The operator may restore the installation; look again in 6 hours.
+		// A suspension lifts after three days and the operator may restore
+		// the installation; look again every hour.
+		m.forgetQuota()
 		if quota := m.fetchQuota(ctx, state); quota != nil && quota.Status == "active" {
 			m.setStatus(ctx, "active", "")
 			return nil
 		}
-		_, err := m.pool.Exec(ctx, `UPDATE mail_relay_state SET next_attempt_at=now()+interval '6 hours',updated_at=now()`)
+		_, err := m.pool.Exec(ctx, `UPDATE mail_relay_state SET next_attempt_at=now()+interval '1 hour',updated_at=now()`)
 		return err
 	}
 	if len(state.KeySealed) == 0 {
@@ -181,6 +183,9 @@ func (m *Mailer) ensureRegistration(ctx context.Context) error {
 		return nil
 	case code == "installation_revoked":
 		m.setStatus(ctx, "revoked", code)
+		return nil
+	case code == "installation_replaced":
+		m.resetRegistration(ctx, code)
 		return nil
 	default:
 		if code == "" {

@@ -266,6 +266,9 @@ func (m *Mailer) relaySend(ctx context.Context, idempotency string, message mail
 	case response.StatusCode == http.StatusUnauthorized:
 		m.resetRegistration(ctx, "invalid_key")
 		return &temporaryError{reason: "invalid_key"}
+	case failure.Error == "installation_replaced":
+		m.resetRegistration(ctx, "installation_replaced")
+		return &temporaryError{reason: "installation_replaced"}
 	case failure.Error == "installation_pending":
 		m.setStatus(ctx, "registering", "installation_pending")
 		return &temporaryError{reason: "installation_pending"}

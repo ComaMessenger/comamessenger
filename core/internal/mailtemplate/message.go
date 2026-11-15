@@ -15,6 +15,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 type Kind string
@@ -181,7 +183,9 @@ func checkLink(base *url.URL, raw, path, query string) error {
 	if err != nil || link.User != nil || link.Fragment != "" || link.Opaque != "" || link.RawFragment != "" {
 		return fmt.Errorf("%w: malformed", ErrInvalidLink)
 	}
-	if link.Scheme != base.Scheme || !strings.EqualFold(link.Host, base.Host) {
+	linkHost, linkErr := CanonicalHost(link)
+	baseHost, baseErr := CanonicalHost(base)
+	if link.Scheme != base.Scheme || linkErr != nil || baseErr != nil || linkHost != baseHost {
 		return fmt.Errorf("%w: foreign host", ErrInvalidLink)
 	}
 	prefix := strings.TrimRight(base.EscapedPath(), "/")
@@ -219,7 +223,26 @@ func checkLink(base *url.URL, raw, path, query string) error {
 	return nil
 }
 
-var linkLike = regexp.MustCompile(`(?i)(://|www\.|@|[\p{L}\p{N}-]+\s*(\.|\[\.\]|\(\.\)|\[dot\]|\(dot\))\s*([a-z]{2,24}|рф|рус|орг|ком|сайт|онлайн|москва|дети|xn--[a-z0-9-]+)(?:[^\p{L}\p{N}]|$)|https?|ftp:|t\.me|wa\.me)`)
+// linkLike matches what reads as an address or a contact: schemes, www,
+// e-mail, word.word (any letters, so «сайт.рф» and «ПОРТАЛ.ГОСУСЛУГИ» too),
+// spelled-out dots and messenger handles. It runs on NFKC text with every
+// dot look-alike folded to «.».
+var linkLike = regexp.MustCompile(`(?i)(://|www\.|@|[\p{L}\p{N}-]+\s*(\.|\[\.\]|\(\.\)|\[dot\]|\(dot\)|\sdot\s|\sточка\s)\s*[\p{L}]{2,}|https?|ftp:|t\.me|wa\.me|telegram|whatsapp|viber|\btg\b)`)
+
+// dotLike are characters mail clients may render or linkify as a dot.
+var dotLike = strings.NewReplacer("\u3002", ".", "\uFF0E", ".", "\uFF61", ".", "\u2024", ".", "\u00B7", ".", "\u2027", ".", "\u2219", ".", "\u0701", ".", "\u0702", ".", "\uFE52", ".", "\u06D4", ".", "\u2E3C", ".")
+
+// contactLike reports a name that carries a phone number: seven digits or
+// more in total.
+func contactLike(value string) bool {
+	digits := 0
+	for _, character := range value {
+		if unicode.IsDigit(character) {
+			digits++
+		}
+	}
+	return digits >= 7
+}
 
 // CleanName prepares user-controlled text for a subject, the From display
 // name and the body: no control or format characters (bidi overrides
@@ -245,12 +268,12 @@ func CleanName(value, fallback string) string {
 		space = false
 		builder.WriteRune(character)
 	}
-	cleaned := builder.String()
+	cleaned := norm.NFKC.String(builder.String())
 	if utf8.RuneCountInString(cleaned) > maxNameRunes {
 		runes := []rune(cleaned)
 		cleaned = strings.TrimSpace(string(runes[:maxNameRunes-1])) + "…"
 	}
-	if cleaned == "" || linkLike.MatchString(cleaned) {
+	if cleaned == "" || linkLike.MatchString(dotLike.Replace(cleaned)) || contactLike(cleaned) {
 		return fallback
 	}
 	return cleaned

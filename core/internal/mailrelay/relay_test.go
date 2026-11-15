@@ -176,8 +176,12 @@ func (h *harness) install(appURL string) (string, string) {
 		Key       *string `json:"key"`
 		Challenge *string `json:"challenge"`
 	}{&created.InstallationID, &created.Key, &created.Challenge})
+	canonical, err := NormalizeAppURL(appURL, false)
+	if err != nil {
+		h.t.Fatal(err)
+	}
 	h.verifier.mu.Lock()
-	h.verifier.published[appURL] = [2]string{created.InstallationID, created.Challenge}
+	h.verifier.published[canonical.String()] = [2]string{created.InstallationID, created.Challenge}
 	h.verifier.mu.Unlock()
 	if response := h.do(http.MethodPost, "/v1/installations/verify", created.Key, "", nil); response.Code != http.StatusOK {
 		h.t.Fatalf("verify: %d %s", response.Code, response.Body)
@@ -367,9 +371,9 @@ func TestInstallationAndGlobalLimits(t *testing.T) {
 	// Many installations together cannot exceed 10 letters to one address.
 	total := 0
 	for index := 0; index < 6; index++ {
-		_, otherKey := h.install(fmt.Sprintf("https://chat%d.example.ru", index))
+		_, otherKey := h.install(fmt.Sprintf("https://chat.example%d.ru", index))
 		for _, message := range []mailtemplate.Message{resetMessage("victim@b.ru"), resetMessage("victim@b.ru")} {
-			message.Data.Link = fmt.Sprintf("https://chat%d.example.ru/reset-password?token=%s", index, linkToken)
+			message.Data.Link = fmt.Sprintf("https://chat.example%d.ru/reset-password?token=%s", index, linkToken)
 			if response := h.do(http.MethodPost, "/v1/messages", otherKey, nextKey(), message); response.Code == http.StatusAccepted {
 				total++
 			}
@@ -451,5 +455,198 @@ func TestRegistrationRateLimitPerIP(t *testing.T) {
 	}
 	if codes[4] != http.StatusCreated || codes[5] != http.StatusTooManyRequests {
 		t.Fatalf("codes %v", codes)
+	}
+}
+
+func TestHostSpellingsShareOneSite(t *testing.T) {
+	h := newHarness(t)
+	id, key := h.install("https://chat.example.ru")
+	if err := h.store.Revoke(context.Background(), id, "spam"); err != nil {
+		t.Fatal(err)
+	}
+	for _, appURL := range []string{"https://chat.example.ru:443", "https://CHAT.example.ru.", "https://other.example.ru", "https://chat.example.ru/coma"} {
+		if response := h.do(http.MethodPost, "/v1/installations", "", "", map[string]string{"app_url": appURL}); response.Code != http.StatusForbidden {
+			t.Errorf("%s registered after revoke: %d", appURL, response.Code)
+		}
+	}
+	for _, appURL := range []string{"https://chat.example.ru:8443", "https://chat.example.ru/Upper", "https://chat.example.ru/a/b/c/d", "https://chat.example.ru/" + strings.Repeat("x", 40)} {
+		if response := h.do(http.MethodPost, "/v1/installations", "", "", map[string]string{"app_url": appURL}); response.Code != http.StatusBadRequest {
+			t.Errorf("%s accepted: %d", appURL, response.Code)
+		}
+	}
+	if response := h.do(http.MethodPost, "/v1/messages", key, nextKey(), resetMessage("a@b.ru")); response.Code != http.StatusForbidden {
+		t.Fatalf("revoked key sends: %d", response.Code)
+	}
+	// IDN spellings are one host.
+	_, idnKey := h.install("https://пример.рф")
+	message := resetMessage("a@b.ru")
+	message.Data.Link = "https://xn--e1afmkfd.xn--p1ai/reset-password?token=" + linkToken
+	if response := h.do(http.MethodPost, "/v1/messages", idnKey, nextKey(), message); response.Code != http.StatusAccepted {
+		t.Fatalf("punycode link for a unicode registration: %d %s", response.Code, response.Body)
+	}
+	if response := h.do(http.MethodPost, "/v1/installations", "", "", map[string]string{"app_url": "https://xn--e1afmkfd.xn--p1ai"}); response.Code != http.StatusCreated {
+		t.Fatalf("punycode registration: %d", response.Code)
+	}
+}
+
+func TestSubdomainsShareLimits(t *testing.T) {
+	h := newHarness(t)
+	total := 0
+	for index := 0; index < 4; index++ {
+		appURL := fmt.Sprintf("https://n%d.evil.ru", index)
+		_, key := h.install(appURL)
+		for _, to := range []string{"x@b.ru", "x@b.ru"} {
+			message := resetMessage(to)
+			message.Data.Link = appURL + "/reset-password?token=" + linkToken
+			if response := h.do(http.MethodPost, "/v1/messages", key, nextKey(), message); response.Code == http.StatusAccepted {
+				total++
+			}
+		}
+	}
+	if total != 3 {
+		t.Fatalf("subdomains sent %d resets to one address, want the per-site limit 3", total)
+	}
+}
+
+func TestNewRecipientLimitCoversEveryType(t *testing.T) {
+	h := newHarness(t)
+	h.server.options.Limits.NewRecipientsNew = 3
+	_, key := h.install("https://chat.example.ru")
+	codes := []int{}
+	for index := 0; index < 4; index++ {
+		codes = append(codes, h.do(http.MethodPost, "/v1/messages", key, nextKey(), resetMessage(fmt.Sprintf("fresh%d@b.ru", index))).Code)
+	}
+	if codes[2] != http.StatusAccepted || codes[3] != http.StatusTooManyRequests {
+		t.Fatalf("codes %v", codes)
+	}
+}
+
+func TestNewInstallationsShareBudget(t *testing.T) {
+	h := newHarness(t)
+	h.server.options.Limits.NewInstallationsBudget = 2
+	sent := 0
+	for index := 0; index < 3; index++ {
+		appURL := fmt.Sprintf("https://chat.site%d.ru", index)
+		_, key := h.install(appURL)
+		message := resetMessage(fmt.Sprintf("u%d@b.ru", index))
+		message.Data.Link = appURL + "/reset-password?token=" + linkToken
+		if response := h.do(http.MethodPost, "/v1/messages", key, nextKey(), message); response.Code == http.StatusAccepted {
+			sent++
+		}
+	}
+	if sent != 2 {
+		t.Fatalf("new installations sent %d letters, budget 2", sent)
+	}
+}
+
+func TestRecipientSpellingsShareLimitAndSuppression(t *testing.T) {
+	for input, want := range map[string]string{
+		"V.I.C.T.I.M+promo@GoogleMail.com": "victim@gmail.com",
+		"anna+x@пример.рф":                 "anna@xn--e1afmkfd.xn--p1ai",
+		"a.b@mail.ru":                      "a.b@mail.ru",
+	} {
+		if got := CanonicalRecipient(input); got != want {
+			t.Errorf("CanonicalRecipient(%q) = %q, want %q", input, got, want)
+		}
+	}
+	h := newHarness(t)
+	_, key := h.install("https://chat.example.ru")
+	accepted := 0
+	for index := 0; index < 5; index++ {
+		if response := h.do(http.MethodPost, "/v1/messages", key, nextKey(), resetMessage(fmt.Sprintf("victim+%d@gmail.com", index))); response.Code == http.StatusAccepted {
+			accepted++
+		}
+	}
+	if accepted != 3 {
+		t.Fatalf("aliases received %d resets, want 3", accepted)
+	}
+	if err := h.store.Suppress(context.Background(), h.server.recipientHash(CanonicalRecipient("v.ictim@gmail.com")), "complained"); err != nil {
+		t.Fatal(err)
+	}
+	if response := h.do(http.MethodPost, "/v1/messages", key, nextKey(), mailtemplate.Message{Kind: mailtemplate.EmailChangeNotice, To: "victim+other@gmail.com", Locale: "ru"}); response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("suppressed mailbox through an alias: %d", response.Code)
+	}
+}
+
+func TestUnverifiedRegistrationsDoNotLockOutOwner(t *testing.T) {
+	h := newHarness(t)
+	for index := 0; index < 12; index++ {
+		h.do(http.MethodPost, "/v1/installations", "", "", map[string]string{"app_url": "https://victim.example.ru"})
+	}
+	request := httptest.NewRequest(http.MethodPost, "/v1/installations", strings.NewReader(`{"app_url":"https://victim.example.ru"}`))
+	request.RemoteAddr = "198.51.100.7:4000"
+	recorder := httptest.NewRecorder()
+	h.handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("owner registration after a flood from another address: %d", recorder.Code)
+	}
+	if !strings.Contains(h.do(http.MethodPost, "/v1/installations", "", "", map[string]string{"app_url": "https://victim.example.ru"}).Body.String(), "rate_limited") {
+		t.Fatal("flooding client is not limited")
+	}
+}
+
+func TestReplacedKeyIsTold(t *testing.T) {
+	h := newHarness(t)
+	_, first := h.install("https://chat.example.ru")
+	_, second := h.install("https://chat.example.ru")
+	if response := h.do(http.MethodPost, "/v1/messages", first, nextKey(), resetMessage("a@b.ru")); !strings.Contains(response.Body.String(), "installation_replaced") {
+		t.Fatalf("old key: %d %s", response.Code, response.Body)
+	}
+	if response := h.do(http.MethodPost, "/v1/messages", second, nextKey(), resetMessage("a@b.ru")); response.Code != http.StatusAccepted {
+		t.Fatalf("new key: %d", response.Code)
+	}
+	// Another path on the same host is another installation and replaces
+	// nothing.
+	_, pathKey := h.install("https://chat.example.ru/bob")
+	if response := h.do(http.MethodPost, "/v1/messages", second, nextKey(), resetMessage("c@b.ru")); response.Code != http.StatusAccepted {
+		t.Fatalf("installation replaced by another path: %d", response.Code)
+	}
+	_ = pathKey
+}
+
+func TestSuspensionIsTemporaryAndNeedsDistinctComplainers(t *testing.T) {
+	h := newHarness(t)
+	_, key := h.install("https://chat.example.ru")
+	if response := h.do(http.MethodPost, "/v1/messages", key, nextKey(), resetMessage("one@b.ru")); response.Code != http.StatusAccepted {
+		t.Fatal(response.Body)
+	}
+	// One person complaining three times is one complainer.
+	for index := 1; index <= 3; index++ {
+		body := fmt.Sprintf(`{"events":[{"eventId":"same-%d","trigger":"email.complained","payload":{"emailId":"00000000-0000-0000-0000-%012d","recipient":{"email":"one@b.ru"}}}]}`, index, 1)
+		h.do(http.MethodPost, "/v1/webhooks/rusender/webhook-secret-0123456789abcdef", "", "", body)
+	}
+	if response := h.do(http.MethodPost, "/v1/messages", key, nextKey(), resetMessage("two@b.ru")); response.Code != http.StatusAccepted {
+		t.Fatalf("one complainer suspended the site: %d %s", response.Code, response.Body)
+	}
+	if _, err := h.store.pool.Exec(context.Background(), `UPDATE mail_installations SET status='suspended',status_reason='auto_complaints',suspended_until=now()-interval '1 minute'`); err != nil {
+		t.Fatal(err)
+	}
+	if response := h.do(http.MethodPost, "/v1/messages", key, nextKey(), resetMessage("three@b.ru")); response.Code != http.StatusAccepted {
+		t.Fatalf("expired suspension still blocks: %d %s", response.Code, response.Body)
+	}
+}
+
+func TestClientKeyGroupsIPv6Prefix(t *testing.T) {
+	if clientKey("2001:db8:1:2:aaaa::1") != clientKey("2001:db8:1:2:bbbb::9") {
+		t.Fatal("one /64 gives different keys")
+	}
+	if clientKey("203.0.113.5") != "203.0.113.5" {
+		t.Fatal(clientKey("203.0.113.5"))
+	}
+}
+
+func TestProviderIdempotencyKeyIsStableAcrossRetries(t *testing.T) {
+	h := newHarness(t)
+	_, key := h.install("https://chat.example.ru")
+	idempotency := nextKey()
+	h.provider.status, h.provider.body = http.StatusBadGateway, `{}`
+	h.do(http.MethodPost, "/v1/messages", key, idempotency, resetMessage("a@b.ru"))
+	h.provider.status = 0
+	if response := h.do(http.MethodPost, "/v1/messages", key, idempotency, resetMessage("a@b.ru")); response.Code != http.StatusAccepted {
+		t.Fatalf("retry: %d", response.Code)
+	}
+	first, second := h.provider.headers[0].Get("Idempotency-Key"), h.provider.headers[1].Get("Idempotency-Key")
+	if first == "" || first != second {
+		t.Fatalf("provider keys differ: %q %q", first, second)
 	}
 }

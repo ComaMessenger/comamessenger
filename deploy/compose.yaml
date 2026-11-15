@@ -375,7 +375,9 @@ services:
     environment:
       MAIL_RELAY_DATABASE_URL: ${MAIL_RELAY_DATABASE_URL:-postgres://comamessenger:comamessenger@postgres:5432/coma_mail_relay?sslmode=disable}
       MAIL_RELAY_LISTEN: :8091
-      MAIL_RELAY_TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-}
+      # nginx on the host reaches the container through the Docker bridge
+      # gateway and overwrites X-Forwarded-For (deploy/nginx/mail-relay.conf.example).
+      MAIL_RELAY_TRUSTED_PROXY_CIDRS: ${MAIL_RELAY_TRUSTED_PROXY_CIDRS:-172.16.0.0/12,192.168.0.0/16}
       MAIL_RELAY_FROM_ADDRESS: ${MAIL_RELAY_FROM_ADDRESS:-no-reply@coma-chat.com}
       RUSENDER_API_KEY_FILE: /secrets/rusender-api-key
       RUSENDER_KEY_ID: ${RUSENDER_KEY_ID:-}

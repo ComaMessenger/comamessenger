@@ -74,6 +74,12 @@ func TestValidateLinks(t *testing.T) {
 	if err := invite.Validate(withPath); err == nil {
 		t.Fatal("link outside base path accepted")
 	}
+	// Host spellings of the installation address are the same host.
+	invite = invitation()
+	invite.Data.Link = "https://CHAT.example.ru:443/invite/" + token
+	if err := invite.Validate(base); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestValidateFields(t *testing.T) {
@@ -141,6 +147,9 @@ func TestRenderInvitation(t *testing.T) {
 	}
 	if !strings.HasSuffix(rendered.FromName, "через Coma") || strings.ContainsAny(rendered.Subject, "\r\n") {
 		t.Fatalf("headers: %q %q", rendered.FromName, rendered.Subject)
+	}
+	if strings.Contains(rendered.HTML, ">https://chat.example.ru/invite/") || !strings.Contains(rendered.HTML, "Ссылка ведёт на сайт chat.example.ru") {
+		t.Fatal("HTML shows the raw link instead of its site")
 	}
 	plain := Render(invitation())
 	if plain.Subject != "Иван Петров приглашает вас в пространство «Ромашка»" || plain.FromName != "Ромашка через Coma" {

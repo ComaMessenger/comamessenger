@@ -3,6 +3,7 @@ package mailtemplate
 import (
 	"fmt"
 	"html/template"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -17,12 +18,12 @@ type Rendered struct {
 }
 
 type texts struct {
-	fallbackWorkspace, fallbackInviter, via, footer string
+	fallbackWorkspace, fallbackInviter, via, footer, linkHost string
 }
 
 var localized = map[string]texts{
-	"ru": {fallbackWorkspace: "Coma", fallbackInviter: "Коллега", via: "через Coma", footer: "Письмо отправила почта Coma по запросу пространства «%s». Ящик не принимает ответы."},
-	"en": {fallbackWorkspace: "Coma", fallbackInviter: "A colleague", via: "via Coma", footer: "Sent by Coma mail on behalf of the «%s» workspace. Replies to this address are not read."},
+	"ru": {fallbackWorkspace: "Coma", fallbackInviter: "Коллега", via: "через Coma", footer: "Письмо отправила почта Coma по запросу пространства «%s». Ящик не принимает ответы.", linkHost: "Ссылка ведёт на сайт %s"},
+	"en": {fallbackWorkspace: "Coma", fallbackInviter: "A colleague", via: "via Coma", footer: "Sent by Coma mail on behalf of the «%s» workspace. Replies to this address are not read.", linkHost: "The link opens %s"},
 }
 
 var monthsRU = [...]string{"января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"}
@@ -64,7 +65,10 @@ type block struct {
 	Lines     []string
 	LinkLabel string
 	Link      string
-	Muted     bool
+	// LinkHost names the site a button leads to; HTML shows it instead of
+	// the raw address, so a crafted path cannot read as part of the letter.
+	LinkHost string
+	Muted    bool
 }
 
 // Render builds the letter. The message must be normalized and validated.
@@ -208,6 +212,16 @@ func Render(m Message) Rendered {
 			}
 		}
 	}
+	for index := range blocks {
+		if blocks[index].Link == "" || blocks[index].Muted {
+			continue
+		}
+		if link, err := url.Parse(blocks[index].Link); err == nil {
+			if host, err := CanonicalHost(link); err == nil {
+				blocks[index].LinkHost = fmt.Sprintf(words.linkHost, host)
+			}
+		}
+	}
 	footer := fmt.Sprintf(words.footer, workspace)
 	return Rendered{
 		Subject:  subject,
@@ -253,7 +267,7 @@ var page = template.Must(template.New("letter").Parse(`<!doctype html>
 <tr><td style="padding:24px 28px 0 28px;font-size:20px;font-weight:700;color:#174586">Coma</td></tr>
 <tr><td style="padding:16px 28px 8px 28px;font-size:15px;line-height:1.55">
 {{range .Blocks}}{{if .Link}}{{if .Muted}}<p style="margin:0 0 16px 0;font-size:13px;color:#5b6475"><a href="{{.Link}}" style="color:#174586">{{.LinkLabel}}</a></p>{{else}}<p style="margin:8px 0 20px 0"><a href="{{.Link}}" style="display:inline-block;background:#174586;color:#ffffff;text-decoration:none;font-weight:600;padding:12px 20px;border-radius:8px">{{.LinkLabel}}</a></p>
-<p style="margin:0 0 16px 0;font-size:12px;color:#5b6475;word-break:break-all">{{.Link}}</p>{{end}}{{else}}<p style="margin:0 0 16px 0{{if .Muted}};font-size:13px;color:#5b6475{{end}}">{{.Text}}</p>{{if .Lines}}<ul style="margin:-8px 0 16px 0;padding-left:20px">{{range .Lines}}<li>{{.}}</li>{{end}}</ul>{{end}}{{end}}{{end}}
+{{if .LinkHost}}<p style="margin:0 0 16px 0;font-size:12px;color:#5b6475">{{.LinkHost}}</p>{{end}}{{end}}{{else}}<p style="margin:0 0 16px 0{{if .Muted}};font-size:13px;color:#5b6475{{end}}">{{.Text}}</p>{{if .Lines}}<ul style="margin:-8px 0 16px 0;padding-left:20px">{{range .Lines}}<li>{{.}}</li>{{end}}</ul>{{end}}{{end}}{{end}}
 </td></tr>
 <tr><td style="padding:12px 28px 24px 28px;border-top:1px solid #e6e9ef;font-size:12px;color:#7a8394">{{.Footer}}</td></tr>
 </table></td></tr></table></body></html>`))

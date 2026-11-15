@@ -84,6 +84,10 @@ func serve(ctx context.Context, logger *slog.Logger, store *mailrelay.Store) err
 			return errors.New("RUSENDER_KEY_ID must be the numeric id of a RuSender sending key")
 		}
 	}
+	insecure := os.Getenv("MAIL_RELAY_ALLOW_INSECURE_ORIGINS") == "true"
+	if insecure {
+		logger.Warn("MAIL_RELAY_ALLOW_INSECURE_ORIGINS is on: http and private installation addresses are accepted; never use this in production")
+	}
 	hashSecret, err := secret("MAIL_RELAY_HASH_SECRET")
 	if err != nil {
 		return err
@@ -102,10 +106,6 @@ func serve(ctx context.Context, logger *slog.Logger, store *mailrelay.Store) err
 	if from == "" {
 		from = "no-reply@coma-chat.com"
 	}
-	insecure := os.Getenv("MAIL_RELAY_ALLOW_INSECURE_ORIGINS") == "true"
-	if insecure {
-		logger.Warn("MAIL_RELAY_ALLOW_INSECURE_ORIGINS is on: http and private installation addresses are accepted; never use this in production")
-	}
 	address := os.Getenv("MAIL_RELAY_LISTEN")
 	if address == "" {
 		address = ":8091"
@@ -113,6 +113,11 @@ func serve(ctx context.Context, logger *slog.Logger, store *mailrelay.Store) err
 	trusted, err := relay.ParseTrustedProxies(os.Getenv("MAIL_RELAY_TRUSTED_PROXY_CIDRS"))
 	if err != nil {
 		return errors.New("MAIL_RELAY_TRUSTED_PROXY_CIDRS must be a comma-separated list of CIDR prefixes")
+	}
+	// Behind a proxy without this list every client shares the proxy's
+	// address, and five registrations an hour would lock everyone out.
+	if len(trusted) == 0 && os.Getenv("MAIL_RELAY_DIRECT_CLIENTS") != "true" && !insecure {
+		return errors.New("set MAIL_RELAY_TRUSTED_PROXY_CIDRS to the reverse proxy addresses, or MAIL_RELAY_DIRECT_CLIENTS=true when clients connect directly")
 	}
 	provider := mailrelay.NewRuSender(&http.Client{Timeout: 20 * time.Second}, os.Getenv("RUSENDER_API_URL"), token, keyID)
 	api := mailrelay.NewServer(logger, mailrelay.Options{
@@ -176,12 +181,12 @@ func command(ctx context.Context, store *mailrelay.Store, args []string) error {
 		if len(args) < 3 {
 			return errors.New("usage: mail-relay revoke <installation-id> <reason>")
 		}
-		return store.SetStatus(ctx, args[1], "revoked", strings.Join(args[2:], " "))
+		return store.Revoke(ctx, args[1], strings.Join(args[2:], " "))
 	case "restore":
 		if len(args) != 2 {
 			return errors.New("usage: mail-relay restore <installation-id>")
 		}
-		return store.SetStatus(ctx, args[1], "active", "")
+		return store.Restore(ctx, args[1])
 	case "set-limit":
 		if len(args) != 3 {
 			return errors.New("usage: mail-relay set-limit <installation-id> <letters per day|default>")

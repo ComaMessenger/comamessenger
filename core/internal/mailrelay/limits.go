@@ -20,6 +20,9 @@ type Limits struct {
 	NewRecipientsNew     int
 	NewRecipientsDefault int
 	NewPeriod            time.Duration
+	// NewInstallationsBudget caps letters of all installations younger than
+	// NewPeriod together: many fresh sites cannot add up to a spam run.
+	NewInstallationsBudget int
 }
 
 func DefaultLimits() Limits {
@@ -29,12 +32,13 @@ func DefaultLimits() Limits {
 			mailtemplate.Invitation: 2, mailtemplate.PasswordReset: 3, mailtemplate.EmailConfirmation: 3,
 			mailtemplate.EmailChangeNotice: 3, mailtemplate.Digest: 2,
 		},
-		PerRecipientGlobal:   10,
-		InstallationNew:      100,
-		InstallationDefault:  500,
-		NewRecipientsNew:     30,
-		NewRecipientsDefault: 150,
-		NewPeriod:            14 * 24 * time.Hour,
+		PerRecipientGlobal:     10,
+		InstallationNew:        100,
+		InstallationDefault:    500,
+		NewRecipientsNew:       50,
+		NewRecipientsDefault:   300,
+		NewPeriod:              14 * 24 * time.Hour,
+		NewInstallationsBudget: 2000,
 	}
 }
 
@@ -49,8 +53,12 @@ func (l Limits) DailyLimit(installation Installation, now time.Time) int {
 	return l.InstallationDefault
 }
 
+func (l Limits) isNew(installation Installation, now time.Time) bool {
+	return installation.ActivatedAt == nil || now.Sub(*installation.ActivatedAt) < l.NewPeriod
+}
+
 func (l Limits) newRecipientLimit(installation Installation, now time.Time) int {
-	if installation.ActivatedAt == nil || now.Sub(*installation.ActivatedAt) < l.NewPeriod {
+	if l.isNew(installation, now) {
 		return l.NewRecipientsNew
 	}
 	return l.NewRecipientsDefault
@@ -80,7 +88,7 @@ const counted = `status IN ('reserved','sent','suppressed','bounced','complained
 func (s *Store) Reserve(ctx context.Context, limits Limits, installation Installation, kind mailtemplate.Kind, recipientHash []byte, idempotencyKey string, payloadHash []byte, sendID string, now time.Time) (reservation, error) {
 	var result reservation
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('mail-host:'||$1, 0))`, installation.AppHost); err != nil {
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('mail-site:'||$1, 0))`, installation.AppSite); err != nil {
 			return err
 		}
 		// Recipient-wide checks span installations; serialise them too.
@@ -126,10 +134,10 @@ func (s *Store) Reserve(ctx context.Context, limits Limits, installation Install
 		var perRecipient, perKind, global, hostTotal, newRecipients int
 		var known bool
 		if err := tx.QueryRow(ctx, `SELECT
-			count(*) FILTER (WHERE app_host=$1),
-			count(*) FILTER (WHERE app_host=$1 AND kind=$3),
+			count(*) FILTER (WHERE app_site=$1),
+			count(*) FILTER (WHERE app_site=$1 AND kind=$3),
 			count(*)
-			FROM mail_sends WHERE recipient_hash=$2 AND created_at>$4 AND `+counted, installation.AppHost, recipientHash, string(kind), since).Scan(&perRecipient, &perKind, &global); err != nil {
+			FROM mail_sends WHERE recipient_hash=$2 AND created_at>$4 AND `+counted, installation.AppSite, recipientHash, string(kind), since).Scan(&perRecipient, &perKind, &global); err != nil {
 			return err
 		}
 		if perRecipient >= limits.PerRecipient || perKind >= limits.PerRecipientKind[kind] {
@@ -141,21 +149,33 @@ func (s *Store) Reserve(ctx context.Context, limits Limits, installation Install
 		if err := tx.QueryRow(ctx, `SELECT
 			count(*) FILTER (WHERE `+counted+`),
 			count(*) FILTER (WHERE new_recipient AND `+counted+`)
-			FROM mail_sends WHERE app_host=$1 AND created_at>$2`, installation.AppHost, since).Scan(&hostTotal, &newRecipients); err != nil {
+			FROM mail_sends WHERE app_site=$1 AND created_at>$2`, installation.AppSite, since).Scan(&hostTotal, &newRecipients); err != nil {
 			return err
 		}
 		if hostTotal >= limits.DailyLimit(installation, now) {
 			return errInstallationLimit
 		}
-		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM mail_sends WHERE app_host=$1 AND recipient_hash=$2 AND status IN ('sent','bounced','complained'))`, installation.AppHost, recipientHash).Scan(&known); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM mail_sends WHERE app_site=$1 AND recipient_hash=$2 AND status IN ('sent','bounced','complained'))`, installation.AppSite, recipientHash).Scan(&known); err != nil {
 			return err
 		}
-		fresh := kind == mailtemplate.Invitation && !known
+		// Any letter to an address the site never reached counts as new,
+		// whatever its type: a password reset phishes as well as an invite.
+		fresh := !known
 		if fresh && newRecipients >= limits.newRecipientLimit(installation, now) {
 			return errInstallationLimit
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO mail_sends(id,installation_id,app_host,kind,recipient_hash,new_recipient,idempotency_key,payload_hash,status,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'reserved',$9)`,
-			sendID, installation.ID, installation.AppHost, string(kind), recipientHash, fresh, idempotencyKey, payloadHash, now); err != nil {
+		young := limits.isNew(installation, now)
+		if young && limits.NewInstallationsBudget > 0 {
+			var budget int
+			if err := tx.QueryRow(ctx, `SELECT count(*) FROM mail_sends WHERE new_installation AND created_at>$1 AND `+counted, since).Scan(&budget); err != nil {
+				return err
+			}
+			if budget >= limits.NewInstallationsBudget {
+				return errInstallationLimit
+			}
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO mail_sends(id,installation_id,app_site,kind,recipient_hash,new_recipient,new_installation,idempotency_key,payload_hash,status,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'reserved',$10)`,
+			sendID, installation.ID, installation.AppSite, string(kind), recipientHash, fresh, young, idempotencyKey, payloadHash, now); err != nil {
 			return err
 		}
 		result = reservation{ID: sendID}
@@ -179,49 +199,56 @@ func (s *Store) Suppress(ctx context.Context, recipientHash []byte, reason strin
 	return err
 }
 
-// Usage is the installation's spend in the current window.
-func (s *Store) Usage(ctx context.Context, host string, now time.Time) (int, error) {
+// Usage is the site's spend in the current window.
+func (s *Store) Usage(ctx context.Context, site string, now time.Time) (int, error) {
 	var used int
-	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM mail_sends WHERE app_host=$1 AND created_at>$2 AND `+counted, host, now.Add(-24*time.Hour)).Scan(&used)
+	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM mail_sends WHERE app_site=$1 AND created_at>$2 AND `+counted, site, now.Add(-24*time.Hour)).Scan(&used)
 	return used, err
 }
 
-// webhookSend is the letter a provider event refers to.
-type webhookSend struct {
-	ID            string
-	AppHost       string
-	RecipientHash []byte
+// ApplyEvent records a provider event once, in one transaction with its
+// effects: the recipient is suppressed and, with status, the letter marked.
+// It returns the site of the letter and whether the event was new and ours.
+func (s *Store) ApplyEvent(ctx context.Context, eventID, providerID, status, reason string) (string, bool, error) {
+	var site string
+	applied := false
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var sendID string
+		var recipientHash []byte
+		err := tx.QueryRow(ctx, `SELECT id::text,app_site,recipient_hash FROM mail_sends WHERE provider_id=$1`, providerID).Scan(&sendID, &site, &recipientHash)
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Another sender on the same RuSender account; not ours to judge.
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		command, err := tx.Exec(ctx, `INSERT INTO mail_webhook_events(event_id) VALUES($1) ON CONFLICT DO NOTHING`, eventID)
+		if err != nil || command.RowsAffected() == 0 {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO mail_suppressions(recipient_hash,reason) VALUES($1,$2) ON CONFLICT (recipient_hash) DO UPDATE SET reason=EXCLUDED.reason`, recipientHash, reason); err != nil {
+			return err
+		}
+		if status != "" {
+			if _, err := tx.Exec(ctx, `UPDATE mail_sends SET status=$2 WHERE id=$1`, sendID, status); err != nil {
+				return err
+			}
+		}
+		applied = true
+		return nil
+	})
+	return site, applied, err
 }
 
-// FirstEvent stores an event id; false means it was already processed.
-func (s *Store) FirstEvent(ctx context.Context, eventID string) (bool, error) {
-	command, err := s.pool.Exec(ctx, `INSERT INTO mail_webhook_events(event_id) VALUES($1) ON CONFLICT DO NOTHING`, eventID)
-	if err != nil {
-		return false, err
-	}
-	return command.RowsAffected() == 1, nil
-}
-
-func (s *Store) SendByProviderID(ctx context.Context, providerID string) (webhookSend, error) {
-	var value webhookSend
-	err := s.pool.QueryRow(ctx, `SELECT id::text,app_host,recipient_hash FROM mail_sends WHERE provider_id=$1`, providerID).Scan(&value.ID, &value.AppHost, &value.RecipientHash)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return webhookSend{}, ErrNotFound
-	}
-	return value, err
-}
-
-func (s *Store) MarkSend(ctx context.Context, sendID, status string) error {
-	_, err := s.pool.Exec(ctx, `UPDATE mail_sends SET status=$2 WHERE id=$1`, sendID, status)
-	return err
-}
-
-// Reputation is a host's last seven days.
-func (s *Store) Reputation(ctx context.Context, host string) (sent, bounced, complained int, err error) {
+// Reputation is a site's last seven days; complainers counts distinct
+// recipients who complained.
+func (s *Store) Reputation(ctx context.Context, site string) (sent, bounced, complained, complainers int, err error) {
 	err = s.pool.QueryRow(ctx, `SELECT
 		count(*) FILTER (WHERE status IN ('sent','bounced','complained')),
 		count(*) FILTER (WHERE status='bounced'),
-		count(*) FILTER (WHERE status='complained')
-		FROM mail_sends WHERE app_host=$1 AND created_at>now()-interval '7 days'`, host).Scan(&sent, &bounced, &complained)
+		count(*) FILTER (WHERE status='complained'),
+		count(DISTINCT recipient_hash) FILTER (WHERE status='complained')
+		FROM mail_sends WHERE app_site=$1 AND created_at>now()-interval '7 days'`, site).Scan(&sent, &bounced, &complained, &complainers)
 	return
 }
