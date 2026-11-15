@@ -38,7 +38,10 @@ func TestConcurrentActionsDoNotDeadlock(t *testing.T) {
 				return err
 			},
 			func() error { return w.messages.DeleteTaskItem(ctx, w.admin, item.ID, items[1].ID) },
-			func() error { _, err := w.messages.AddTaskItem(ctx, w.author, item.ID, task.AddItemInput{Text: "d"}); return err },
+			func() error {
+				_, err := w.messages.AddTaskItem(ctx, w.author, item.ID, task.AddItemInput{Text: "d"})
+				return err
+			},
 			func() error { _, err := w.messages.NudgeTask(ctx, w.author, item.ID); return err },
 			func() error {
 				_, err := w.messages.SetTaskStatus(ctx, w.author, item.ID, task.StatusInput{Status: "in_progress"})
@@ -64,7 +67,10 @@ func TestConcurrentActionsDoNotDeadlock(t *testing.T) {
 				_, _, err := w.messages.CreateTask(ctx, w.author, w.chatID, message.CreateTaskInput{ClientMsgID: uuid.NewString(), Title: "Ещё", Assignee: person(w.bob.ActorID), RemindBeforeDue: ptr(false)})
 				return err
 			},
-			func() error { _, err := w.messages.WaitingInbox(ctx, w.alice, message.WaitingInboxOptions{}); return err },
+			func() error {
+				_, err := w.messages.WaitingInbox(ctx, w.alice, message.WaitingInboxOptions{})
+				return err
+			},
 		}
 		var group sync.WaitGroup
 		errs := make(chan error, len(actions))

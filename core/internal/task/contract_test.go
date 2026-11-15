@@ -97,7 +97,7 @@ func TestTransitions(t *testing.T) {
 	allowed := map[[2]string]bool{
 		{StatusOpen, StatusInProgress}: true, {StatusInProgress, StatusOpen}: true,
 		{StatusOpen, StatusDone}: true, {StatusInProgress, StatusDone}: true,
-		{StatusDone, StatusOpen}: true,
+		{StatusDone, StatusOpen}:     true,
 		{StatusOpen, StatusCanceled}: true, {StatusInProgress, StatusCanceled}: true,
 		{StatusCanceled, StatusOpen}: true,
 	}
