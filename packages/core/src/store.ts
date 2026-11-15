@@ -10,6 +10,18 @@ import {
   type RequestEvent,
   type RequestViewers,
 } from "./requests";
+import { isAwayEvent, parseAwayEvent, type AwayOverrides } from "./away";
+import {
+  isPollEvent,
+  mergePollViewer,
+  newerPoll,
+  parsePollEvent,
+  pollReloadDelayMs,
+  reducePoll,
+  type PollCacheAccess,
+  type PollCacheEntry,
+  type PollViewers,
+} from "./polls";
 import {
   absorbEarlyTasks,
   parseTaskEvent,
@@ -19,10 +31,12 @@ import {
   type TaskCacheAccess,
 } from "./tasks";
 import type {
+  AwayPublic,
   Chat,
   ClientMessage,
   DurableEvent,
   MessageTask,
+  PollState,
   RealtimeState,
   RequestState,
   UnreadSnapshot,
@@ -60,6 +74,20 @@ export type MessengerState = {
    * message.created behind), by message id: put in when the message comes.
    */
   earlyTasks: EarlyTaskUpdates;
+  /**
+   * The reader's state of each poll, by message id (wave 4): the one source
+   * for poll cards. Filled from REST (`poll_viewer` of feed pages is moved
+   * here and dropped from the message, getPoll, votePoll, closePoll) and
+   * the reader's own poll.vote.updated.
+   */
+  pollViewers: PollViewers;
+  /**
+   * Away statuses from actor.away.updated by person, fresher than any page
+   * read before (null — removed). Read through currentAway/withCurrentAway.
+   */
+  awayOverrides: AwayOverrides;
+  /** The signed-in person: tells whether the reader wrote a poll. */
+  selfID: string | null;
   replaceChats(chats: Chat[]): void;
   replaceMessages(chatID: string, messages: ClientMessage[]): void;
   prependMessages(chatID: string, messages: ClientMessage[]): void;
@@ -109,6 +137,26 @@ export type MessengerState = {
    * loaded yet gets it when it comes, if it is newer.
    */
   setTask(messageID: string, task: MessageTask, chatID?: string): void;
+  setSelfID(actorID: string | null): void;
+  /** The poll and the reader's viewer of one message, as the cache has them. */
+  pollEntry(messageID: string, chatID?: string): PollCacheEntry;
+  /**
+   * Puts a poll read by REST (getPoll, votePoll, closePoll, a «Ждут вас»
+   * item) into the cache when it is not older than what is there.
+   */
+  setPollState(messageID: string, state: PollState, chatID?: string): void;
+  /** Writes an entry as it is: an optimistic vote or the rollback. */
+  setPollEntry(messageID: string, entry: PollCacheEntry, chatID?: string): void;
+  /**
+   * Reads a poll again (getPoll) after poll.updated when the reader sees
+   * results: the counts per option are never in frames. Only for cards on
+   * screen (mountPoll), pollReloadDelayMs after the last event.
+   */
+  setPollLoader(loader: PollLoader | null): void;
+  /** A poll card is on screen; call the returned function when it leaves. */
+  mountPoll(messageID: string): () => void;
+  /** An away status learnt by REST or an event; null — removed. */
+  setAwayOverride(actorID: string, away: AwayPublic | null): void;
   setUnread(value: UnreadSnapshot): void;
   setRealtime(value: RealtimeState): void;
   setActive(chatID: string | null): void;
@@ -174,6 +222,8 @@ export type MessageStreamFrame = Omit<MessageStreamState, "body"> & {
 export type MessageLoader = (
   messageID: string,
 ) => Promise<ClientMessage | null>;
+/** getPoll of one message. */
+export type PollLoader = (messageID: string) => Promise<PollState>;
 
 /** The loader every client uses: the message's context window by REST. */
 export type RequestLoader = (messageID: string) => Promise<RequestState>;
@@ -197,6 +247,31 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
   const requested = new Map<string, number>();
   // Latest presence expiry per person: a newer frame cancels the old timer.
   const presenceExpiry = new Map<string, string>();
+  let pollLoader: PollLoader | null = null;
+  // Poll cards on screen (several cards may show one poll) and pending reloads.
+  const mountedPolls = new Map<string, number>();
+  const pollTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const schedulePollReload = (
+    get: () => MessengerState,
+    messageID: string,
+    chatID?: string,
+  ) => {
+    if (!pollLoader || !mountedPolls.get(messageID)) return;
+    const pending = pollTimers.get(messageID);
+    if (pending) clearTimeout(pending);
+    pollTimers.set(
+      messageID,
+      setTimeout(() => {
+        pollTimers.delete(messageID);
+        if (!pollLoader || !mountedPolls.get(messageID)) return;
+        void pollLoader(messageID)
+          .then((value) => get().setPollState(messageID, value, chatID))
+          .catch(() => {
+            // The card keeps the counters of the event; the next one retries.
+          });
+      }, pollReloadDelayMs),
+    );
+  };
   return createStore<MessengerState>((set, get) => ({
     chats: {},
     messages: {},
@@ -213,6 +288,9 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
     features: [],
     requestViewers: {},
     earlyTasks: {},
+    pollViewers: {},
+    awayOverrides: {},
+    selfID: null,
     replaceChats: (items) =>
       set({ chats: Object.fromEntries(items.map((item) => [item.id, item])) }),
     replaceMessages: (chatID, items) =>
@@ -226,6 +304,7 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
         );
         return {
           requestViewers: absorbViewers(state.requestViewers, items),
+          pollViewers: absorbPollViewers(state.pollViewers, items),
           earlyTasks: early.early,
           messages: {
             ...state.messages,
@@ -244,6 +323,7 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
         );
         return {
           requestViewers: absorbViewers(state.requestViewers, items),
+          pollViewers: absorbPollViewers(state.pollViewers, items),
           earlyTasks: early.early,
           messages: {
             ...state.messages,
@@ -271,6 +351,7 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
         ]);
         return {
           requestViewers: absorbViewers(state.requestViewers, [message]),
+          pollViewers: absorbPollViewers(state.pollViewers, [message]),
           earlyTasks: early.early,
           messages: reconcileMessage(state.messages, early.messages[0]!),
         };
@@ -343,6 +424,51 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
         list[found.index] = { ...list[found.index]!, task };
         return { messages: { ...state.messages, [found.chatID]: list } };
       }),
+    setSelfID: (selfID) => set({ selfID }),
+    pollEntry: (messageID, chatID) => readPollEntry(get(), messageID, chatID),
+    setPollState: (messageID, value, chatID) =>
+      set((state) => {
+        const current = readPollEntry(state, messageID, chatID);
+        return writePollEntry(
+          state,
+          messageID,
+          {
+            poll: newerPoll(current.poll, value.poll),
+            viewer: mergePollViewer(
+              current.viewer ?? undefined,
+              value.viewer,
+              value.poll.version,
+            ),
+          },
+          chatID,
+        );
+      }),
+    setPollEntry: (messageID, entry, chatID) =>
+      set((state) => writePollEntry(state, messageID, entry, chatID)),
+    setPollLoader: (value) => {
+      pollLoader = value;
+    },
+    mountPoll: (messageID) => {
+      mountedPolls.set(messageID, (mountedPolls.get(messageID) ?? 0) + 1);
+      let done = false;
+      return () => {
+        if (done) return;
+        done = true;
+        const left = (mountedPolls.get(messageID) ?? 1) - 1;
+        if (left > 0) {
+          mountedPolls.set(messageID, left);
+          return;
+        }
+        mountedPolls.delete(messageID);
+        const pending = pollTimers.get(messageID);
+        if (pending) clearTimeout(pending);
+        pollTimers.delete(messageID);
+      };
+    },
+    setAwayOverride: (actorID, away) =>
+      set((state) => ({
+        awayOverrides: { ...state.awayOverrides, [actorID]: away },
+      })),
     apply: (event) => {
       if (event.seq <= get().checkpoint) return false;
       if (event.type === "task.updated" || event.type === "task.notified") {
@@ -371,6 +497,51 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
             checkpoint: event.seq,
           };
         });
+        return true;
+      }
+      if (isPollEvent(event.type)) {
+        const parsed = parsePollEvent(event);
+        let reload = false;
+        set((state) => {
+          if (!parsed || parsed.type === "poll.notified")
+            return { checkpoint: event.seq };
+          const messageID = parsed.data.message_id;
+          const entry = readPollEntry(state, messageID, parsed.data.chat_id);
+          const found = findMessage(
+            state.messages,
+            messageID,
+            parsed.data.chat_id,
+          );
+          const author = found
+            ? state.messages[found.chatID]![found.index]!.actor_id
+            : null;
+          const result = reducePoll(entry, parsed, {
+            isAuthor: Boolean(state.selfID && author === state.selfID),
+          });
+          reload = result.reload;
+          if (!result.changed) return { checkpoint: event.seq };
+          return {
+            ...writePollEntry(state, messageID, result, parsed.data.chat_id),
+            checkpoint: event.seq,
+          };
+        });
+        if (reload && parsed)
+          schedulePollReload(get, parsed.data.message_id, parsed.data.chat_id);
+        return true;
+      }
+      if (isAwayEvent(event.type)) {
+        const parsed = parseAwayEvent(event);
+        set((state) =>
+          parsed?.type === "actor.away.updated"
+            ? {
+                awayOverrides: {
+                  ...state.awayOverrides,
+                  [parsed.data.actor_id]: parsed.data.away,
+                },
+                checkpoint: event.seq,
+              }
+            : { checkpoint: event.seq },
+        );
         return true;
       }
       if (isRequestEvent(event.type)) {
@@ -643,6 +814,8 @@ export function createMessengerStore(checkpoint = 0): StoreApi<MessengerState> {
         messageStreams: {},
         requestViewers: {},
         earlyTasks: {},
+        pollViewers: {},
+        awayOverrides: {},
         checkpoint: value,
       }),
   }));
@@ -714,6 +887,13 @@ export function mergeMessage(
     current.task.version > incoming.task.version
   )
     merged.task = current.task;
+  // And poll.updated.
+  if (
+    current.poll &&
+    incoming.poll &&
+    current.poll.version > incoming.poll.version
+  )
+    merged.poll = current.poll;
   return merged;
 }
 
@@ -722,6 +902,32 @@ export function mergeMessage(
  * the cached task stays when its version is higher.
  */
 function keepNewerTasks(
+  cached: readonly ClientMessage[],
+  incoming: ClientMessage[],
+): ClientMessage[] {
+  return keepNewerPolls(cached, keepNewerTaskItems(cached, incoming));
+}
+
+/** The same for polls: a cached poll.updated beats an older page. */
+function keepNewerPolls(
+  cached: readonly ClientMessage[],
+  incoming: ClientMessage[],
+): ClientMessage[] {
+  if (!cached.some((item) => item.poll)) return incoming;
+  const polls = new Map(
+    cached
+      .filter((item) => item.poll)
+      .map((item) => [item.id, item.poll!] as const),
+  );
+  return incoming.map((item) => {
+    const poll = polls.get(item.id);
+    return poll && item.poll && poll.version > item.poll.version
+      ? { ...item, poll }
+      : item;
+  });
+}
+
+function keepNewerTaskItems(
   cached: readonly ClientMessage[],
   incoming: ClientMessage[],
 ): ClientMessage[] {
@@ -752,12 +958,81 @@ export function storeTaskCache(
   };
 }
 
-/** The message without its REST-only viewer: the store keeps viewers apart. */
+/** The message without its REST-only viewers: the store keeps viewers apart. */
 function withoutViewer<T extends ClientMessage>(message: T): T {
-  if (!("request_viewer" in message)) return message;
+  if (!("request_viewer" in message) && !("poll_viewer" in message))
+    return message;
   const rest = { ...message };
   delete rest.request_viewer;
+  delete rest.poll_viewer;
   return rest;
+}
+
+function absorbPollViewers(
+  viewers: PollViewers,
+  messages: readonly ClientMessage[],
+): PollViewers {
+  let next = viewers;
+  for (const message of messages) {
+    if (!message.poll || !message.poll_viewer) continue;
+    if (next === viewers) next = { ...viewers };
+    next[message.id] = mergePollViewer(
+      next[message.id],
+      message.poll_viewer,
+      message.poll.version,
+    );
+  }
+  return next;
+}
+
+function readPollEntry(
+  state: Pick<MessengerState, "messages" | "pollViewers">,
+  messageID: string,
+  chatID?: string,
+): PollCacheEntry {
+  const found = findMessage(state.messages, messageID, chatID);
+  return {
+    poll: found
+      ? (state.messages[found.chatID]![found.index]!.poll ?? null)
+      : null,
+    viewer: state.pollViewers[messageID] ?? null,
+  };
+}
+
+function writePollEntry(
+  state: Pick<MessengerState, "messages" | "pollViewers">,
+  messageID: string,
+  entry: PollCacheEntry,
+  chatID?: string,
+): Pick<MessengerState, "messages" | "pollViewers"> {
+  let { messages, pollViewers } = state;
+  const found = entry.poll ? findMessage(messages, messageID, chatID) : null;
+  if (found && entry.poll) {
+    const list = [...messages[found.chatID]!];
+    list[found.index] = { ...list[found.index]!, poll: entry.poll };
+    messages = { ...messages, [found.chatID]: list };
+  }
+  if (entry.viewer) pollViewers = { ...pollViewers, [messageID]: entry.viewer };
+  else if (pollViewers[messageID]) {
+    pollViewers = { ...pollViewers };
+    delete pollViewers[messageID];
+  }
+  return { messages, pollViewers };
+}
+
+/**
+ * The cache access performPollAction works through, over the messenger
+ * store: the poll and the viewer of one message.
+ */
+export function storePollCache(
+  store: StoreApi<MessengerState>,
+  messageID: string,
+  chatID?: string,
+): PollCacheAccess {
+  return {
+    read: () => store.getState().pollEntry(messageID, chatID),
+    write: (entry) => store.getState().setPollEntry(messageID, entry, chatID),
+  };
 }
 
 function absorbViewers(

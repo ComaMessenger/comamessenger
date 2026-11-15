@@ -227,7 +227,7 @@ function WaitingWithTasks({ filters }: { filters: WaitingFilter[] }) {
       {rows.map((row) =>
         row.kind === "request" ? (
           <InboxRequest key={row.item.message.id} item={row.item} />
-        ) : (
+        ) : row.kind === "task" ? (
           <InboxTask
             key={row.item.message.id}
             row={row}
@@ -237,7 +237,7 @@ function WaitingWithTasks({ filters }: { filters: WaitingFilter[] }) {
                 : row.item.chat.display_name
             }
           />
-        ),
+        ) : null,
       )}
       {waiting.hasNextPage && (
         <div className="directory-list__more">

@@ -27,6 +27,12 @@ export const serverFeature = {
   tasks: "message_tasks",
   /** Phase 6.7 wave 4: «Опрос» and the «Опросы» filter of «Ждут вас». */
   polls: "message_polls",
+  /**
+   * Phase 6.7 wave 4: «Отсутствую» — the section of the status sheet, the
+   * header line and slot of a direct chat, the mention hint, the «Люди»
+   * filters, auto-replies.
+   */
+  away: "actor_away",
 } as const;
 
 /** True when the server announced the feature; false before hello. */
@@ -39,11 +45,13 @@ export function hasServerFeature(
   return false;
 }
 
-/** The workplace features (phases 6.4–6.6) the server announced. */
+/** The workplace features (phases 6.4–6.7) the server announced. */
 export type WorkplaceFeatures = {
   requests: boolean;
   reminders: boolean;
   tasks: boolean;
+  polls: boolean;
+  away: boolean;
 };
 
 export function workplaceFeatures(
@@ -54,6 +62,8 @@ export function workplaceFeatures(
     requests: hasServerFeature(list, serverFeature.requests),
     reminders: hasServerFeature(list, serverFeature.reminders),
     tasks: hasServerFeature(list, serverFeature.tasks),
+    polls: hasServerFeature(list, serverFeature.polls),
+    away: hasServerFeature(list, serverFeature.away),
   };
 }
 
@@ -64,6 +74,9 @@ export function workplaceFeatures(
  * the reader. Every task.notified counts. A task.updated counts when the
  * reader is on the task before or after it (`task` — the reader's id and
  * the task the cache had before the event); without them it counts always.
+ * Polls (wave 4): the reader's own vote (it leaves «Ждут вас»), a reminder
+ * a poll closing and a new poll with a due date count; other poll.updated
+ * (someone else voted) do not.
  */
 export function refreshesUnread(
   event: Pick<DurableEvent, "type" | "data">,
@@ -73,9 +86,17 @@ export function refreshesUnread(
     event.type === "request.assigned" ||
     event.type === "request.answer.updated" ||
     event.type === "task.notified" ||
+    event.type === "poll.vote.updated" ||
+    event.type === "poll.notified" ||
     event.type.startsWith("reminder.")
   )
     return true;
+  if (event.type === "poll.updated") return event.data.status === "closed";
+  // A new poll with a due date waits for everyone in the chat but its author.
+  if (event.type === "message.created" && event.data.type === "poll") {
+    const poll = event.data.poll as { due_at?: unknown } | null | undefined;
+    return typeof poll?.due_at === "string";
+  }
   if (event.type === "task.updated") {
     if (!task) return true;
     const next = parseMessageTask(event.data.task);

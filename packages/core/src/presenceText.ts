@@ -1,3 +1,12 @@
+import {
+  activeAway,
+  awayHeaderText,
+  awayKindEmoji,
+  currentAway,
+  type AwayOverrides,
+} from "./away";
+import type { AwayKind, AwayPublic } from "./types";
+
 /**
  * The line under a chat title, as in Telegram: what someone is doing right
  * now, else whether the direct peer is online or when they were last seen,
@@ -291,6 +300,11 @@ export type ConversationStatus = {
   animated: boolean;
   /** Online or acting: accent color without dots. */
   live: boolean;
+  /**
+   * The direct peer is away (wave 4): the line is «🌴 в отпуске до 30
+   * ноября» and the avatar shows the kind's emoji instead of the green dot.
+   */
+  away?: { kind: AwayKind; emoji: string } | null;
 };
 
 export type ConversationStatusInput = {
@@ -310,6 +324,11 @@ export type ConversationStatusInput = {
     seenThisSession?: boolean;
     /** Agents: the run state, when one is running. */
     agentState?: AgentWorkState | null;
+    /**
+     * «Отсутствую» (wave 4): while it is in effect it is shown instead of
+     * «в сети» and «был(а)», even when the person is online.
+     */
+    away?: AwayPublic | null;
   } | null;
   /** Groups and channels. */
   memberCount?: number;
@@ -338,6 +357,14 @@ export function conversationStatus(
       live: true,
     };
   if (direct && peer) {
+    const away = activeAway(peer.away, input.now);
+    if (away)
+      return {
+        text: awayHeaderText(away, input.now, locale),
+        animated: false,
+        live: false,
+        away: { kind: away.kind, emoji: awayKindEmoji[away.kind] },
+      };
     if (peer.presence === "online")
       return {
         text: locale === "ru" ? "в сети" : "online",
@@ -384,6 +411,7 @@ type HeaderMember = {
 type HeaderPeer = HeaderMember & {
   last_seen_at?: string | null;
   last_seen_approx?: LastSeenApprox | null;
+  away?: AwayPublic | null;
 };
 
 /**
@@ -412,6 +440,8 @@ export function chatHeaderStatus(input: {
     threadRootID: string | null;
     state: AgentWorkState;
   }[];
+  /** actor.away.updated learnt meanwhile, fresher than direct_peer.away. */
+  away?: AwayOverrides;
 }): ConversationStatus {
   const { chat, viewerID } = input;
   const nameOf = (actorID: string) =>
@@ -451,6 +481,7 @@ export function chatHeaderStatus(input: {
         lastSeenApprox: peer.last_seen_approx ?? null,
         seenThisSession: state !== undefined,
         agentState: run?.state ?? null,
+        away: currentAway(peer.actor_id, peer.away, input.away ?? {}),
       },
     });
   }

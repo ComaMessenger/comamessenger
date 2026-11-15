@@ -6,9 +6,8 @@ import { hasServerFeature, serverFeature } from "./realtime";
  *
  * 1. attachments — photo, camera, file on the phone; «Фото и видео», «Файл»,
  *    «Markdown-файл» on the web, which has no camera;
- * 2. «Попросить и поручить» — «Запрос» (wave 1), «Задача» (wave 3) after
- *    it, each only when the server announced its feature; «Опрос» (wave 4)
- *    will take the place between them;
+ * 2. «Попросить и поручить» — «Запрос» (wave 1), «Опрос» (wave 4),
+ *    «Задача» (wave 3), each only when the server announced its feature;
  * 3. «Агенты» — «Позвать агента» when the chat has agents.
  *
  * Scheduling is not here: it stays on a long press of «Отправить».
@@ -20,6 +19,7 @@ export type ComposerMenuItemID =
   | "file"
   | "markdownFile"
   | "request"
+  | "poll"
   | "task"
   | "agent";
 
@@ -49,8 +49,8 @@ export type ComposerMenuFacts = {
   /** HelloFrame.features of the connection; nothing new before hello. */
   features: Iterable<string> | null | undefined;
   /**
-   * The composer of a thread: requests and tasks go to the chat's feed
-   * only, so neither is offered there.
+   * The composer of a thread: requests, polls and tasks go to the chat's
+   * feed only, so none is offered there.
    */
   inThread?: boolean;
 };
@@ -87,6 +87,8 @@ export function composerMenu(facts: ComposerMenuFacts): ComposerMenuGroup[] {
     hasServerFeature(facts.features, serverFeature.requests)
   )
     ask.push(item("request", "composerRequest", "composerRequestHint"));
+  if (!facts.inThread && hasServerFeature(facts.features, serverFeature.polls))
+    ask.push(item("poll", "composerPoll", "composerPollHint"));
   if (!facts.inThread && hasServerFeature(facts.features, serverFeature.tasks))
     ask.push(item("task", "composerTask", "composerTaskHint"));
   const groups: ComposerMenuGroup[] = [

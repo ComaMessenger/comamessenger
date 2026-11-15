@@ -265,7 +265,11 @@ export type DurableEvent = {
   seq: number;
   type: string;
   occurred_at: string;
-  actor_id: string;
+  /**
+   * Who caused the event; null when nobody may know (poll.updated, a poll
+   * closed by its due date) or the server did it.
+   */
+  actor_id: string | null;
   chat_id?: string | null;
   subject_id: string;
   data: Record<string, unknown>;
@@ -368,3 +372,36 @@ export type TaskUpdatedEvent = components["schemas"]["TaskUpdatedEvent"];
 /** data of task.notified: a reason for push and toast, no task text. */
 export type TaskNotifiedEvent =
   components["schemas"]["RealtimeTaskNotifiedEventV1"];
+
+// Polls («Опрос») and «Отсутствую», phase 6.7 wave 4.
+export type MessagePoll = components["schemas"]["MessagePoll"];
+export type PollViewer = components["schemas"]["PollViewer"];
+export type PollState = components["schemas"]["PollState"];
+export type CreatePollRequest = components["schemas"]["CreatePollRequest"];
+export type VotePollRequest = components["schemas"]["VotePollRequest"];
+export type PollVoter = components["schemas"]["PollVoter"];
+export type PollVoterPage = components["schemas"]["PollVoterPage"];
+export type PollRemindResult = components["schemas"]["PollRemindResult"];
+/** data of poll.updated: counters every member may see, never a choice. */
+export type PollUpdatedEvent =
+  components["schemas"]["RealtimePollUpdatedEventV1"];
+/** data of poll.vote.updated: the reader's own vote; no choice when anonymous. */
+export type PollVoteUpdatedEvent =
+  components["schemas"]["RealtimePollVoteUpdatedEventV1"];
+export type PollNotifiedEvent =
+  components["schemas"]["RealtimePollNotifiedEventV1"];
+export type AwayKind = components["schemas"]["AwayKind"];
+/** The away status as everyone in the workspace sees it. */
+export type AwayPublic = components["schemas"]["AwayPublic"];
+export type AwayAutoreply = components["schemas"]["AwayAutoreply"];
+/** The own away status with the private settings (getAway, setAway). */
+export type AwayStatus = components["schemas"]["AwayStatus"];
+export type SetAwayRequest = components["schemas"]["SetAwayRequest"];
+export type SubstitutingEntry = components["schemas"]["SubstitutingEntry"];
+export type SubstitutingList = components["schemas"]["SubstitutingList"];
+export type ActorAwayUpdatedEvent =
+  components["schemas"]["RealtimeActorAwayUpdatedEventV1"];
+export type AwaySubstituteAssignedEvent =
+  components["schemas"]["RealtimeAwaySubstituteAssignedEventV1"];
+export type AwaySubstituteRemovedEvent =
+  components["schemas"]["RealtimeAwaySubstituteRemovedEventV1"];

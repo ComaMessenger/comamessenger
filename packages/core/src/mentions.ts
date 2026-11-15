@@ -1,5 +1,21 @@
+import {
+  awayNote,
+  mentionAwayHint,
+  visibleSubstitute,
+  withCurrentAway,
+  type AwayOverrides,
+  type AwayPerson,
+  type MentionAwayHint,
+} from "./away";
+import type { CalendarLocale } from "./calendar";
 import { departmentPath, expandDepartment, foldOrgText, orgIndex } from "./org";
-import type { ChatMember, Message, OrgDepartment, OrgStructure } from "./types";
+import type {
+  AwayPublic,
+  ChatMember,
+  Message,
+  OrgDepartment,
+  OrgStructure,
+} from "./types";
 
 const mentionPattern = /@\[([^\]]+)\]\(([0-9a-f-]{36})\)/gi;
 
@@ -369,4 +385,75 @@ export function departmentMentionNoteText(
   }
   if (count === 0) return `Nobody from ${note.name} is in this chat`;
   return `${count} ${count === 1 ? "person" : "people"} from ${note.name} notified`;
+}
+
+// ---------------------------------------------------------------------------
+// «Отсутствую» at a mention (phase 6.7 wave 4, decision 8)
+
+type AwayMember = Pick<ChatMember, "actor_id" | "display_name" | "type"> & {
+  away?: AwayPublic | null;
+};
+
+/**
+ * The mark next to a person in the @ menu: «в отпуске до 30 ноября», so
+ * the author sees it before choosing. Null when they are not away now.
+ * `overrides` are actor.away.updated learnt after the members were read.
+ */
+export function mentionSuggestionAway(
+  member: AwayMember,
+  now: Date,
+  locale: CalendarLocale,
+  overrides: AwayOverrides = {},
+): string | null {
+  return awayNote(withCurrentAway(member, overrides), now, locale);
+}
+
+/**
+ * The lines over the composer for everyone away among the people mentioned
+ * in `source` (in the order they were mentioned): «Анна в отпуске до 30
+ * ноября — ответит позже» with «Упомянуть Марину». The same lines go under
+ * the sent message as «видно только вам» until the chat is left; the server
+ * keeps nothing. `lookup` finds the substitute (in the chat or the
+ * workspace directory); `substituteInChat` tells whether mentioning them
+ * here reaches them.
+ */
+export function mentionAwayHints(
+  source: string,
+  options: {
+    members: readonly AwayMember[];
+    now: Date;
+    locale: CalendarLocale;
+    lookup?: (actorID: string) => AwayPerson | null | undefined;
+    overrides?: AwayOverrides;
+  },
+): (MentionAwayHint & { substituteInChat: boolean })[] {
+  const overrides = options.overrides ?? {};
+  const members = new Map(
+    options.members.map((member) => [
+      member.actor_id,
+      withCurrentAway(member, overrides),
+    ]),
+  );
+  const find = (actorID: string): AwayPerson | null => {
+    const person = members.get(actorID) ?? options.lookup?.(actorID) ?? null;
+    return person ? withCurrentAway(person, overrides) : null;
+  };
+  const hints: (MentionAwayHint & { substituteInChat: boolean })[] = [];
+  for (const actorID of mentionedActorIDs(source)) {
+    const person = members.get(actorID);
+    if (!person) continue;
+    const substitute = visibleSubstitute(person.away, find, options.now);
+    const hint = mentionAwayHint(
+      person,
+      substitute,
+      options.now,
+      options.locale,
+    );
+    if (hint)
+      hints.push({
+        ...hint,
+        substituteInChat: substitute ? members.has(substitute.actor_id) : false,
+      });
+  }
+  return hints;
 }
