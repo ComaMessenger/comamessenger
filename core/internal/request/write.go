@@ -368,21 +368,16 @@ func (s *Service) remindWaitingTx(ctx context.Context, tx pgx.Tx, current locked
 	if err != nil {
 		return 0, 0, fmt.Errorf("scan recipients to remind: %w", err)
 	}
-	var seq int64
 	sent := make([]string, 0, len(targets))
 	for _, item := range targets {
-		if !item.send {
-			continue
+		if item.send {
+			sent = append(sent, item.actorID)
 		}
-		if seq, err = nextSequence(ctx, tx, current.OrgID); err != nil {
-			return 0, 0, err
-		}
-		recipient := item.actorID
-		if err := insertEvent(ctx, tx, current.OrgID, seq, "request.reminded", current.AuthorID, current.ChatID, current.MessageID, &recipient,
-			remindedEvent{MessageID: current.MessageID, ChatID: current.ChatID, Kind: kind}); err != nil {
-			return 0, 0, err
-		}
-		sent = append(sent, item.actorID)
+	}
+	seq, err := insertAudienceEvents(ctx, tx, current.OrgID, "request.reminded", current.AuthorID, current.ChatID, current.MessageID, sent,
+		remindedEvent{MessageID: current.MessageID, ChatID: current.ChatID, Kind: kind})
+	if err != nil {
+		return 0, 0, err
 	}
 	if len(sent) > 0 {
 		if _, err := tx.Exec(ctx, `

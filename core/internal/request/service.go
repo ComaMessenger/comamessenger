@@ -119,18 +119,9 @@ func (s *Service) ResolveTx(ctx context.Context, tx pgx.Tx, user identity.User, 
 // message itself is written, so each client learns «this is for me» before
 // the card arrives with message.created.
 func AssignTx(ctx context.Context, tx pgx.Tx, user identity.User, chatID, messageID string, plan Plan, recipients Recipients) error {
-	for _, actorID := range recipients.ActorIDs {
-		seq, err := nextSequence(ctx, tx, user.OrgID)
-		if err != nil {
-			return err
-		}
-		recipient := actorID
-		if err := insertEvent(ctx, tx, user.OrgID, seq, "request.assigned", user.ActorID, chatID, messageID, &recipient,
-			assignedEvent{MessageID: messageID, ChatID: chatID, DueAt: plan.DueAt}); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err := insertAudienceEvents(ctx, tx, user.OrgID, "request.assigned", user.ActorID, chatID, messageID, recipients.ActorIDs,
+		assignedEvent{MessageID: messageID, ChatID: chatID, DueAt: plan.DueAt})
+	return err
 }
 
 // InsertTx stores the request of a just inserted message and schedules its
@@ -426,6 +417,37 @@ func insertEvent(ctx context.Context, tx pgx.Tx, orgID string, seq int64, eventT
 		}
 	}
 	return nil
+}
+
+// insertAudienceEvents writes one event with the same data to each person
+// in audiences, in one statement: a request to 500 people costs two
+// queries, not a thousand. It returns the last sequence number (0 for none).
+func insertAudienceEvents(ctx context.Context, tx pgx.Tx, orgID, eventType, actorID, chatID, subjectID string, audiences []string, data any) (int64, error) {
+	if len(audiences) == 0 {
+		return 0, nil
+	}
+	payload, err := json.Marshal(data)
+	if err != nil {
+		return 0, fmt.Errorf("marshal request event: %w", err)
+	}
+	var last int64
+	if err := tx.QueryRow(ctx, `UPDATE organizations SET event_seq = event_seq + $2 WHERE id = $1 RETURNING event_seq`, orgID, len(audiences)).Scan(&last); err != nil {
+		return 0, fmt.Errorf("allocate event sequences: %w", err)
+	}
+	first := last - int64(len(audiences)) + 1
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO events (org_id, seq, type, actor_id, chat_id, subject_id, audience_actor_id, data)
+		SELECT $1, $2 + ordinality - 1, $3, $4, $5, $6, audience, $8::jsonb
+		FROM unnest($7::uuid[]) WITH ORDINALITY AS target(audience, ordinality)`,
+		orgID, first, eventType, actorID, chatID, subjectID, audiences, string(payload)); err != nil {
+		return 0, fmt.Errorf("insert request events: %w", err)
+	}
+	if eventType == "request.reminded" {
+		if _, err := tx.Exec(ctx, `INSERT INTO notification_jobs (org_id, event_seq) SELECT $1, generate_series($2::bigint, $3::bigint) ON CONFLICT DO NOTHING`, orgID, first, last); err != nil {
+			return 0, fmt.Errorf("enqueue request notifications: %w", err)
+		}
+	}
+	return last, nil
 }
 
 // lockOrganization serializes the organization's event sequence and comes
