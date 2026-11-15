@@ -12,8 +12,8 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// Until package T lands, every task route of the contract and the waiting
-// inbox exist and answer 501 not_implemented.
+// Every task route of the contract and the waiting inbox exist; without a
+// task service (tests, tools) they answer 501 not_implemented.
 func TestTaskRoutesAnswerNotImplemented(t *testing.T) {
 	h := newIdentityHandlers(slog.New(slog.NewTextHandler(io.Discard, nil)), "", Dependencies{})
 	router := chi.NewRouter()

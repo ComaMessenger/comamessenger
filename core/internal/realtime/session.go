@@ -208,6 +208,7 @@ func (s *session) writeLoop(ctx context.Context) error {
 			"presence_snapshot",
 			"message_reminders",
 			"message_requests",
+			"message_tasks",
 			"org_structure",
 		},
 	}

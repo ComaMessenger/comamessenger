@@ -63,6 +63,7 @@ func CompleteEventMessages(ctx context.Context, tx pgx.Tx, orgID string, items [
 		// into a frame the whole chat receives.
 		message.Request = full.Request
 		message.RequestViewer = nil
+		message.Task = full.Task
 		if message.ThreadRootID != nil {
 			count := rootCounts[*message.ThreadRootID]
 			message.ThreadRootReplyCount = &count

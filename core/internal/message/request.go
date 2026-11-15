@@ -151,6 +151,9 @@ func hydrateRequests(ctx context.Context, tx pgx.Tx, orgID string, messages []Me
 // hydrateRequestViewers fills RequestViewer for the reading person: REST
 // only, never in realtime frames, which the whole chat shares.
 func (s *Service) hydrateRequestViewers(ctx context.Context, tx pgx.Tx, user identity.User, messages []*Message) error {
+	if err := hideTasksFromAgents(ctx, tx, user, messages); err != nil {
+		return err
+	}
 	if s.requests == nil {
 		return nil
 	}

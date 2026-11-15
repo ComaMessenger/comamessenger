@@ -153,6 +153,9 @@ func (s *Service) Get(ctx context.Context, user identity.User, messageID string)
 	if err := hydrateFiles(ctx, tx, user.OrgID, items); err != nil {
 		return Message{}, err
 	}
+	if err := hideTasksFromAgents(ctx, tx, user, []*Message{&items[0]}); err != nil {
+		return Message{}, err
+	}
 	return items[0], tx.Commit(ctx)
 }
 

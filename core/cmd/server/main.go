@@ -41,6 +41,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/scheduledreset"
 	"github.com/comamessenger/comamessenger/core/internal/search"
 	"github.com/comamessenger/comamessenger/core/internal/storage"
+	"github.com/comamessenger/comamessenger/core/internal/task"
 	"github.com/comamessenger/comamessenger/core/internal/userstate"
 	"github.com/comamessenger/comamessenger/core/internal/webhook"
 	"github.com/comamessenger/comamessenger/core/internal/workspace"
@@ -261,6 +262,18 @@ func main() {
 	}
 	if err := requestClient.Start(realtimeCtx); err != nil {
 		logger.Error("request job startup failed", "error", err)
+		os.Exit(1)
+	}
+	// Tasks («Задача», phase 6.6 wave 3): their own River client and queue.
+	taskService := task.NewService(pool, afterCommit)
+	messageService.SetTasks(taskService)
+	taskClient, err := task.NewClient(pool, taskService, logger)
+	if err != nil {
+		logger.Error("task job initialization failed", "error", err)
+		os.Exit(1)
+	}
+	if err := taskClient.Start(realtimeCtx); err != nil {
+		logger.Error("task job startup failed", "error", err)
 		os.Exit(1)
 	}
 	searchService := search.NewService(pool)
