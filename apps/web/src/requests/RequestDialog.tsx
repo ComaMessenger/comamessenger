@@ -180,6 +180,34 @@ export function RequestDialog({
   const recipients = requestRecipientIDs(audience, members, userID, structure);
   const chatPeopleIDs = people.map((member) => member.actor_id);
   const index = structure ? orgIndex(structure) : null;
+  // Switching segments back and forth keeps the department and position
+  // chosen last; the first time, the first one with someone of this chat.
+  const lastGroup = useRef<{ department?: string; position?: string }>({});
+  if (audience.kind === "department")
+    lastGroup.current.department = audience.departmentID;
+  if (audience.kind === "position")
+    lastGroup.current.position = audience.positionID;
+  function pickedGroup(kind: "department" | "position"): string {
+    const remembered = lastGroup.current[kind];
+    if (remembered) return remembered;
+    if (!structure || !index) return "";
+    const options = { chatMemberIDs: chatPeopleIDs, excludeActorID: userID };
+    const list =
+      kind === "department"
+        ? index.order.map((item) => item.id)
+        : index.positionOrder.map((item) => item.id);
+    return (
+      list.find(
+        (id) =>
+          (kind === "department"
+            ? expandDepartment(structure, id, options)
+            : expandPosition(structure, id, options)
+          ).inChat.length > 0,
+      ) ??
+      list[0] ??
+      ""
+    );
+  }
   const dueAt =
     due === "none"
       ? null
@@ -313,20 +341,8 @@ export function RequestDialog({
                             audience.kind === "people" ? audience.actorIDs : [],
                         }
                       : kind === "department"
-                        ? {
-                            kind: "department",
-                            departmentID:
-                              audience.kind === "department"
-                                ? audience.departmentID
-                                : (index?.order[0]?.id ?? ""),
-                          }
-                        : {
-                            kind: "position",
-                            positionID:
-                              audience.kind === "position"
-                                ? audience.positionID
-                                : (index?.positionOrder[0]?.id ?? ""),
-                          },
+                        ? { kind: "department", departmentID: pickedGroup("department") }
+                        : { kind: "position", positionID: pickedGroup("position") },
               })
             }
             items={segments.map((id) => ({

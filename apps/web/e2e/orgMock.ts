@@ -724,7 +724,27 @@ export async function mockOrg(page: Page, options: OrgMockOptions = {}): Promise
           .map((entry) => ({ ...entry, role: entry.actor_id === viewerID ? "owner" : "member", joined_at: "2026-08-19T00:00:00Z" })),
       };
     } else if ((m = match(/^\/chats\/([^/]+)\/(pins|agents)$/))) body = m[2] === "pins" ? { pins: [] } : { agents: [] };
-    else if ((m = match(/^\/chats\/([^/]+)\/messages$/)) && method === "POST") {
+    else if ((m = match(/^\/chats\/([^/]+)\/requests$/)) && method === "POST") {
+      // The request itself is the request package's business: record what
+      // the form sent and answer with a plain message.
+      sent.push({ request: input });
+      status = 201;
+      body = {
+        id: id("50000000", 90 + sent.length),
+        chat_id: m[1],
+        actor_id: viewerID,
+        client_msg_id: input.client_msg_id,
+        type: "text",
+        body: input.body,
+        body_format: "plain",
+        version: 1,
+        created_seq: 3 + sent.length,
+        created_at: now.toISOString(),
+        mentioned_actor_ids: [],
+        files: [],
+        thread_reply_count: 0,
+      };
+    } else if ((m = match(/^\/chats\/([^/]+)\/messages$/)) && method === "POST") {
       sent.push(input);
       const departmentIDs = (input.mentioned_department_ids as string[]) ?? [];
       const ids = m[1] === chatID ? chatMembers : [];

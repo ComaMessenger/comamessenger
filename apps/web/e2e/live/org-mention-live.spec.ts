@@ -6,7 +6,7 @@ import {
   owner,
   run,
   signIn,
-  skipWithoutServer,
+  skipWithoutS2,
 } from "./liveApi";
 
 // Plan check org-mention.spec.ts on a real server (needs S2): @department
@@ -16,7 +16,7 @@ import {
 test.skip(() => test.info().project.name === "phone", "Live run on desktop");
 
 test("@department notifies only its people in this chat", async ({ browser }) => {
-  skipWithoutServer();
+  skipWithoutS2();
   const anna = await owner();
   const inChat = await member(anna, `Олег ${run}м`, "olegm");
   const outside = await member(anna, `Борис ${run}м`, "borism");

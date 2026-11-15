@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useLayoutEffect,
   useId,
   useMemo,
   useRef,
@@ -236,12 +237,30 @@ export function Composer({
     (member) => presence[member.actor_id] === "online",
   ).length;
 
+  // The caret goes where an insertion ends right after React writes the new
+  // text, before the next key press: a frame later, a fast typist's first
+  // letter would already have landed at the old caret position.
+  const pendingCaret = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const cursor = pendingCaret.current;
+    if (cursor === null || !input.current) return;
+    pendingCaret.current = null;
+    input.current.focus();
+    input.current.setSelectionRange(cursor, cursor);
+  });
+  function placeCaret(cursor: number) {
+    pendingCaret.current = cursor;
+    // The text may not change (nothing to re-render): apply it anyway.
+    requestAnimationFrame(() => {
+      if (pendingCaret.current !== cursor || !input.current) return;
+      pendingCaret.current = null;
+      input.current.focus();
+      input.current.setSelectionRange(cursor, cursor);
+    });
+  }
   function setVisibleText(nextText: string, cursor: number) {
     setBody(encodeMentions(updateMentionText(draft, nextText)));
-    requestAnimationFrame(() => {
-      input.current?.focus();
-      input.current?.setSelectionRange(cursor, cursor);
-    });
+    placeCaret(cursor);
   }
   function insertCommand(command: ChatCommand) {
     const text = `/${command.command} `;
@@ -340,10 +359,7 @@ export function Composer({
     const cursor =
       (next.mentions.find((item) => item.start === mention.index)?.end ??
         mention.index) + 1;
-    requestAnimationFrame(() => {
-      input.current?.focus();
-      input.current?.setSelectionRange(cursor, cursor);
-    });
+    placeCaret(cursor);
   }
   function insertDepartment(department: DepartmentMentionSuggestion) {
     if (!mention) return;
@@ -358,10 +374,7 @@ export function Composer({
     const cursor =
       (next.mentions.find((item) => item.start === mention.index)?.end ??
         mention.index) + 1;
-    requestAnimationFrame(() => {
-      input.current?.focus();
-      input.current?.setSelectionRange(cursor, cursor);
-    });
+    placeCaret(cursor);
   }
   function insertContextual(value: "all" | "here") {
     if (!mention) return;
@@ -383,10 +396,7 @@ export function Composer({
     );
     setBody(encodeMentions(next));
     setAttachOpen(false);
-    requestAnimationFrame(() => {
-      input.current?.focus();
-      input.current?.setSelectionRange(next.text.length, next.text.length);
-    });
+    placeCaret(next.text.length);
   }
   function choosePlus(id: ComposerMenuItemID) {
     if (id === "photo") mediaInput.current?.click();

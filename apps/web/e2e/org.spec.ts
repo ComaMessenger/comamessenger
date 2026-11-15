@@ -442,3 +442,51 @@ test("member permissions one by one in «Участники и доступ»", 
     },
   });
 });
+
+for (const theme of ["light", "dark"] as const)
+  test(`a request to a department, only with the right (${theme})`, async ({
+    page,
+  }) => {
+    // The owner may always address groups.
+    const api = await mockOrg(page, { theme });
+    await page.goto(`/chat/${chatID}`);
+    await page.getByRole("button", { name: "Добавить", exact: true }).click();
+    await page.getByRole("menuitem", { name: /Запрос/ }).click();
+    const dialog = page.getByRole("dialog", { name: "Запрос" });
+    await dialog.getByRole("textbox", { name: "Вопрос" }).fill("Ознакомьтесь с графиком");
+    await dialog.getByRole("radio", { name: "Отдел" }).click();
+    const list = dialog.getByRole("radiogroup", { name: "Отдел" });
+    await expect(
+      list.getByRole("radio", { name: /^Зал ЛФК/ }),
+    ).toContainText("Реабилитация · со всеми вложенными · 3 чел. · в этом чате: 3");
+    await list.getByRole("radio", { name: /^Зал ЛФК/ }).click();
+    if (!isPhone()) {
+      // The list scrolls to the choice; the form below it changes with the
+      // answer type: the addressee block alone is compared.
+      await list.evaluate((element) => (element.scrollTop = 0));
+      await page.mouse.move(0, 0);
+      await expect(list).toHaveScreenshot(`request-department-${theme}.png`, shot);
+    }
+    await dialog.getByRole("radio", { name: "Должность" }).click();
+    await expect(
+      dialog.getByRole("radiogroup", { name: "Должность" }).getByRole("radio", { name: /^Инструктор ЛФК/ }),
+    ).toContainText("в этом чате: 2");
+    await dialog.getByRole("radio", { name: "Отдел" }).click();
+    await dialog.getByRole("button", { name: /^Отправить запрос · 3/ }).click();
+    await expect.poll(() => api.sent.at(-1)?.request).toMatchObject({
+      audience: { kind: "department", department_id: departments.gym },
+    });
+  });
+
+test("without the right there are no department and position segments", async ({
+  page,
+}) => {
+  await mockOrg(page, { viewer: people.boris, role: "member" });
+  await page.goto(`/chat/${chatID}`);
+  await page.getByRole("button", { name: "Добавить", exact: true }).click();
+  await page.getByRole("menuitem", { name: /Запрос/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Запрос" });
+  await expect(dialog.getByRole("radio", { name: "Люди" })).toBeVisible();
+  await expect(dialog.getByRole("radio", { name: "Отдел" })).toHaveCount(0);
+  await expect(dialog.getByRole("radio", { name: "Должность" })).toHaveCount(0);
+});

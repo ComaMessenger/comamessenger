@@ -11,6 +11,15 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 export const liveAPI = process.env.COMA_LIVE_API ?? "";
 export const skipWithoutServer = () =>
   test.skip(!liveAPI, "COMA_LIVE_API is not set: no live server");
+/**
+ * @department and requests to a department or position need the S2 server
+ * package (mentions and request addressees); set COMA_LIVE_S2=1 once the
+ * stand has it.
+ */
+export const skipWithoutS2 = () => {
+  skipWithoutServer();
+  test.skip(!process.env.COMA_LIVE_S2, "COMA_LIVE_S2 is not set: no S2 on the stand");
+};
 
 const ownerEmail = "owner@w2-org.test";
 const ownerPassword = "owner live password 2026";

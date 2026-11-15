@@ -409,16 +409,29 @@ describe("RequestDialog addressees from the structure", () => {
     });
     fireEvent.click(screen.getByRole("radio", { name: "Department" }));
     const list = screen.getByRole("radiogroup", { name: "Department" });
-    // The first department in tree order is preselected: Office has
-    // nobody of this chat.
-    expect(within(list).getByRole("radio", { name: /^Office/ })).toHaveAttribute(
+    // Preselected: the first department with someone of this chat (Office
+    // has nobody here).
+    expect(within(list).getByRole("radio", { name: /^Rehabilitation/ })).toHaveAttribute(
       "aria-checked",
       "true",
     );
     expect(
       within(list).getByRole("radio", { name: /^Rehabilitation/ }),
     ).toHaveTextContent("with subdepartments · 3 ppl · in this chat: 2");
-    fireEvent.click(within(list).getByRole("radio", { name: /^Rehabilitation/ }));
+    // Back and forth keeps the choice.
+    fireEvent.click(within(list).getByRole("radio", { name: /^Gym/ }));
+    fireEvent.click(screen.getByRole("radio", { name: "Position" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Department" }));
+    expect(
+      within(screen.getByRole("radiogroup", { name: "Department" })).getByRole("radio", {
+        name: /^Gym/,
+      }),
+    ).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(
+      within(screen.getByRole("radiogroup", { name: "Department" })).getByRole("radio", {
+        name: /^Rehabilitation/,
+      }),
+    );
     const send = screen.getByRole("button", { name: "Send request · 2 people" });
     fireEvent.click(send);
     await waitFor(() => expect(createRequest).toHaveBeenCalled());
