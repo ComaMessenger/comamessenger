@@ -22,10 +22,10 @@ appId: com.comamessenger.app
 - takeScreenshot: org-people-${THEME}
 
 # The department chips: «Бассейн» leaves its own group only.
-- scrollUntilVisible:
-    element: Бассейн
-    direction: RIGHT
-    centerElement: false
+# The chips row scrolls sideways: swipe it, not the list.
+- swipe:
+    start: 85%,22%
+    end: 15%,22%
 - tapOn:
     text: Бассейн
     index: 0
@@ -34,11 +34,9 @@ appId: com.comamessenger.app
     timeout: 5000
 - assertNotVisible: ".*Олег Чернов.*"
 - takeScreenshot: org-people-filter-${THEME}
-- scrollUntilVisible:
-    element:
-      id: people-dept-all
-    direction: LEFT
-    centerElement: false
+- swipe:
+    start: 15%,22%
+    end: 85%,22%
 - tapOn:
     id: people-dept-all
 

@@ -216,8 +216,11 @@ appId: com.comamessenger.app
 - takeScreenshot: settings-member-deactivated-${THEME}
 - tapOn:
     id: member-status
-- extendedWaitUntil:
-    visible: Отключить
+# An active member gets the «Оргструктура» group back (org_structure), which
+# moves the status row down.
+- scrollUntilVisible:
+    element: Отключить
+    direction: DOWN
     timeout: 10000
 - tapOn: Назад
 - tapOn: Назад
