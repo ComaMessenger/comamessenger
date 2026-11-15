@@ -61,6 +61,10 @@ type Actor struct {
 	// time or, when either side hides it, an approximate bucket.
 	LastSeenAt     *time.Time `json:"last_seen_at,omitempty"`
 	LastSeenApprox *string    `json:"last_seen_approx,omitempty"`
+	// The org structure assignment of a person (phase 6.5): set by
+	// ListActors, left out without one.
+	PositionID          *string `json:"position_id,omitempty"`
+	PrimaryDepartmentID *string `json:"primary_department_id,omitempty"`
 }
 type ActorPage struct {
 	Actors      []Actor `json:"actors"`
@@ -276,12 +280,26 @@ func (s *Service) ListActors(ctx context.Context, user identity.User, query, aft
 	if limit < 1 || limit > 100 {
 		return ActorPage{}, fmt.Errorf("%w: limit must be between 1 and 100", ErrInvalid)
 	}
+	// For people, q also matches the name of the person's position and of
+	// any of their departments (primary or additional), and the result
+	// carries both. Agents do not see the org structure (phase 6.5): for an
+	// agent caller neither the fields nor that search exist.
+	var person bool
+	if err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM actors WHERE org_id=$1 AND id=$2 AND type='user')`, user.OrgID, user.ActorID).Scan(&person); err != nil {
+		return ActorPage{}, fmt.Errorf("read caller type: %w", err)
+	}
 	rows, err := s.pool.Query(ctx, `SELECT id,display_name,handle::text,title,about,type,
 		CASE WHEN status_expires_at IS NULL OR status_expires_at>now() THEN status_emoji ELSE '' END,
 		CASE WHEN status_expires_at IS NULL OR status_expires_at>now() THEN status_text ELSE '' END,
 		CASE WHEN status_expires_at IS NULL OR status_expires_at>now() THEN status_expires_at END,
-		avatar_version
-		FROM actors WHERE org_id=$1 AND status='active' AND deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM agents sys WHERE sys.org_id = actors.org_id AND sys.actor_id = actors.id AND sys.system_role IS NOT NULL) AND ($2='' OR display_name ILIKE '%'||$2||'%' OR handle::text ILIKE '%'||$2||'%' OR title ILIKE '%'||$2||'%') AND (NULLIF($3,'') IS NULL OR id>NULLIF($3,'')::uuid) ORDER BY id LIMIT $4`, user.OrgID, query, afterID, limit+1)
+		avatar_version, CASE WHEN $5::boolean THEN position_id END,
+		CASE WHEN $5 THEN (SELECT dm.department_id FROM department_members dm WHERE dm.org_id = actors.org_id AND dm.actor_id = actors.id AND dm.is_primary) END
+		FROM actors WHERE org_id=$1 AND status='active' AND deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM agents sys WHERE sys.org_id = actors.org_id AND sys.actor_id = actors.id AND sys.system_role IS NOT NULL)
+		  AND ($2='' OR display_name ILIKE '%'||$2||'%' OR handle::text ILIKE '%'||$2||'%' OR title ILIKE '%'||$2||'%'
+		    OR $5 AND EXISTS (SELECT 1 FROM positions p WHERE p.org_id = actors.org_id AND p.id = actors.position_id AND p.name ILIKE '%'||$2||'%')
+		    OR $5 AND EXISTS (SELECT 1 FROM department_members dm JOIN departments d ON d.org_id = dm.org_id AND d.id = dm.department_id
+		      WHERE dm.org_id = actors.org_id AND dm.actor_id = actors.id AND d.name ILIKE '%'||$2||'%'))
+		  AND (NULLIF($3,'') IS NULL OR id>NULLIF($3,'')::uuid) ORDER BY id LIMIT $4`, user.OrgID, query, afterID, limit+1, person)
 	if err != nil {
 		return ActorPage{}, fmt.Errorf("list actors: %w", err)
 	}
@@ -289,7 +307,7 @@ func (s *Service) ListActors(ctx context.Context, user identity.User, query, aft
 	result := ActorPage{Actors: make([]Actor, 0, limit)}
 	for rows.Next() {
 		var actor Actor
-		if err := rows.Scan(&actor.ID, &actor.DisplayName, &actor.Handle, &actor.Title, &actor.About, &actor.Type, &actor.StatusEmoji, &actor.StatusText, &actor.StatusExpiresAt, &actor.AvatarVersion); err != nil {
+		if err := rows.Scan(&actor.ID, &actor.DisplayName, &actor.Handle, &actor.Title, &actor.About, &actor.Type, &actor.StatusEmoji, &actor.StatusText, &actor.StatusExpiresAt, &actor.AvatarVersion, &actor.PositionID, &actor.PrimaryDepartmentID); err != nil {
 			return ActorPage{}, err
 		}
 		result.Actors = append(result.Actors, actor)
@@ -328,6 +346,21 @@ func (s *Service) Discover(ctx context.Context, user identity.User) ([]Directory
 }
 
 func (s *Service) Create(ctx context.Context, user identity.User, input CreateInput) (Chat, error) {
+	return s.CreateWithin(ctx, user, input, nil, nil)
+}
+
+// CreateWithin creates a group or channel like Create. adminIDs among the
+// members get the chat administrator role. within, when set, runs in the
+// creating transaction after the organization lock and the member rows, so a
+// caller (the department chat of the org structure) links the chat and
+// writes its own audit and events atomically with the chat; an error from it
+// rolls everything back. Direct chats cannot be created this way.
+func (s *Service) CreateWithin(ctx context.Context, user identity.User, input CreateInput, adminIDs []string, within func(context.Context, pgx.Tx, string) error) (Chat, error) {
+	if within != nil || len(adminIDs) > 0 {
+		if kind := strings.ToLower(strings.TrimSpace(input.Kind)); kind != "group" && kind != "channel" {
+			return Chat{}, fmt.Errorf("%w: only groups and channels take administrators", ErrInvalid)
+		}
+	}
 	input.Kind = strings.ToLower(strings.TrimSpace(input.Kind))
 	input.Visibility = strings.ToLower(strings.TrimSpace(input.Visibility))
 	input.Name = strings.TrimSpace(input.Name)
@@ -402,6 +435,14 @@ func (s *Service) Create(ctx context.Context, user identity.User, input CreateIn
 			return Chat{}, fmt.Errorf("%w: member does not exist", ErrInvalid)
 		}
 	}
+	for _, actorID := range adminIDs {
+		if actorID == user.ActorID {
+			continue
+		}
+		if _, err := tx.Exec(ctx, `UPDATE chat_members SET role = 'admin' WHERE chat_id = $1 AND actor_id = $2 AND org_id = $3`, chatID, actorID, user.OrgID); err != nil {
+			return Chat{}, fmt.Errorf("set chat administrator: %w", err)
+		}
+	}
 	_, err = tx.Exec(ctx, `
 		INSERT INTO audit_log (id, org_id, actor_id, action, target_type, target_id, metadata)
 		VALUES ($1, $2, $3, 'chat.create', 'chat', $4, jsonb_build_object('kind', $5::text))`,
@@ -412,6 +453,15 @@ func (s *Service) Create(ctx context.Context, user identity.User, input CreateIn
 	seq, err := appendDurableEvent(ctx, tx, user, chatID, "chat.created", nil, map[string]any{"chat_id": chatID, "kind": input.Kind})
 	if err != nil {
 		return Chat{}, err
+	}
+	if within != nil {
+		if err := within(ctx, tx, chatID); err != nil {
+			return Chat{}, err
+		}
+		// within may have appended events after chat.created.
+		if err := tx.QueryRow(ctx, `SELECT event_seq FROM organizations WHERE id = $1`, user.OrgID).Scan(&seq); err != nil {
+			return Chat{}, fmt.Errorf("read event sequence: %w", err)
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return Chat{}, fmt.Errorf("commit chat creation: %w", err)
@@ -717,6 +767,93 @@ func (s *Service) AddMember(ctx context.Context, user identity.User, chatID stri
 	}
 	s.notify(user.OrgID, seq)
 	return s.member(ctx, chatID, input.ActorID)
+}
+
+// AddMembersResolved adds several people as ordinary members in one
+// transaction, each with the usual member.joined event and audit entry. The
+// caller must be an owner or administrator of the group or channel (a
+// moderator who is not a member is refused). resolve runs inside the
+// transaction after the organization lock and returns who to add, so the list
+// is computed from the same state the insert sees; then may write more in the
+// same transaction. Only active people are added, members already in the chat
+// are skipped. It returns the ids added.
+func (s *Service) AddMembersResolved(ctx context.Context, user identity.User, chatID string, resolve func(context.Context, pgx.Tx) ([]string, error), then func(context.Context, pgx.Tx, []string) error) ([]string, error) {
+	kind, role, err := s.managementContext(ctx, user, chatID)
+	if err != nil {
+		return nil, err
+	}
+	if role == "" {
+		return nil, ErrForbidden
+	}
+	if kind == "direct" || !canManageContext(kind, role, false) {
+		return nil, ErrForbidden
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	if err := lockOrganization(ctx, tx, user.OrgID); err != nil {
+		return nil, err
+	}
+	var manager bool
+	if err := tx.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM chat_members manager JOIN chats c ON c.org_id = manager.org_id AND c.id = manager.chat_id
+			WHERE manager.org_id = $1 AND manager.chat_id = $2 AND manager.actor_id = $3 AND manager.role IN ('owner', 'admin')
+			  AND c.kind IN ('group', 'channel') AND c.archived_at IS NULL
+		)`, user.OrgID, chatID, user.ActorID).Scan(&manager); err != nil {
+		return nil, fmt.Errorf("check chat manager: %w", err)
+	}
+	if !manager {
+		return nil, ErrForbidden
+	}
+	candidates, err := resolve(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	added := make([]string, 0, len(candidates))
+	seq := int64(0)
+	for _, actorID := range candidates {
+		command, err := tx.Exec(ctx, `
+			INSERT INTO chat_members (chat_id, actor_id, org_id, role)
+			SELECT $1, target.id, target.org_id, 'member' FROM actors target
+			WHERE target.id = $2 AND target.org_id = $3 AND target.type = 'user'
+			  AND target.status = 'active' AND target.deleted_at IS NULL
+			ON CONFLICT (chat_id, actor_id) DO NOTHING`, chatID, actorID, user.OrgID)
+		if err != nil {
+			return nil, fmt.Errorf("add chat member: %w", err)
+		}
+		if command.RowsAffected() != 1 {
+			continue
+		}
+		auditID, err := id.New()
+		if err != nil {
+			return nil, err
+		}
+		if err := audit(ctx, tx, auditID, user, "chat.member.add", "actor", actorID); err != nil {
+			return nil, err
+		}
+		if seq, err = appendDurableEvent(ctx, tx, user, chatID, "member.joined", nil, map[string]any{"actor_id": actorID, "role": "member"}); err != nil {
+			return nil, err
+		}
+		added = append(added, actorID)
+	}
+	if then != nil {
+		if err := then(ctx, tx, added); err != nil {
+			return nil, err
+		}
+		if err := tx.QueryRow(ctx, `SELECT event_seq FROM organizations WHERE id = $1`, user.OrgID).Scan(&seq); err != nil {
+			return nil, fmt.Errorf("read event sequence: %w", err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit chat member additions: %w", err)
+	}
+	if seq > 0 {
+		s.notify(user.OrgID, seq)
+	}
+	return added, nil
 }
 
 func (s *Service) UpdateMember(ctx context.Context, user identity.User, chatID, actorID string, input UpdateMemberInput) (Member, error) {

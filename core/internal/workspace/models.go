@@ -163,6 +163,9 @@ type Member struct {
 	StatusText      string            `json:"status_text"`
 	StatusExpiresAt *time.Time        `json:"status_expires_at"`
 	AvatarVersion   int64             `json:"avatar_version"`
+	// The org structure assignment (phase 6.5), left out without one.
+	PositionID          *string `json:"position_id,omitempty"`
+	PrimaryDepartmentID *string `json:"primary_department_id,omitempty"`
 }
 
 type UpdateMemberInput struct {

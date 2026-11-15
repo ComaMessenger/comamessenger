@@ -57,6 +57,10 @@ func NewService(repository *Repository, encryptionSecret string, tester Connecti
 	return &Service{repository: repository, aead: aead, tester: tester, now: time.Now}, nil
 }
 
+// SetAfterCommit wakes realtime delivery after a member update appended an
+// event (org.updated when a person in the org structure changes status).
+func (s *Service) SetAfterCommit(callback func(string, int64)) { s.repository.SetAfterCommit(callback) }
+
 func (s *Service) Settings(ctx context.Context, current identity.User) (Settings, error) {
 	return s.repository.Settings(ctx, current.OrgID)
 }
@@ -357,7 +361,17 @@ func (s *Service) UpdateMember(ctx context.Context, current identity.User, actor
 			return Member{}, ErrForbidden
 		}
 	}
-	return s.repository.UpdateMember(ctx, current.OrgID, current.ActorID, actorID, input)
+	var authorize func(stored []permission.Code, currentRole string, previous []permission.Code) bool
+	if input.Permissions != nil {
+		next := *input.Permissions
+		authorize = func(stored []permission.Code, currentRole string, previous []permission.Code) bool {
+			// The role and permissions stored now, not the session's.
+			holder := current
+			holder.OrgRole, holder.Permissions = currentRole, stored
+			return mayChangeMemberPermissions(holder, previous, next)
+		}
+	}
+	return s.repository.UpdateMember(ctx, current.OrgID, current.ActorID, actorID, input, authorize)
 }
 
 func (s *Service) RequirePasswordChange(ctx context.Context, current identity.User, actorID string) ([]string, error) {
@@ -458,21 +472,49 @@ func validateIntegrations(value integrationSecrets) error {
 	return nil
 }
 
-// canDelegateMemberPermissions lets an administrator who manages members grant
-// or revoke the permissions a regular member may hold (knowledge.manage), as
-// long as the administrator holds every such permission personally. It never
-// covers the administrator's own account or a role change, and the repository
-// additionally refuses targets that are not regular members, so administrator
-// permissions remain an owner decision.
+// canDelegateMemberPermissions is the request-level half of decision 15 of
+// phase 6.5: an administrator who manages members may change the permissions
+// of a regular member, never their own, never together with a role change and
+// only within the codes a member may hold. Which codes actually change is
+// checked against the stored set inside the write transaction
+// (mayChangeMemberPermissions); the repository additionally refuses targets
+// that are not regular members, so administrator permissions remain an owner
+// decision.
 func canDelegateMemberPermissions(current identity.User, targetActorID string, input UpdateMemberInput) bool {
 	if current.OrgRole != "admin" || targetActorID == current.ActorID || input.Role != nil || input.Permissions == nil {
 		return false
 	}
-	if !memberGrantable(*input.Permissions) {
+	return allows(current, permission.MembersManage) && memberGrantable(*input.Permissions)
+}
+
+// mayChangeMemberPermissions compares the stored and requested permissions of
+// a member code by code: every code that is switched on or off must be one the
+// administrator holds personally. Codes left as they are need nothing, so an
+// administrator without requests.address_groups may still grant
+// knowledge.manage to a member who has requests.address_groups from the owner,
+// but may neither grant nor revoke requests.address_groups.
+func mayChangeMemberPermissions(current identity.User, previous, next []permission.Code) bool {
+	if current.OrgRole == "owner" {
+		return true
+	}
+	if current.OrgRole != "admin" || !allows(current, permission.MembersManage) {
 		return false
 	}
-	for _, code := range permission.All() {
-		if permission.MemberGrantable(code) && !allows(current, code) {
+	before := make(map[permission.Code]bool, len(previous))
+	for _, code := range previous {
+		before[code] = true
+	}
+	after := make(map[permission.Code]bool, len(next))
+	for _, code := range next {
+		after[code] = true
+	}
+	for code := range before {
+		if !after[code] && !allows(current, code) {
+			return false
+		}
+	}
+	for code := range after {
+		if !before[code] && (!permission.MemberGrantable(code) || !allows(current, code)) {
 			return false
 		}
 	}

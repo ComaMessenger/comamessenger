@@ -140,7 +140,7 @@ func TestSecurityEventsStopPendingMessages(t *testing.T) {
 		}},
 		{"deactivation", ReasonAuthorInactive, func(t *testing.T, w *world) {
 			status := "deactivated"
-			if _, err := workspace.NewRepository(w.pool).UpdateMember(ctx, w.orgID, w.owner.User.ActorID, w.author.User.ActorID, workspace.UpdateMemberInput{Status: &status}); err != nil {
+			if _, err := workspace.NewRepository(w.pool).UpdateMember(ctx, w.orgID, w.owner.User.ActorID, w.author.User.ActorID, workspace.UpdateMemberInput{Status: &status}, nil); err != nil {
 				t.Fatal(err)
 			}
 		}},
@@ -291,7 +291,7 @@ func TestDeactivationThenReactivationStillStops(t *testing.T) {
 	item := w.create(t, w.groupID, w.input("before"))
 	repo := workspace.NewRepository(w.pool)
 	for _, status := range []string{"deactivated", "active"} {
-		if _, err := repo.UpdateMember(ctx, w.orgID, w.owner.User.ActorID, w.author.User.ActorID, workspace.UpdateMemberInput{Status: &status}); err != nil {
+		if _, err := repo.UpdateMember(ctx, w.orgID, w.owner.User.ActorID, w.author.User.ActorID, workspace.UpdateMemberInput{Status: &status}, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -389,7 +389,7 @@ func TestSecurityEventRacesDelivery(t *testing.T) {
 		repo := workspace.NewRepository(w.pool)
 		rounds(t, w, func() error {
 			for _, status := range []string{"deactivated", "active"} {
-				if _, err := repo.UpdateMember(ctx, w.orgID, w.owner.User.ActorID, w.author.User.ActorID, workspace.UpdateMemberInput{Status: &status}); err != nil {
+				if _, err := repo.UpdateMember(ctx, w.orgID, w.owner.User.ActorID, w.author.User.ActorID, workspace.UpdateMemberInput{Status: &status}, nil); err != nil {
 					return err
 				}
 			}

@@ -178,7 +178,7 @@ func TestEventSequenceUnderMixedLoad(t *testing.T) {
 		if i%2 == 1 {
 			status = "active"
 		}
-		_, err := members.UpdateMember(ctx, w.orgID, w.owner.User.ActorID, w.other.User.ActorID, workspace.UpdateMemberInput{Status: &status})
+		_, err := members.UpdateMember(ctx, w.orgID, w.owner.User.ActorID, w.other.User.ActorID, workspace.UpdateMemberInput{Status: &status}, nil)
 		return err
 	})
 	l.worker("revoke-device", func(int) error {
@@ -309,7 +309,7 @@ func TestDraftsDoNotDeadlockWithDeactivation(t *testing.T) {
 		if i%2 == 1 {
 			status = "active"
 		}
-		_, err := members.UpdateMember(ctx, w.orgID, w.owner.User.ActorID, w.other.User.ActorID, workspace.UpdateMemberInput{Status: &status})
+		_, err := members.UpdateMember(ctx, w.orgID, w.owner.User.ActorID, w.other.User.ActorID, workspace.UpdateMemberInput{Status: &status}, nil)
 		return err
 	})
 	l.run(3 * time.Second)
