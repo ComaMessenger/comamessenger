@@ -91,6 +91,11 @@ export async function clearUserData(): Promise<void> {
     await tx.runAsync(
       "DELETE FROM meta WHERE key LIKE 'request_draft:%' OR key IN ('request_outbox', 'reminder_actions', 'important_tab')",
     );
+    // Phase 6.7: poll drafts and queue, the device's memory of anonymous
+    // choices.
+    await tx.runAsync(
+      "DELETE FROM meta WHERE key LIKE 'poll_draft:%' OR key LIKE 'coma.poll.anon.%' OR key = 'poll_outbox'",
+    );
   });
 }
 

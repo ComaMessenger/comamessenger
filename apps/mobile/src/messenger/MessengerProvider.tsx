@@ -35,11 +35,7 @@ import {
 import { setLocale } from "@/i18n";
 import { applyThemePreference } from "@/lib/theme";
 import { createAppStore } from "./appStore";
-import {
-  cacheStorage,
-  checkpointStorage,
-  outboxStorage,
-} from "@/lib/database";
+import { cacheStorage, checkpointStorage, outboxStorage } from "@/lib/database";
 import { hydrateDrafts } from "@/lib/drafts";
 import { reactionsKey } from "@/conversation/reactions";
 import { invalidateChatDetails } from "@/chatinfo/queries";
@@ -51,6 +47,9 @@ import { cacheShell, cachedShell, persistMessages } from "./cache";
 import { flushRequestOutbox } from "@/requests/outbox";
 import { flushTaskOutbox } from "@/tasks/outbox";
 import { applyTaskEvent } from "@/tasks/realtime";
+import { flushPollOutbox } from "@/polls/outbox";
+import { applyPollEvent } from "@/polls/realtime";
+import { applyAwayEvent } from "@/status/realtime";
 import { flushReminderActions } from "@/reminders/pushActions";
 import { useSession, useSignedIn } from "@/session/SessionProvider";
 
@@ -93,7 +92,7 @@ export function useMessenger(): MessengerValue {
 export function MessengerProvider({ children }: { children: ReactNode }) {
   const { api, user } = useSignedIn();
   const { sessionExpired, updateUser } = useSession();
-  const store = useMemo(() => createAppStore(api), [api]);
+  const store = useMemo(() => createAppStore(api, user.id), [api, user.id]);
   // Request-lived data (members, reactions, thread pages); event-lived state
   // stays in the domain store, as on the web (ADR-0009).
   const queryClient = useMemo(
@@ -237,6 +236,22 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
                   ],
                 });
             }
+            // Polls (phase 6.7): «Ждут вас» and «Кто голосовал»; the cards
+            // follow the store. «Отсутствую»: «Вы замещаете …», «Люди» and
+            // the own status when it changed elsewhere or started by itself.
+            if (applied) {
+              applyPollEvent(queryClient, user.id, event);
+              applyAwayEvent(
+                queryClient,
+                user.id,
+                event,
+                () =>
+                  void api
+                    .me()
+                    .then(updateUser)
+                    .catch(() => undefined),
+              );
+            }
             // Scheduled messages reach only the author's devices and carry
             // no text; the cached list fetches what changed.
             if (
@@ -287,6 +302,10 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
             });
             // Lost org.updated events: the structure is read again.
             void queryClient.invalidateQueries({ queryKey: orgKeys.all });
+            void queryClient.invalidateQueries({ queryKey: ["away", user.id] });
+            void queryClient.invalidateQueries({
+              queryKey: ["polls", user.id],
+            });
             await reload();
             if (active) {
               const page = await api.messages(active, { limit: 50 });
@@ -469,10 +488,11 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
     coordinator.presence("active");
     coordinator.start();
     void outbox.flush();
-    // Requests sent offline and reminder buttons pressed in a push while the
+    // Requests and polls sent offline and reminder buttons pressed in a push while the
     // app could not reach the server go now.
     void flushRequestOutbox(api, store).catch(() => undefined);
     void flushTaskOutbox(api, store).catch(() => undefined);
+    void flushPollOutbox(api, store).catch(() => undefined);
     void flushReminderActions(api, queryClient, user.id).catch(() => undefined);
     return () => {
       // Signed out: the next account brings its own theme.
@@ -510,6 +530,7 @@ export function MessengerProvider({ children }: { children: ReactNode }) {
         void outbox.flush();
         void flushRequestOutbox(api, store).catch(() => undefined);
         void flushTaskOutbox(api, store).catch(() => undefined);
+        void flushPollOutbox(api, store).catch(() => undefined);
         void flushReminderActions(api, queryClient, user.id).catch(
           () => undefined,
         );

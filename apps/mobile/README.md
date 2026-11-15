@@ -74,6 +74,8 @@ The org structure flows (phase 6.5 wave 2) rebuild their departments, positions 
 
 Tasks and the slot under the chat header (phase 6.6) seed their chat «Инструкторы · задачи» first: `node e2e/seed-tasks.mjs && maestro test -e THEME=light e2e/task-create.yaml` (also `task-assignee.yaml`, `task-from-message.yaml`); `task-queue.yaml` runs after `node e2e/seed-org.mjs` (a task for the department «Зал ЛФК», Олег takes it); `chat-slot.yaml` runs after `SLOT_ONLY=1 node e2e/seed-tasks.mjs` (pinned and scheduled only). Against another instance pass `COMA_API=http://localhost:<port>` to the seeds and `-e SERVER=localhost:<port>` to the flows; `sign-in.yaml` keeps its own `SERVER` default, so edit it in a copy.
 
+Polls and «Отсутствую» (phase 6.7) seed their data before every run: `node e2e/seed-polls.mjs && maestro test -e THEME=light e2e/poll.yaml` (the author in «Опросы · планёрка»; again `seed-polls.mjs` before `poll-voter.yaml`, Анна's polls in «Опросы · зал» and «Ждут вас → Опросы»); `node e2e/seed-away.mjs && maestro test -e THEME=light e2e/away.yaml` (the sheet «Статус» and «Ещё»), again `seed-away.mjs` before `away-peer.yaml` (Анна away: the header, the slot, the auto-reply, the @ hint, «Люди → Отсутствуют»). The flows run in the light theme; for dark screenshots set the account theme to «Как в системе» and `xcrun simctl ui booted appearance dark`.
+
 Maestro needs a JDK; the one bundled with Android Studio works: `export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"`.
 
 ## Checks

@@ -58,14 +58,21 @@ class NotificationService: UNNotificationServiceExtension {
   /// core/internal/push/scheduled.go: scheduledFailedTag and its URL.
   private static let scheduledFailedTag = "scheduled-failed"
   private static let scheduledRoute = "/scheduled"
+  /// core/internal/push/away.go: the push «Вы замещаете …» opens the person.
+  private static let peopleRoute = "/people/"
   /// apps/mobile/src/reminders/actionQueue.ts: reminderCategory.
   private static let reminderCategory = "coma.reminder"
 
   /// The in-app addresses a push may open, as in apps/mobile/src/push/codec.ts:
   /// a chat (a thread, or a message with `?message=` and `&reminder=`), the
-  /// scheduled list and «Важные» (`/important?tab=…`).
+  /// scheduled list, «Важные» (`/important?tab=…`) and the card of a person
+  /// (`/people/<uuid>`: «Вы замещаете …»).
   static func allowedRoute(_ url: String) -> Bool {
     if url.hasPrefix("/chat/") || url == scheduledRoute { return true }
+    if url.hasPrefix(peopleRoute) {
+      let id = url.dropFirst(peopleRoute.count)
+      return id.count == 36 && UUID(uuidString: String(id)) != nil
+    }
     return ["/important", "/important?tab=waiting", "/important?tab=saved", "/important?tab=reminders"]
       .contains(url)
   }

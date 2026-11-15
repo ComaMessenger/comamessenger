@@ -45,6 +45,7 @@ import { useThreadPreview } from "./useThreadPreview";
 import { replySwipeProps } from "./replySwipe";
 import { RequestCard } from "@/requests/RequestCard";
 import { TaskCard } from "@/tasks/TaskCard";
+import { PollMessage } from "@/polls/PollMessage";
 
 const avatarSize = 30;
 
@@ -161,7 +162,13 @@ export function MessageBubble({
   // A task («Задача») is a card too; its body is the server's text copy
   // for search and old clients, the card draws the task instead.
   const task = message.task && !message.deleted_at ? message.task : null;
-  const ownColors = own && !request && !task;
+  // A poll («Опрос», phase 6.7) is a card too; its question and options are
+  // the card, not the body the server writes for older clients.
+  const poll = message.poll && !message.deleted_at ? message.poll : null;
+  // An auto-reply of someone away: a muted dashed bubble with «АВТООТВЕТ»
+  // next to the name, even in a direct chat (prototype «Отсутствую», B).
+  const autoReply = message.auto_reply === true && !message.deleted_at;
+  const ownColors = own && !request && !task && !poll && !autoReply;
   const name =
     author?.display_name ?? (own ? t("previewYou") : t("participant"));
   const agent = author?.type === "agent";
@@ -192,6 +199,7 @@ export function MessageBubble({
     Boolean(blocks) ||
     Boolean(request) ||
     Boolean(task) ||
+    Boolean(poll) ||
     (files.length > 0 && !voiceOnly && !sizedByMedia);
   const photosOnly =
     images.length > 0 &&
@@ -202,7 +210,11 @@ export function MessageBubble({
   const hasThread = showThread && message.thread_reply_count > 0 && !deleted;
   const muted = ownColors ? theme.ownMuted : theme.muted;
   const accent = ownColors ? theme.onOwn : theme.primary;
-  const background = ownColors ? theme.own : theme.surface;
+  const background = ownColors
+    ? theme.own
+    : autoReply
+      ? theme.canvas
+      : theme.surface;
   const nameColor = agent
     ? theme.primary
     : avatarColors(theme, message.actor_id).foreground;
@@ -247,7 +259,7 @@ export function MessageBubble({
         marks.includes("pin") ? t("pinnedMark") : null,
         marks.includes("star") ? t("savedMark") : null,
         reminded ? t("remindedMark") : null,
-        message.edited_at && !deleted ? t("edited") : null,
+        message.edited_at && !deleted && !poll ? t("edited") : null,
         time,
         status?.label,
       ]
@@ -262,7 +274,7 @@ export function MessageBubble({
       {reminded && !deleted ? (
         <Bell size={12} color={ownColors ? theme.onOwn : theme.primary} />
       ) : null}
-      {message.edited_at && !deleted ? (
+      {message.edited_at && !deleted && !poll ? (
         <Text size={11} style={{ color: muted }}>
           {request ? t("requestEdited") : t("edited")}
         </Text>
@@ -324,7 +336,7 @@ export function MessageBubble({
         onNotice={onNotice}
       />
     );
-  else if (!blocks?.card && message.body.trim())
+  else if (!blocks?.card && !poll && message.body.trim())
     body = <Markdown source={message.body} own={ownColors} />;
 
   const bubble = (
@@ -341,11 +353,14 @@ export function MessageBubble({
             ? theme.primary
             : ownColors
               ? "transparent"
-              : theme.border,
+              : autoReply
+                ? theme.borderStrong
+                : theme.border,
         },
+        autoReply && !highlighted && styles.dashed,
       ]}
     >
-      {placement.showName && (
+      {(placement.showName || autoReply) && (
         <View style={styles.name}>
           <Text
             weight="semibold"
@@ -364,6 +379,23 @@ export function MessageBubble({
                 style={styles.tagText}
               >
                 {t("agentTag")}
+              </Text>
+            </View>
+          )}
+          {autoReply && (
+            <View
+              testID="auto-reply-tag"
+              accessible
+              accessibilityLabel={t("autoReplyLabel")}
+              style={[styles.tag, { backgroundColor: theme.surfaceSelected }]}
+            >
+              <Text
+                weight="bold"
+                size={10.5}
+                tone="muted"
+                style={styles.autoTag}
+              >
+                {t("autoReplyTag")}
               </Text>
             </View>
           )}
@@ -411,6 +443,14 @@ export function MessageBubble({
         <RequestCard
           message={message}
           part="body"
+          preview={preview}
+          onNotice={onNotice}
+        />
+      ) : null}
+      {poll ? (
+        <PollMessage
+          message={{ ...message, poll }}
+          members={members}
           preview={preview}
           onNotice={onNotice}
         />
@@ -683,6 +723,8 @@ const styles = StyleSheet.create({
   shrink: { flexShrink: 1 },
   tag: { borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1 },
   tagText: { letterSpacing: 0.2, textTransform: "uppercase" },
+  autoTag: { letterSpacing: 0.4 },
+  dashed: { borderStyle: "dashed" },
   inline: { flexDirection: "row", alignItems: "center", gap: spacing[1] },
   quote: { borderLeftWidth: 3, paddingLeft: spacing[2], paddingVertical: 1 },
   italic: { fontStyle: "italic" },

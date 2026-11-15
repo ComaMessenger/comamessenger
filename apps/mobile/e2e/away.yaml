@@ -1,0 +1,154 @@
+# «Отсутствую» and «Свой статус» (phase 6.7): «Ещё → Статус», a vacation
+# with the auto-reply, «Вместо меня» chosen from everyone and muted
+# notifications; the status row and «Уведомления: выкл. до …»; «Вы
+# замещаете Олега …» opens his card; «Свой статус» meanwhile, «Снять» brings
+# it back. Run after sign-in.yaml:
+#   node e2e/seed-away.mjs && maestro test -e THEME=light e2e/away.yaml
+appId: com.comamessenger.app
+---
+- runFlow: open-app.yaml
+- tapOn:
+    id: tab-more
+- extendedWaitUntil:
+    visible:
+      id: more-status
+    timeout: 10000
+- assertVisible: Установить статус
+- takeScreenshot: ${THEME}-away-more-empty
+
+# 1. The sheet: a vacation for two weeks.
+- tapOn:
+    id: more-status
+- extendedWaitUntil:
+    visible:
+      id: away-form
+    timeout: 10000
+- tapOn:
+    id: away-kind-vacation
+- tapOn:
+    id: away-until-twoWeeks
+- assertVisible:
+    id: away-autoreply-preview
+- takeScreenshot: ${THEME}-away-sheet
+
+# 2. «Вместо меня» → «Выбрать…» → Марина.
+- scrollUntilVisible:
+    element:
+      id: away-substitute-choose
+    direction: DOWN
+- tapOn:
+    id: away-substitute-choose
+- extendedWaitUntil:
+    visible:
+      id: away-substitute-picker
+    timeout: 5000
+- tapOn:
+    id: away-substitute-search
+- inputText: Марина
+- extendedWaitUntil:
+    visible:
+      id: away-substitute-row-0
+    timeout: 10000
+- tapOn:
+    id: away-substitute-row-0
+- extendedWaitUntil:
+    visible:
+      id: away-form
+    timeout: 5000
+- assertVisible: .*По срочным вопросам — к Марине Соколовой.*
+- scrollUntilVisible:
+    element:
+      id: away-save
+    direction: DOWN
+    visibilityPercentage: 100
+- takeScreenshot: ${THEME}-away-sheet-substitute
+- tapOn:
+    id: away-save
+- extendedWaitUntil:
+    notVisible:
+      id: status-sheet
+    timeout: 10000
+
+# 3. «Ещё»: the status row, the badge, muted notifications.
+- extendedWaitUntil:
+    visible: .*В отпуске до.*
+    timeout: 10000
+- assertVisible: ".*Автоответ включён · вместо меня: Марина.*"
+- assertVisible:
+    id: more-away-badge
+- assertVisible: .*выкл\. до.*
+- takeScreenshot: ${THEME}-away-more
+
+# 4. «Вы замещаете Олега …» (seed-away.mjs) opens his card.
+- assertVisible: .*Вы замещаете Олега.*
+- tapOn:
+    id: more-substituting-0
+- extendedWaitUntil:
+    visible:
+      id: person-away
+    timeout: 10000
+- assertVisible: .*На выезде до.*
+- takeScreenshot: ${THEME}-away-substituting-card
+- tapOn:
+    id: person-back
+
+# 5. «Свой статус» while away: saved, the away status still shows.
+- tapOn:
+    id: more-status
+- extendedWaitUntil:
+    visible:
+      id: status-sheet
+    timeout: 5000
+- tapOn:
+    id: status-tab-custom
+- tapOn:
+    id: status-preset-statusPresetMeeting
+- takeScreenshot: ${THEME}-away-custom-sheet
+- scrollUntilVisible:
+    element:
+      id: status-save
+    direction: DOWN
+    visibilityPercentage: 100
+- tapOn:
+    id: status-save
+- extendedWaitUntil:
+    notVisible:
+      id: status-sheet
+    timeout: 10000
+- assertVisible: .*В отпуске до.*
+
+# 6. «Снять»: the custom status comes back.
+- tapOn:
+    id: more-status
+- extendedWaitUntil:
+    visible:
+      id: away-form
+    timeout: 10000
+- tapOn:
+    id: status-sheet-action
+- extendedWaitUntil:
+    notVisible:
+      id: status-sheet
+    timeout: 10000
+- extendedWaitUntil:
+    visible: На встрече
+    timeout: 10000
+- assertNotVisible:
+    id: more-away-badge
+- takeScreenshot: ${THEME}-away-cleared
+
+# 7. Clean up: «Очистить» the custom status.
+- tapOn:
+    id: more-status
+- tapOn:
+    id: status-tab-custom
+- scrollUntilVisible:
+    element:
+      id: status-clear
+    direction: DOWN
+    visibilityPercentage: 100
+- tapOn:
+    id: status-clear
+- extendedWaitUntil:
+    visible: Установить статус
+    timeout: 10000

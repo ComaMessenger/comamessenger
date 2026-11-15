@@ -21,9 +21,21 @@ appId: com.comamessenger.app
       visible:
         id: people-filter-online
     commands:
+      # «На месте» and «Отсутствуют» (phase 6.7) push the kinds to the right.
+      - swipe:
+          from:
+            id: people-filter-online
+          direction: LEFT
+          duration: 500
       - tapOn:
           id: people-filter-agents
       - takeScreenshot: people-agents
+      # Back to the start of the chips row.
+      - swipe:
+          start: 15%, 21%
+          end: 95%, 21%
+          duration: 400
+      - waitForAnimationToEnd
       - tapOn:
           id: people-filter-all
 - runFlow:

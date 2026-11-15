@@ -11,11 +11,19 @@ import { router } from "expo-router";
 import { ListFilter, UserPlus } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import {
+  awayPresenceFilterLabelKeys,
+  awayPresenceFilters,
   departmentPath,
+  matchesAwayPresence,
   personOrg,
   personOrgLine,
+  type AwayPresenceFilter,
   type PeopleFilter,
 } from "@comamessenger/core";
+import { useStore } from "zustand";
+import { useMessenger } from "@/messenger/MessengerProvider";
+import { useAwayNow, useAwayOverrides } from "@/status/useAway";
+import { PresencePeople } from "./PresencePeople";
 import { spacing } from "@comamessenger/tokens";
 import { useTheme } from "@/lib/theme";
 import { useSignedIn } from "@/session/SessionProvider";
@@ -48,6 +56,35 @@ export function PeopleScreen() {
   const [department, setDepartment] = useState<string | null | undefined>();
   const [menu, setMenu] = useState(false);
   const everyone = useAllPeople();
+  // «Все · На месте · Отсутствуют» (phase 6.7 decision 14), on servers
+  // with actor_away.
+  const { store } = useMessenger();
+  const features = useStore(store, (state) => state.features);
+  const presenceFilters = awayPresenceFilters(features);
+  const [presenceFilter, setPresenceFilter] =
+    useState<AwayPresenceFilter>("all");
+  const overrides = useAwayOverrides();
+  const awayNow = useAwayNow();
+  const presenceCounts = useMemo(() => {
+    const humans = everyone.people.filter(
+      (person) => person.type === "user" && person.actor_id !== user.id,
+    );
+    const away = humans.filter((person) =>
+      matchesAwayPresence(
+        {
+          ...person,
+          away:
+            person.actor_id in overrides
+              ? overrides[person.actor_id]
+              : person.away,
+        },
+        "away",
+        awayNow,
+      ),
+    ).length;
+    return { all: humans.length, away, here: humans.length - away };
+  }, [awayNow, everyone.people, overrides, user.id]);
+  const byPresence = presenceFilters.length > 0 && presenceFilter !== "all";
   const directory = usePeople({
     query,
     filter: grouped
@@ -170,7 +207,9 @@ export function PeopleScreen() {
               ) : null}
             </ScrollView>
           ) : null}
-          {query.trim() ? (
+          {byPresence ? (
+            <PresencePeople filter={presenceFilter} structure={structure} />
+          ) : query.trim() ? (
             <FlatList
               testID="people-list"
               data={directory.people}
@@ -243,28 +282,45 @@ export function PeopleScreen() {
             title={t("orgPeopleFilters")}
             testID="people-menu-sheet"
             onClose={() => setMenu(false)}
-            items={(
-              [
-                ["all", t("orgFilterEveryone")],
-                ["online", t("peopleFilterOnline")],
-                ["agents", t("peopleFilterAgents")],
-              ] as const
-            ).map(([value, label]) => ({
-              key: value,
-              label,
-              meta:
-                value === "online"
-                  ? String(counts.online)
-                  : value === "agents"
-                    ? String(counts.agents)
-                    : undefined,
-              checked: view === value,
-              testID: `people-view-${value}`,
-              onPress: () => {
-                setView(value);
-                setMenu(false);
-              },
-            }))}
+            items={[
+              ...(
+                [
+                  ["all", t("orgFilterEveryone")],
+                  ["online", t("peopleFilterOnline")],
+                  ["agents", t("peopleFilterAgents")],
+                ] as const
+              ).map(([value, label]) => ({
+                key: value,
+                label,
+                meta:
+                  value === "online"
+                    ? String(counts.online)
+                    : value === "agents"
+                      ? String(counts.agents)
+                      : undefined,
+                checked: view === value && !byPresence,
+                testID: `people-view-${value}`,
+                onPress: () => {
+                  setView(value);
+                  setPresenceFilter("all");
+                  setMenu(false);
+                },
+              })),
+              ...presenceFilters
+                .filter((value) => value !== "all")
+                .map((value) => ({
+                  key: `presence-${value}`,
+                  label: t(awayPresenceFilterLabelKeys[value]),
+                  meta: String(presenceCounts[value]),
+                  checked: presenceFilter === value,
+                  testID: `people-view-${value}`,
+                  onPress: () => {
+                    setView("all");
+                    setPresenceFilter(value);
+                    setMenu(false);
+                  },
+                })),
+            ]}
           />
         </>
       ) : (
@@ -276,62 +332,105 @@ export function PeopleScreen() {
             style={styles.chipsScroll}
             contentContainerStyle={styles.chips}
           >
-            {filters.map((item) => (
-              <TabChip
-                key={item.value}
-                testID={`people-filter-${item.value}`}
-                label={item.label}
-                count={item.value === "online" ? counts.online : undefined}
-                selected={filter === item.value}
-                onPress={() => setFilter(item.value)}
-              />
-            ))}
+            {filters
+              .map((item) => (
+                <TabChip
+                  key={item.value}
+                  testID={`people-filter-${item.value}`}
+                  label={item.label}
+                  count={
+                    item.value === "online"
+                      ? counts.online
+                      : item.value === "all" && presenceFilters.length
+                        ? presenceCounts.all
+                        : undefined
+                  }
+                  selected={filter === item.value && !byPresence}
+                  onPress={() => {
+                    setFilter(item.value);
+                    setPresenceFilter("all");
+                  }}
+                />
+              ))
+              .flatMap((chip, index) =>
+                // «На месте» and «Отсутствуют» right after «Все».
+                index === 0
+                  ? [
+                      chip,
+                      ...presenceFilters
+                        .filter((value) => value !== "all")
+                        .map((value) => (
+                          <TabChip
+                            key={`presence-${value}`}
+                            testID={`people-filter-${value}`}
+                            label={t(awayPresenceFilterLabelKeys[value])}
+                            count={presenceCounts[value]}
+                            selected={presenceFilter === value}
+                            onPress={() => {
+                              setFilter("all");
+                              setPresenceFilter(value);
+                            }}
+                          />
+                        )),
+                    ]
+                  : [chip],
+              )}
           </ScrollView>
-          <FlatList
-            testID="people-list"
-            data={directory.people}
-            keyExtractor={(person) => person.actor_id}
-            keyboardDismissMode="on-drag"
-            keyboardShouldPersistTaps="handled"
-            onEndReached={directory.loadMore}
-            onEndReachedThreshold={0.5}
-            renderItem={({ item, index }) => (
-              <PersonRow
-                testID={`person-row-${index}`}
-                person={item}
-                presence={directory.presence[item.actor_id]}
-                hint={t("openProfileHint")}
-                onPress={() => router.push(`/people/${item.actor_id}`)}
-              />
-            )}
-            ListFooterComponent={
-              directory.loadingMore || directory.searching ? (
-                <ActivityIndicator style={styles.loader} color={theme.muted} />
-              ) : null
-            }
-            ListEmptyComponent={
-              directory.loading ? (
-                <ActivityIndicator style={styles.loader} color={theme.muted} />
-              ) : directory.failed ? (
-                <View style={styles.state}>
-                  <Notice
-                    title={t("peopleLoadFailed")}
-                    actionLabel={t("retry")}
-                    onAction={directory.refetch}
+          {byPresence ? (
+            <PresencePeople filter={presenceFilter} structure={null} />
+          ) : (
+            <FlatList
+              testID="people-list"
+              data={directory.people}
+              keyExtractor={(person) => person.actor_id}
+              keyboardDismissMode="on-drag"
+              keyboardShouldPersistTaps="handled"
+              onEndReached={directory.loadMore}
+              onEndReachedThreshold={0.5}
+              renderItem={({ item, index }) => (
+                <PersonRow
+                  testID={`person-row-${index}`}
+                  person={item}
+                  presence={directory.presence[item.actor_id]}
+                  hint={t("openProfileHint")}
+                  onPress={() => router.push(`/people/${item.actor_id}`)}
+                />
+              )}
+              ListFooterComponent={
+                directory.loadingMore || directory.searching ? (
+                  <ActivityIndicator
+                    style={styles.loader}
+                    color={theme.muted}
                   />
-                </View>
-              ) : directory.searching ? null : (
-                <View style={styles.state}>
-                  <Text weight="semibold" size={16} style={styles.center}>
-                    {t("peopleEmpty")}
-                  </Text>
-                  <Text tone="muted" size={14} style={styles.center}>
-                    {t("peopleEmptyHint")}
-                  </Text>
-                </View>
-              )
-            }
-          />
+                ) : null
+              }
+              ListEmptyComponent={
+                directory.loading ? (
+                  <ActivityIndicator
+                    style={styles.loader}
+                    color={theme.muted}
+                  />
+                ) : directory.failed ? (
+                  <View style={styles.state}>
+                    <Notice
+                      title={t("peopleLoadFailed")}
+                      actionLabel={t("retry")}
+                      onAction={directory.refetch}
+                    />
+                  </View>
+                ) : directory.searching ? null : (
+                  <View style={styles.state}>
+                    <Text weight="semibold" size={16} style={styles.center}>
+                      {t("peopleEmpty")}
+                    </Text>
+                    <Text tone="muted" size={14} style={styles.center}>
+                      {t("peopleEmptyHint")}
+                    </Text>
+                  </View>
+                )
+              }
+            />
+          )}
         </>
       )}
     </SafeAreaView>

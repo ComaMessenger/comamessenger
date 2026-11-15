@@ -25,6 +25,7 @@ import {
   type ChatSlot as Slot,
   type Message,
   type ScheduledMessage,
+  type SlotAway,
   type SlotItem,
   type SlotKind,
   type SlotPin,
@@ -114,7 +115,13 @@ export function useChatSlot({
   scheduled,
   scheduledLoaded,
   enabled,
+  away = null,
 }: {
+  /**
+   * «Отсутствует» (phase 6.7 decision 10): the other person of a direct chat
+   * is away, as awaySlot of @comamessenger/core builds it.
+   */
+  away?: SlotAway | null;
   chatID: string;
   messages: readonly Message[];
   viewer: TaskViewer;
@@ -158,6 +165,7 @@ export function useChatSlot({
       scheduled: scheduledLoaded
         ? scheduledSummary(scheduled, chatID)
         : undefined,
+      away,
     },
     now,
   );

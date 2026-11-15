@@ -1,5 +1,5 @@
 # The «+» sheet, variant A (phase 6.4): the attachments, «Попросить и
-# поручить» with «Запрос», no «Отложить»; a long press of «Отправить» still
+# поручить» with «Запрос» and «Опрос» (phase 6.7), no «Отложить»; a long press of «Отправить» still
 # offers «Отправить позже». Run after sign-in.yaml and seed-requests.mjs
 # (the server must announce requests):
 #   maestro test -e THEME=light e2e/composer-plus.yaml
@@ -28,11 +28,11 @@ appId: com.comamessenger.app
 - assertVisible: ПОПРОСИТЬ И ПОРУЧИТЬ
 - assertVisible:
     id: composer-action-request
-# «Задача» (phase 6.6) comes with message_tasks on the server; «Опрос» has
-# no phone screens yet.
+# «Задача» (phase 6.6) and «Опрос» (phase 6.7) come with message_tasks
+# and message_polls on the server.
 - assertVisible:
     id: composer-action-task
-- assertNotVisible:
+- assertVisible:
     id: composer-action-poll
 - assertNotVisible:
     id: composer-action-schedule

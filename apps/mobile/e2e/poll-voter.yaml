@@ -1,0 +1,99 @@
+# «Опрос» of a colleague (phase 6.7): before the vote only «N из M
+# ответили», a tap votes at once and opens the results, «Отменить голос»
+# takes it back, a vote again; the anonymous poll warns that the vote is
+# final and keeps no «Отменить голос». Run after sign-in.yaml:
+#   node e2e/seed-polls.mjs && maestro test -e THEME=light e2e/poll-voter.yaml
+appId: com.comamessenger.app
+---
+- runFlow: open-app.yaml
+
+# 0. «Важные → Ждут вас → Опросы»: the poll with a due date waits.
+- tapOn:
+    id: tab-important
+- tapOn:
+    id: important-section-waiting
+- tapOn:
+    id: waiting-filter-polls
+- extendedWaitUntil:
+    visible: .*Какой день удобнее для выездного занятия\?.*
+    timeout: 10000
+- assertVisible: .*Опрос · Анна Иванова.*
+- takeScreenshot: ${THEME}-poll-waiting
+- tapOn:
+    id: waiting-poll-waiting-0-open
+- extendedWaitUntil:
+    visible:
+      id: conversation
+    timeout: 10000
+
+# 1. The ordinary poll: Олег voted, the results stay hidden before mine.
+# Earlier runs leave deleted polls above it.
+- scrollUntilVisible:
+    element: .*Какой день удобнее для выездного занятия\?.*
+    direction: DOWN
+    timeout: 20000
+- scrollUntilVisible:
+    element: .*Неудобен вечер.*
+    direction: DOWN
+- extendedWaitUntil:
+    visible: 1 из 4 ответили
+    timeout: 10000
+- assertNotVisible: 100%
+- assertVisible: .*Анонимно · голос нельзя изменить.*
+- takeScreenshot: ${THEME}-poll-before
+
+# 2. A tap on «Среда» votes: Олег and I — 100 %.
+- tapOn: Среда
+- extendedWaitUntil:
+    visible: 100%
+    timeout: 10000
+- assertVisible: 2 из 4 ответили
+- assertVisible:
+    id: poll-retract
+- takeScreenshot: ${THEME}-poll-voted
+
+# 3. «Отменить голос», then «Вторник».
+# The vote is on its way while the buttons are disabled; the server's
+# answer adds «Кто голосовал» and the links settle.
+- extendedWaitUntil:
+    visible:
+      id: poll-who-voted
+    timeout: 10000
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: poll-retract
+      enabled: true
+    timeout: 10000
+- tapOn:
+    id: poll-retract
+- extendedWaitUntil:
+    notVisible: 100%
+    timeout: 10000
+- assertVisible: 1 из 4 ответили
+- tapOn: Вторник
+- extendedWaitUntil:
+    visible: 50%
+    timeout: 10000
+- takeScreenshot: ${THEME}-poll-revoted
+
+# 4. The anonymous poll: the vote is final.
+- tapOn: Неудобно утро
+- extendedWaitUntil:
+    notVisible: .*Анонимно · голос нельзя изменить.*
+    timeout: 10000
+- assertVisible: 100%
+- takeScreenshot: ${THEME}-poll-anonymous
+
+# 5. Voted: the poll is no longer waiting.
+- tapOn:
+    id: conversation-back
+- tapOn:
+    id: tab-important
+- tapOn:
+    id: important-section-waiting
+- tapOn:
+    id: waiting-filter-polls
+- extendedWaitUntil:
+    notVisible: .*Какой день удобнее для выездного занятия\?.*
+    timeout: 10000

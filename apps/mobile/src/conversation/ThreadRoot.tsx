@@ -28,6 +28,7 @@ import { formatTime } from "./MessageRow";
 import { useReactions } from "./reactions";
 import { RequestCard } from "@/requests/RequestCard";
 import { TaskCard } from "@/tasks/TaskCard";
+import { PollMessage } from "@/polls/PollMessage";
 
 /** The message a thread grew from, pinned on white above the replies. */
 export function ThreadRoot({
@@ -124,10 +125,18 @@ export function ThreadRoot({
             />
           ) : (
             !blocks?.card &&
+            !message.poll &&
             Boolean(message.body.trim()) && <Markdown source={message.body} />
           )}
           {!deleted && message.request ? (
             <RequestCard message={message} part="body" onNotice={onNotice} />
+          ) : null}
+          {!deleted && message.poll ? (
+            <PollMessage
+              message={{ ...message, poll: message.poll }}
+              members={members}
+              onNotice={onNotice}
+            />
           ) : null}
           {blocks && (
             <MessageBlocks

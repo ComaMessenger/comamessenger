@@ -1,0 +1,152 @@
+# Someone away, as colleagues see it (phase 6.7): the direct chat with Анна
+# — «🌴 в отпуске до …» in the header, the badge on the avatar, «Вместо
+# Анны — Марина» under it, the auto-reply once; the @ menu and the hint over
+# the composer in a group with «Упомянуть Марину» and the quiet line;
+# «Люди → Отсутствуют» and her card. Run after sign-in.yaml:
+#   node e2e/seed-away.mjs && maestro test -e THEME=light e2e/away-peer.yaml
+appId: com.comamessenger.app
+---
+- runFlow: open-app.yaml
+- evalScript: ${output.tag = String(Date.now()).slice(-6)}
+
+# 1. The direct chat.
+- tapOn: "Анна Иванова, .*"
+- extendedWaitUntil:
+    visible:
+      id: conversation
+    timeout: 10000
+- extendedWaitUntil:
+    visible: .*🌴 в отпуске до.*
+    timeout: 10000
+- assertVisible:
+    id: conversation-away-badge
+- assertVisible:
+    id: chat-slot-away
+- assertVisible: .*Вместо Анны — Марина Соколова.*
+- tapOn:
+    id: composer-input
+# A draft left by an earlier run goes first.
+- eraseText: 120
+- inputText: Анна, сможешь в среду подменить в бассейне? ${output.tag}
+- extendedWaitUntil:
+    visible:
+      id: composer-send
+      enabled: true
+    timeout: 5000
+- tapOn:
+    id: composer-send
+- extendedWaitUntil:
+    visible: .*подменить в бассейне\? ${output.tag}.*
+    timeout: 10000
+# The auto-reply comes once to this message (seed-away.mjs starts a new
+# period every run).
+- extendedWaitUntil:
+    visible:
+      id: auto-reply-tag
+      below: .*подменить в бассейне\? ${output.tag}.*
+    timeout: 20000
+- hideKeyboard:
+    optional: true
+- takeScreenshot: ${THEME}-away-direct
+- tapOn:
+    id: conversation-back
+
+# 2. The group: the @ menu, the hint and the quiet line.
+- tapOn: .*Отсутствие · инструкторы.*
+- extendedWaitUntil:
+    visible:
+      id: conversation
+    timeout: 10000
+- tapOn:
+    id: composer-input
+- inputText: "@Анн"
+- extendedWaitUntil:
+    visible:
+      id: mention-away-note
+    timeout: 10000
+- takeScreenshot: ${THEME}-away-mention-menu
+- tapOn:
+    id: mention-person-anna_away
+- inputText: сможешь в среду? ${output.tag}
+- extendedWaitUntil:
+    visible:
+      id: away-mention-hints
+    timeout: 5000
+- assertVisible: .*Анна в отпуске до .* — уведомление не придёт.*
+- assertVisible: Упомянуть Марину
+- takeScreenshot: ${THEME}-away-mention-hint
+- tapOn:
+    id: composer-send
+- extendedWaitUntil:
+    visible:
+      id: away-mention-note
+    timeout: 10000
+- assertVisible: .*видно только вам.*
+- hideKeyboard:
+    optional: true
+- takeScreenshot: ${THEME}-away-mention-sent
+- tapOn:
+    id: conversation-back
+
+# 3. «Люди → Отсутствуют» and the card.
+- tapOn:
+    id: tab-more
+- tapOn:
+    id: open-people
+- extendedWaitUntil:
+    visible:
+      id: person-row-0
+    timeout: 15000
+- runFlow:
+    when:
+      visible:
+        id: people-filter-away
+    commands:
+      - tapOn:
+          id: people-filter-away
+- runFlow:
+    when:
+      visible:
+        id: people-menu
+    commands:
+      - tapOn:
+          id: people-menu
+      - tapOn:
+          id: people-view-away
+- extendedWaitUntil:
+    visible:
+      id: people-away-list
+    timeout: 10000
+- extendedWaitUntil:
+    visible: .*в отпуске до.*
+    timeout: 10000
+- takeScreenshot: ${THEME}-away-people
+- tapOn:
+    id: person-row-0
+- extendedWaitUntil:
+    visible:
+      id: person-away
+    timeout: 10000
+- assertVisible:
+    id: person-away-substitute
+- takeScreenshot: ${THEME}-away-person
+
+# 4. The slot opens the direct chat with the substitute.
+- tapOn:
+    id: person-back
+- tapOn:
+    id: people-back
+- tapOn:
+    id: tab-chats
+- tapOn: "Анна Иванова, .*"
+- extendedWaitUntil:
+    visible:
+      id: chat-slot-away
+    timeout: 10000
+- tapOn:
+    id: chat-slot-away
+- extendedWaitUntil:
+    visible: .*Марина Соколова.*
+    timeout: 15000
+- assertNotVisible:
+    id: chat-slot-away

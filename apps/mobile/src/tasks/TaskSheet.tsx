@@ -23,6 +23,7 @@ import { useSignedIn } from "@/session/SessionProvider";
 import { useMessenger } from "@/messenger/MessengerProvider";
 import { Avatar } from "@/ui/Avatar";
 import { BottomSheet } from "@/ui/BottomSheet";
+import { AwayPickerHints } from "@/status/AwayPickerHints";
 import { Text, maxTextScale } from "@/ui/Text";
 import { useNow } from "@/scheduled/clock";
 import { calendarLocale } from "@/requests/locale";
@@ -430,6 +431,17 @@ export function TaskSheet({
                 }}
               />
             </View>
+          ) : null}
+          {draft.assignee.kind === "person" && draft.assignee.actorID ? (
+            // «Отсутствую» (phase 6.7 decision 6): the hint and «Выбрать …».
+            <AwayPickerHints
+              chosen={[draft.assignee.actorID]}
+              people={taskPeople(members)}
+              withinPeople
+              onChoose={(_, substitute) =>
+                update({ assignee: { kind: "person", actorID: substitute } })
+              }
+            />
           ) : null}
           {draft.assignee.kind === "person" ? (
             <PersonChips
