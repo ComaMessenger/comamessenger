@@ -567,12 +567,13 @@ func (s *Service) cancelJobs(ctx context.Context, tx pgx.Tx, t *lockedTask) erro
 	return nil
 }
 
-// OnMessageDeletedTx cancels the task of a message deleted in tx and its
-// jobs. The caller holds the organization lock and the message row
-// (message.Service.Delete): the order every task write follows. A message
-// that is not a task, or a task already closed, is left alone (its jobs are
-// gone with the close). service may be nil (tests, tools without jobs):
-// stale jobs then find a canceled task.
+// OnMessageDeletedTx cancels the task of a message deleted in tx, cancels
+// its jobs and wipes its texts: like the body of a deleted message, the
+// title, the description and the item texts are gone. The caller holds the
+// organization lock and the message row (message.Service.Delete): the order
+// every task write follows. A message that is not a task is left alone.
+// service may be nil (tests, tools without jobs): stale jobs then find a
+// canceled task.
 func OnMessageDeletedTx(ctx context.Context, tx pgx.Tx, service *Service, user identity.User, messageID string) error {
 	current, err := lockTask(ctx, tx, user.OrgID, messageID)
 	if errors.Is(err, ErrNotFound) {
@@ -581,12 +582,16 @@ func OnMessageDeletedTx(ctx context.Context, tx pgx.Tx, service *Service, user i
 	if err != nil {
 		return err
 	}
-	if !Active(current.Status) {
-		return nil
+	if _, err := tx.Exec(ctx, `UPDATE message_task_items SET text = '' WHERE message_id = $1`, messageID); err != nil {
+		return fmt.Errorf("wipe task items of deleted message: %w", err)
 	}
 	if err := tx.QueryRow(ctx, `
-		UPDATE message_tasks SET status='canceled', canceled_reason='message_deleted', status_changed_by=$2,
-			status_changed_at=now(), version=version+1, updated_at=now(), due_soon_job_id=NULL, overdue_job_id=NULL
+		UPDATE message_tasks SET title='', description='', version=version+1, updated_at=now(),
+			status = CASE WHEN status IN ('open','in_progress') THEN 'canceled' ELSE status END,
+			canceled_reason = CASE WHEN status IN ('open','in_progress') THEN 'message_deleted' ELSE canceled_reason END,
+			status_changed_by = CASE WHEN status IN ('open','in_progress') THEN $2::uuid ELSE status_changed_by END,
+			status_changed_at = CASE WHEN status IN ('open','in_progress') THEN now() ELSE status_changed_at END,
+			due_soon_job_id=NULL, overdue_job_id=NULL
 		WHERE message_id=$1 RETURNING version`, messageID, user.ActorID).Scan(&current.Version); err != nil {
 		return fmt.Errorf("cancel task of deleted message: %w", err)
 	}

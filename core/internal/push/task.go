@@ -36,6 +36,19 @@ const taskAddressee = `(m.type='task' AND EXISTS (
 const taskSummary = `((e.data->>'kind') IN ('taken','completed') OR ((e.data->>'kind')='overdue'
 	AND t.author_id=e.audience_actor_id AND t.assignee_id IS DISTINCT FROM e.audience_actor_id))`
 
+// taskStillConcerns: a notice that asks for work goes only while the task
+// still concerns the recipient as it did: a queue someone took is not
+// offered any more, a reassigned task is not pushed to the former person.
+const taskStillConcerns = `CASE e.data->>'kind'
+	  WHEN 'offered' THEN t.assignee_id IS NULL AND EXISTS (SELECT 1 FROM message_task_candidates sc WHERE sc.message_id=t.message_id AND sc.actor_id=cm.actor_id)
+	  WHEN 'assigned' THEN t.assignee_id=cm.actor_id
+	  WHEN 'due_changed' THEN t.assignee_id=cm.actor_id
+	  WHEN 'reopened' THEN t.assignee_id=cm.actor_id
+	  WHEN 'item_assigned' THEN EXISTS (SELECT 1 FROM message_task_items si WHERE si.message_id=t.message_id AND si.assignee_id=cm.actor_id AND si.done_at IS NULL)
+	  WHEN 'nudged' THEN t.assignee_id=cm.actor_id OR (t.assignee_id IS NULL AND EXISTS (SELECT 1 FROM message_task_candidates sc WHERE sc.message_id=t.message_id AND sc.actor_id=cm.actor_id))
+	  WHEN 'due_soon' THEN t.assignee_id=cm.actor_id OR (t.assignee_id IS NULL AND EXISTS (SELECT 1 FROM message_task_candidates sc WHERE sc.message_id=t.message_id AND sc.actor_id=cm.actor_id))
+	  ELSE true END`
+
 // taskRecipients is the recipients branch of task.notified: the person
 // while an active member of the live chat and the task message not deleted;
 // a notice that asks for work only while the task is still open.
@@ -48,10 +61,12 @@ const taskRecipients = `
 	  CASE WHEN ` + taskSummary + ` THEN 'task_summary' ELSE 'task' END
 	FROM event e JOIN chats c ON c.org_id=e.org_id AND c.id=e.chat_id AND c.archived_at IS NULL
 	JOIN chat_members cm ON cm.org_id=e.org_id AND cm.chat_id=e.chat_id AND cm.actor_id=e.audience_actor_id
+	JOIN actors ta ON ta.org_id=cm.org_id AND ta.id=cm.actor_id AND ta.status='active' AND ta.deleted_at IS NULL
 	JOIN message_tasks t ON t.org_id=e.org_id AND t.message_id=e.subject_id
 	JOIN messages tm ON tm.org_id=t.org_id AND tm.id=t.message_id AND tm.deleted_at IS NULL
 	WHERE e.type='task.notified' AND (e.data->>'kind')<>'unassigned'
-	  AND ((e.data->>'kind') IN ('taken','completed') OR t.status IN ('open','in_progress'))`
+	  AND ((e.data->>'kind') IN ('taken','completed') OR t.status IN ('open','in_progress'))
+	  AND ` + taskStillConcerns
 
 // taskCategories decide the task categories in eligible.
 const taskCategories = `

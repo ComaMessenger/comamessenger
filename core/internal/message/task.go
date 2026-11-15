@@ -134,6 +134,42 @@ func hydrateTasks(ctx context.Context, tx pgx.Tx, orgID string, messages []Messa
 	return nil
 }
 
+// hideTasksFromAgents drops Task from messages read by an agent: agents
+// read a task as its text (body) only, decision 20 of phase 6.6.
+func hideTasksFromAgents(ctx context.Context, tx pgx.Tx, user identity.User, messages []*Message) error {
+	found := false
+	for _, item := range messages {
+		if item.Task != nil {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return nil
+	}
+	var person bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM actors WHERE org_id = $1 AND id = $2 AND type = 'user')`, user.OrgID, user.ActorID).Scan(&person); err != nil {
+		return fmt.Errorf("check task reader: %w", err)
+	}
+	if !person {
+		for _, item := range messages {
+			item.Task = nil
+		}
+	}
+	return nil
+}
+
+// HideTaskFromFrame removes task from a message.* frame payload, for
+// agents among its recipients.
+func HideTaskFromFrame(data json.RawMessage) (json.RawMessage, error) {
+	var message Message
+	if err := json.Unmarshal(data, &message); err != nil {
+		return nil, fmt.Errorf("decode message event: %w", err)
+	}
+	message.Task = nil
+	return wirejson.Marshal(message)
+}
+
 // loadMessages reads messages by id in the given order, with everything the
 // feed shows (the request view of user included).
 func (s *Service) loadMessages(ctx context.Context, tx pgx.Tx, user identity.User, ids []string) ([]Message, error) {

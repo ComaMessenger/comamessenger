@@ -50,7 +50,9 @@ func MineSQL(org, actor string) string {
 		UNION
 		SELECT message_id FROM message_task_items WHERE org_id = $org AND assignee_id = $actor AND done_at IS NULL
 		UNION
-		SELECT message_id FROM message_task_candidates WHERE org_id = $org AND actor_id = $actor
+		SELECT mc.message_id FROM message_task_candidates mc
+		JOIN message_tasks mt ON mt.message_id = mc.message_id AND mt.assignee_id IS NULL AND mt.status IN ('open', 'in_progress')
+		WHERE mc.org_id = $org AND mc.actor_id = $actor
 	) mine
 	JOIN message_tasks t ON t.message_id = mine.message_id AND t.org_id = $org AND t.status IN ('open', 'in_progress')
 	` + VisibleSQL("$actor") + `
@@ -340,7 +342,8 @@ func ListMine(ctx context.Context, q querier, user identity.User, options MineLi
 }
 
 // Get checks that the reader may read the task message: an active member
-// of its chat, the message not deleted. ErrNotFound otherwise, also for a
+// of its chat, the chat not archived (as message.Get), the message not
+// deleted. ErrNotFound otherwise, also for a
 // message that is not a task.
 func Get(ctx context.Context, q querier, user identity.User, messageID string) error {
 	if uuid.Validate(messageID) != nil {
@@ -350,6 +353,7 @@ func Get(ctx context.Context, q querier, user identity.User, messageID string) e
 	err := q.QueryRow(ctx, `
 		SELECT true FROM message_tasks t
 		JOIN messages m ON m.org_id = t.org_id AND m.id = t.message_id AND m.deleted_at IS NULL
+		JOIN chats c ON c.org_id = t.org_id AND c.id = t.chat_id AND c.archived_at IS NULL
 		JOIN chat_members vcm ON vcm.org_id = t.org_id AND vcm.chat_id = t.chat_id AND vcm.actor_id = $3
 		JOIN actors va ON va.org_id = t.org_id AND va.id = vcm.actor_id AND va.status = 'active' AND va.deleted_at IS NULL
 		WHERE t.org_id = $1 AND t.message_id = $2

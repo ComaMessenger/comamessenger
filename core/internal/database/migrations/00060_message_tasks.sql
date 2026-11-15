@@ -13,7 +13,8 @@ CREATE TABLE message_tasks (
     message_id uuid PRIMARY KEY,
     chat_id uuid NOT NULL,
     author_id uuid NOT NULL,
-    title text NOT NULL CHECK (char_length(title) BETWEEN 1 AND 200),
+    -- 1–200 characters; a deleted task message loses its texts (empty).
+    title text NOT NULL CHECK (char_length(title) <= 200),
     description text NOT NULL DEFAULT '' CHECK (char_length(description) <= 4000),
     -- «из сообщения»; NULL once the source is deleted for good.
     source_message_id uuid,
@@ -53,7 +54,8 @@ CREATE TABLE message_tasks (
     CHECK ((status = 'canceled') = (canceled_reason IS NOT NULL)),
     FOREIGN KEY (org_id, message_id) REFERENCES messages(org_id, id) ON DELETE CASCADE,
     FOREIGN KEY (org_id, chat_id) REFERENCES chats(org_id, id) ON DELETE CASCADE,
-    FOREIGN KEY (org_id, author_id) REFERENCES actors(org_id, id) ON DELETE CASCADE,
+    -- Like messages.actor_id: an author is never deleted from under a task.
+    FOREIGN KEY (org_id, author_id) REFERENCES actors(org_id, id) ON DELETE RESTRICT,
     FOREIGN KEY (org_id, assignee_id) REFERENCES actors(org_id, id) ON DELETE SET NULL (assignee_id),
     FOREIGN KEY (org_id, source_message_id) REFERENCES messages(org_id, id) ON DELETE SET NULL (source_message_id),
     FOREIGN KEY (org_id, audience_department_id) REFERENCES departments(org_id, id) ON DELETE SET NULL (audience_department_id),
@@ -100,7 +102,8 @@ CREATE TABLE message_task_items (
     org_id uuid NOT NULL,
     message_id uuid NOT NULL,
     position smallint NOT NULL CHECK (position BETWEEN 0 AND 29),
-    text text NOT NULL CHECK (char_length(text) BETWEEN 1 AND 200),
+    -- 1–200 characters; empty once the task message is deleted.
+    text text NOT NULL CHECK (char_length(text) <= 200),
     assignee_id uuid,
     -- When the current assignee was set: the push of item_assigned names the
     -- latest item of the person.
@@ -114,7 +117,8 @@ CREATE TABLE message_task_items (
     FOREIGN KEY (org_id, message_id) REFERENCES message_tasks(org_id, message_id) ON DELETE CASCADE,
     FOREIGN KEY (org_id, assignee_id) REFERENCES actors(org_id, id) ON DELETE SET NULL (assignee_id),
     FOREIGN KEY (org_id, done_by) REFERENCES actors(org_id, id) ON DELETE SET NULL (done_by),
-    FOREIGN KEY (org_id, created_by) REFERENCES actors(org_id, id) ON DELETE CASCADE
+    -- Deleting the person must not take items from under the counters.
+    FOREIGN KEY (org_id, created_by) REFERENCES actors(org_id, id) ON DELETE RESTRICT
 );
 -- My open items.
 CREATE INDEX message_task_items_assignee_idx

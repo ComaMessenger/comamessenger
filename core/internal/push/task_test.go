@@ -147,3 +147,31 @@ func TestTaskPushFollowsMentionRules(t *testing.T) {
 		t.Fatalf("completed to a muted author: web=%v mobile=%v", web, mobile)
 	}
 }
+
+// A notice that no longer concerns its recipient is not pushed: the task was
+// reassigned before the push went out.
+func TestStaleTaskNoticeIsNotPushed(t *testing.T) {
+	w := newFailurePushWorld(t)
+	ctx := context.Background()
+	tasks := task.NewService(w.pool, nil)
+	messages := message.NewService(w.pool, 4096, 100, nil)
+	messages.SetTasks(tasks)
+	remind := false
+	created, _, err := messages.CreateTask(ctx, w.other.User, w.chatID, message.CreateTaskInput{
+		ClientMsgID: uuid.NewString(), Title: w.secretBody, RemindBeforeDue: &remind,
+		Assignee: task.AssigneeInput{Kind: "person", ActorID: &w.author.User.ActorID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := messages.UpdateTask(ctx, w.other.User, created.ID, task.UpdateInput{ExpectedVersion: &created.Task.Version,
+		Assignee: &task.AssigneeInput{Kind: "person", ActorID: &w.other.User.ActorID}}); err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		w.materialize(t)
+	}
+	if n := w.count(t, `SELECT count(*) FROM events e JOIN mobile_push_deliveries d ON d.org_id=e.org_id AND d.event_seq=e.seq WHERE e.type='task.notified' AND e.subject_id=$1`, created.ID); n != 0 {
+		t.Fatalf("stale task pushes = %d", n)
+	}
+}

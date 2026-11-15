@@ -798,6 +798,11 @@ func (s *Service) NudgeTx(ctx context.Context, tx pgx.Tx, user identity.User, me
 	if err != nil {
 		return NudgeResult{}, Change{}, err
 	}
+	// Nobody to remind in the chat now (the responsible person left): the
+	// attempt is not spent.
+	if len(targets) == 0 {
+		return NudgeResult{}, Change{}, ErrForbidden
+	}
 	// The daily limit counts every nudge a person got in the last 24 hours,
 	// from all tasks; above it the notice still goes, without a push.
 	rows, err := tx.Query(ctx, `

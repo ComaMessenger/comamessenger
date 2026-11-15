@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/comamessenger/comamessenger/core/internal/eventlog"
+	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/message"
 	"github.com/comamessenger/comamessenger/core/internal/request"
 	"github.com/comamessenger/comamessenger/core/internal/task"
@@ -810,4 +811,94 @@ func TestThreeHundredOpenTasks(t *testing.T) {
 	}
 	_, _, err = w.messages.CreateTask(ctx, w.author, w.chatID, message.CreateTaskInput{ClientMsgID: uuid.NewString(), Title: "301", Assignee: person(w.alice.ActorID), RemindBeforeDue: ptr(false)})
 	expectErr(t, err, task.ErrLimitReached)
+}
+
+// Agents read a task as its text: no task in the feed, in message frames
+// (replay and live) and no task.updated.
+func TestAgentsSeeTaskAsText(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	item := w.create(t, w.author, message.CreateTaskInput{Title: "Видно", Assignee: person(w.alice.ActorID), Items: []task.ItemInput{{Text: "СКРЫТЫЙ-пункт"}}})
+	if err := w.status(t, w.alice, item.ID, "in_progress"); err != nil {
+		t.Fatal(err)
+	}
+	agent := identity.User{ActorID: w.agentID, OrgID: w.orgID, OrgRole: "member", Status: "active"}
+	page, err := w.messages.List(ctx, agent, w.chatID, message.ListOptions{Limit: 50})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range page.Messages {
+		if entry.ID == item.ID && (entry.Task != nil || entry.Body != "Видно") {
+			t.Fatalf("agent feed = %+v", entry)
+		}
+	}
+	if got, err := w.messages.Get(ctx, agent, item.ID); err != nil || got.Task != nil {
+		t.Fatalf("agent get = %+v %v", got.Task, err)
+	}
+	if people, err := w.messages.List(ctx, w.bob, w.chatID, message.ListOptions{Limit: 50}); err != nil || people.Messages[len(people.Messages)-1].Task == nil {
+		t.Fatalf("people lose the task: %v", err)
+	}
+	store := eventlog.NewStore(w.pool)
+	frames, err := store.Replay(ctx, agent, "", 0, w.maxSeq(t), 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, frame := range frames {
+		if strings.HasPrefix(frame.Type, "task.") || strings.Contains(string(frame.Data), "СКРЫТЫЙ") || strings.Contains(string(frame.Data), `"task":`) {
+			t.Fatalf("agent replay %s: %s", frame.Type, frame.Data)
+		}
+	}
+	live, err := store.Live(ctx, w.orgID, 0, w.maxSeq(t), 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agentGotCreated, bobGotTask := false, false
+	for _, event := range live {
+		for _, recipient := range event.RecipientActorIDs {
+			switch recipient {
+			case w.agentID:
+				if strings.HasPrefix(event.Frame.Type, "task.") || strings.Contains(string(event.Frame.Data), `"task":`) {
+					t.Fatalf("agent live %s: %s", event.Frame.Type, event.Frame.Data)
+				}
+				agentGotCreated = agentGotCreated || event.Frame.Type == "message.created"
+			case w.bob.ActorID:
+				bobGotTask = bobGotTask || (event.Frame.Type == "message.created" && strings.Contains(string(event.Frame.Data), "СКРЫТЫЙ"))
+			}
+		}
+	}
+	if !agentGotCreated || !bobGotTask {
+		t.Fatalf("live split: agent=%v bob=%v", agentGotCreated, bobGotTask)
+	}
+}
+
+func TestDeletedTaskTextsAreWipedAndArchiveHidesGet(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	item := w.create(t, w.author, message.CreateTaskInput{Title: "Стереть", Description: "описание", Assignee: person(w.alice.ActorID), Items: []task.ItemInput{{Text: "пункт"}}})
+	if err := w.status(t, w.alice, item.ID, "done"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.messages.Delete(ctx, w.author, item.ID); err != nil {
+		t.Fatal(err)
+	}
+	if w.count(t, `SELECT count(*) FROM message_tasks WHERE message_id=$1 AND title='' AND description='' AND status='done'`, item.ID) != 1 ||
+		w.count(t, `SELECT count(*) FROM message_task_items WHERE message_id=$1 AND text<>''`, item.ID) != 0 {
+		t.Fatal("texts of a deleted task stay")
+	}
+	other := w.simple(t, w.alice)
+	w.exec(t, `UPDATE chats SET archived_at=now() WHERE id=$1`, w.chatID)
+	_, err := w.messages.GetTask(ctx, w.alice, other.ID)
+	expectErr(t, err, task.ErrNotFound)
+}
+
+func TestNudgeWithoutAnyoneInChatIsNotSpent(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	item := w.simple(t, w.alice)
+	w.exec(t, `DELETE FROM chat_members WHERE chat_id=$1 AND actor_id=$2`, w.chatID, w.alice.ActorID)
+	_, err := w.messages.NudgeTask(ctx, w.author, item.ID)
+	expectErr(t, err, task.ErrForbidden)
+	if got := w.load(t, item.ID); got.NudgeCount != 0 {
+		t.Fatalf("nudge count = %d", got.NudgeCount)
+	}
 }

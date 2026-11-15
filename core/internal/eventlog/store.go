@@ -1,10 +1,12 @@
 package eventlog
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/comamessenger/comamessenger/core/internal/identity"
@@ -195,12 +197,33 @@ func (s *Store) Replay(ctx context.Context, user identity.User, sessionID string
 	if err := message.CompleteEventMessages(ctx, tx, user.OrgID, items); err != nil {
 		return nil, fmt.Errorf("complete replayed message events: %w", err)
 	}
-	tasks := make([]message.EventMessage, 0)
-	for index := range result {
-		if result[index].Type == "task.updated" {
-			tasks = append(tasks, message.EventMessage{Data: &result[index].Data})
-		}
+	// Agents read a task as its text only: no task.updated, no task in
+	// message frames (phase 6.6, decision 20).
+	var person bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM actors WHERE org_id = $1 AND id = $2 AND type = 'user')`, user.OrgID, user.ActorID).Scan(&person); err != nil {
+		return nil, fmt.Errorf("check replay reader: %w", err)
 	}
+	tasks := make([]message.EventMessage, 0)
+	kept := result[:0]
+	for index := range result {
+		frame := result[index]
+		switch {
+		case frame.Type == "task.updated" && !person:
+			continue
+		case frame.Type == "task.updated":
+			kept = append(kept, frame)
+			tasks = append(tasks, message.EventMessage{Data: &kept[len(kept)-1].Data})
+			continue
+		case !person && carriesTask(frame):
+			data, err := message.HideTaskFromFrame(frame.Data)
+			if err != nil {
+				return nil, err
+			}
+			frame.Data = data
+		}
+		kept = append(kept, frame)
+	}
+	result = kept
 	if err := message.CompleteTaskEvents(ctx, tx, user.OrgID, tasks); err != nil {
 		return nil, fmt.Errorf("complete replayed task events: %w", err)
 	}
@@ -315,6 +338,10 @@ func (s *Store) Live(ctx context.Context, orgID string, afterSeq, throughSeq int
 	if err := message.CompleteEventMessages(ctx, tx, orgID, items); err != nil {
 		return nil, fmt.Errorf("complete live message events: %w", err)
 	}
+	result, err = s.hideTasksFromAgents(ctx, tx, orgID, result)
+	if err != nil {
+		return nil, err
+	}
 	tasks := make([]message.EventMessage, 0)
 	for index := range result {
 		if result[index].Frame.Type == "task.updated" && len(result[index].RecipientActorIDs) > 0 {
@@ -331,6 +358,81 @@ func (s *Store) Live(ctx context.Context, orgID string, afterSeq, throughSeq int
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("finish event snapshot: %w", err)
+	}
+	return result, nil
+}
+
+// carriesTask: a message frame with the task of a task message.
+func carriesTask(frame Frame) bool {
+	return strings.HasPrefix(frame.Type, "message.") && bytes.Contains(frame.Data, []byte(`"task":{`))
+}
+
+// hideTasksFromAgents keeps tasks from agents among the recipients of a
+// live batch (phase 6.6, decision 20: agents read a task as its text):
+// task.updated does not go to them, and a message frame carrying a task
+// goes to them as a separate copy, with the same sequence, without it.
+func (s *Store) hideTasksFromAgents(ctx context.Context, tx pgx.Tx, orgID string, events []LiveEvent) ([]LiveEvent, error) {
+	candidates := map[string]struct{}{}
+	for _, event := range events {
+		if event.Frame.Type == "task.updated" || carriesTask(event.Frame) {
+			for _, actorID := range event.RecipientActorIDs {
+				candidates[actorID] = struct{}{}
+			}
+		}
+	}
+	if len(candidates) == 0 {
+		return events, nil
+	}
+	ids := make([]string, 0, len(candidates))
+	for actorID := range candidates {
+		ids = append(ids, actorID)
+	}
+	rows, err := tx.Query(ctx, `SELECT id FROM actors WHERE org_id = $1 AND id = ANY($2::uuid[]) AND type <> 'user'`, orgID, ids)
+	if err != nil {
+		return nil, fmt.Errorf("find agent recipients: %w", err)
+	}
+	agents := map[string]bool{}
+	for rows.Next() {
+		var actorID string
+		if err := rows.Scan(&actorID); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scan agent recipient: %w", err)
+		}
+		agents[actorID] = true
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate agent recipients: %w", err)
+	}
+	if len(agents) == 0 {
+		return events, nil
+	}
+	result := make([]LiveEvent, 0, len(events))
+	for _, event := range events {
+		if event.Frame.Type != "task.updated" && !carriesTask(event.Frame) {
+			result = append(result, event)
+			continue
+		}
+		people, robots := make([]string, 0, len(event.RecipientActorIDs)), make([]string, 0)
+		for _, actorID := range event.RecipientActorIDs {
+			if agents[actorID] {
+				robots = append(robots, actorID)
+			} else {
+				people = append(people, actorID)
+			}
+		}
+		event.RecipientActorIDs = people
+		result = append(result, event)
+		if len(robots) > 0 && event.Frame.Type != "task.updated" {
+			copied := event
+			copied.RecipientActorIDs = robots
+			data, err := message.HideTaskFromFrame(event.Frame.Data)
+			if err != nil {
+				return nil, err
+			}
+			copied.Frame.Data = data
+			result = append(result, copied)
+		}
 	}
 	return result, nil
 }
