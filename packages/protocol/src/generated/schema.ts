@@ -633,6 +633,249 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/org": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The whole org structure of the workspace in one response: departments, positions and the assignment of active people. Any active member may read it. Deactivated people, agents and people with neither a membership nor a position are left out of people; a lead who is not active is reported as null. chat_id of a department is given only to members of that chat (has_chat tells the others a chat exists). The response carries ETag "org-{version}"; a request with a matching If-None-Match gets 304 without a body. Until the server announces the org_structure feature the route answers 501 not_implemented. */
+        get: operations["getOrgStructure"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/org/departments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Creates a department. Needs org.manage or members.manage (403 forbidden otherwise). members with primary true move the person's primary department here and drop the membership in the previous primary one; additional departments are not touched. primary false adds the department as an additional one. A lead who is not among members becomes an additional member. Only people (not agents) may be members (422 org_invalid, details.field actor_id). Depth is limited to 8 levels (422 org_depth_exceeded), the workspace to 500 departments and a person to 10 additional departments (409 org_limit_reached). Names are unique among siblings ignoring case (409 org_name_taken). Writes of the org structure are limited to 120 a minute per person (429 rate_limited). Emits org.updated. */
+        post: operations["createDepartment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/org/departments/{department_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Deletes a department. Its subdepartments move to its parent. Primary members move to members_to (by default the parent); with none, or without a parent, a person's oldest additional department becomes primary, otherwise the person is left without a department. Additional memberships are dropped. The department chat stays, only the link is removed. Past requests to the department keep their label. Needs org.manage or members.manage. Emits org.updated. */
+        delete: operations["deleteDepartment"];
+        options?: never;
+        head?: never;
+        /** @description Renames a department, moves it under another parent (parent_id null — to the top level) or sets its lead (lead_actor_id null — no lead). A lead outside the department becomes an additional member. A parent that is the department itself or its descendant gets 409 org_cycle. expected_version is the department's version (409 org_version_conflict when stale). Needs org.manage or members.manage. Emits org.updated. */
+        patch: operations["updateDepartment"];
+        trace?: never;
+    };
+    "/api/v1/org/departments/{department_id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Moves a department one place up or down among its siblings. The first manual move sets sort_key for all siblings (until then they go by name). Moving the first one up or the last one down changes nothing. Needs org.manage or members.manage. Emits org.updated when the order changes. */
+        post: operations["moveDepartment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/org/departments/{department_id}/members/{actor_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Adds a person to a department or changes the kind of membership. primary true moves the person's primary department here; the previous primary one becomes additional with keep_previous true, otherwise that membership is dropped. primary false makes it an additional department; turning the primary department into an additional one promotes the person's oldest other additional department, if any. Needs org.manage or members.manage. Emits org.updated. */
+        put: operations["setDepartmentMember"];
+        post?: never;
+        /** @description Removes a person from a department. When it was the primary one, the oldest additional department becomes primary. When the person led the department, the lead is cleared in the same write. Removing a person who is not a member changes nothing. Needs org.manage or members.manage. Emits org.updated. */
+        delete: operations["removeDepartmentMember"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/org/people/{actor_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Sets the whole assignment of one person at once: primary department, additional departments and position. Departments the person leads but is no longer a member of lose their lead. additional_department_ids must not contain the primary one and needs a primary one (422 org_invalid). expected_org_version, when given, must equal the current org version (409 org_version_conflict). Needs org.manage or members.manage. Emits org.updated. */
+        put: operations["setPersonOrg"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/org/people/assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Mass assignment for up to 200 people in one transaction and one org.updated event. Fields left out are not touched. primary_department_id moves the primary department as setDepartmentMember with keep_previous false; add_department_id adds an additional department (people for whom it is already primary keep it as primary); position_id sets the position, null clears it. All people must be active people of the workspace (422 org_invalid, details.field actor_ids). Needs org.manage or members.manage. */
+        post: operations["assignPeopleOrg"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/org/positions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Adds a position to the directory. Names are unique ignoring case (409 org_name_taken); at most 300 positions (409 org_limit_reached). Needs org.manage or members.manage. Emits org.updated. */
+        post: operations["createPosition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/org/positions/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Adds several positions at once, for «Должности из подписей профилей». Names that already exist (ignoring case) or repeat in the request are skipped, not rejected. One org.updated event. Needs org.manage or members.manage. */
+        post: operations["createPositions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/org/positions/{position_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Deletes a position; people who held it are left without one. Past requests to the position keep their label. Needs org.manage or members.manage. Emits org.updated. */
+        delete: operations["deletePosition"];
+        options?: never;
+        head?: never;
+        /** @description Renames a position. expected_version is the position's version (409 org_version_conflict when stale). Past requests to the position keep the old label. Needs org.manage or members.manage. Emits org.updated. */
+        patch: operations["updatePosition"];
+        trace?: never;
+    };
+    "/api/v1/org/title-suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description «Должности из подписей профилей»: distinct profile titles of active people (trimmed, compared ignoring case) that do not match a position yet, with the people who carry each, most frequent first. After createPositions the client may assign the new positions to them with assignPeopleOrg. Needs org.manage or members.manage. */
+        get: operations["listTitleSuggestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/org/departments/{department_id}/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description «Привязать чат»: links an existing group. It must be a group (not a direct chat or a channel), not archived, and the caller must be its owner or administrator (422 department_chat_invalid otherwise). 409 department_chat_exists when the chat is linked to another department or this department already has a chat. Allowed to the lead and to holders of org.manage or members.manage. Emits org.updated. */
+        put: operations["linkDepartmentChat"];
+        /** @description «Создать чат отдела»: creates a private group named after the department with all active people of the department and its subdepartments, as an ordinary group creation (the same member limit, chat.created and member.joined events). The caller owns the chat, the lead is its administrator. Allowed to the department lead and to holders of org.manage or members.manage (403 forbidden otherwise). 409 department_chat_exists when the department already has a chat, archived included. Emits org.updated. */
+        post: operations["createDepartmentChat"];
+        /** @description Removes the link between the department and its chat; the chat stays as it is. Allowed to the lead and to holders of org.manage or members.manage. Emits org.updated. */
+        delete: operations["unlinkDepartmentChat"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/org/departments/{department_id}/chat/missing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Active people of the department and its subdepartments who are not members of the department chat, those who left on their own included. Only for a member of the chat who may add members there and is the lead or holds org.manage or members.manage (403 forbidden); 404 department_not_found when the department has no chat. */
+        get: operations["listDepartmentChatMissing"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/org/departments/{department_id}/chat/add-missing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description «Добавить»: adds the people listDepartmentChatMissing returns, as ordinary member additions with member.joined events and the usual group member limit (409 limit_reached). Agents and deactivated people are never added. The same access as listDepartmentChatMissing. */
+        post: operations["addDepartmentChatMissing"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/invitations": {
         parameters: {
             query?: never;
@@ -1117,7 +1360,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Sends a request message to the chat: a question with answer buttons addressed to some members. Any member who may write to the chat may send one (the same check as createMessage). The audience is turned into a fixed list of people at the moment of sending: the author, agents and deactivated people are left out, and whoever joins the chat later is not asked. Wave 1 accepts only the audiences people and chat; department and position are part of the contract but get 422 request_audience_unavailable until wave 2. Requests go to the main chat feed only, not into threads. A replay with the same client_msg_id and the same content returns the original message (200); the same key with other content gets 409 idempotency_conflict. */
+        /** @description Sends a request message to the chat: a question with answer buttons addressed to some members. Any member who may write to the chat may send one (the same check as createMessage). The audience is turned into a fixed list of people at the moment of sending: the author, agents and deactivated people are left out, and whoever joins the chat later is not asked. The audiences department and position need the org_structure feature (422 request_audience_unavailable without it) and requests.address_groups (403 request_audience_forbidden). Requests go to the main chat feed only, not into threads. A replay with the same client_msg_id and the same content returns the original message (200); the same key with other content gets 409 idempotency_conflict. */
         post: operations["createRequest"];
         delete?: never;
         options?: never;
@@ -2966,7 +3209,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_confirmation_loosened" | "agent_conflict" | "agent_not_ready" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "architect_budget_exceeded" | "architect_busy" | "architect_connection_required" | "architect_model_error" | "architect_session_expired" | "architect_session_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "integration_in_use" | "integration_usage_changed" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "limit_reached" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "saved_limit_reached" | "saved_storage_full" | "scheduled_message_closed" | "scheduled_message_not_found" | "scheduled_message_not_retryable" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "storage_unavailable" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "voice_check_busy" | "voice_check_in_progress" | "webhook_not_found" | "webhook_rejected" | "workspace_not_found" | "chat_archived" | "not_implemented" | "not_member" | "reminder_invalid" | "reminder_limit_reached" | "reminder_not_found" | "request_audience_empty" | "request_audience_unavailable" | "request_change_too_late" | "request_closed" | "request_invalid" | "request_limit_reached" | "request_not_found" | "request_remind_too_soon" | "request_too_many_recipients";
+        ErrorCode: "action_closed" | "action_conflict" | "already_bootstrapped" | "agent_budget_exceeded" | "agent_confirmation_loosened" | "agent_conflict" | "agent_not_ready" | "agent_configuration_not_found" | "agent_not_found" | "agent_trigger_conflict" | "agent_trigger_not_found" | "architect_budget_exceeded" | "architect_busy" | "architect_connection_required" | "architect_model_error" | "architect_session_expired" | "architect_session_not_found" | "chat_conflict" | "chat_not_found" | "forbidden" | "file_conflict" | "file_not_found" | "idempotency_conflict" | "integration_in_use" | "integration_usage_changed" | "internal_error" | "invalid_credentials" | "invalid_refresh_token" | "invalid_request" | "invitation_invalid" | "knowledge_conflict" | "knowledge_not_found" | "limit_reached" | "message_not_found" | "origin_not_allowed" | "payload_too_large" | "password_change_required" | "push_unavailable" | "rate_limited" | "saved_limit_reached" | "saved_storage_full" | "scheduled_message_closed" | "scheduled_message_not_found" | "scheduled_message_not_retryable" | "service_not_ready" | "session_not_found" | "smtp_not_configured" | "storage_full" | "storage_unavailable" | "email_taken" | "reauthentication_failed" | "token_invalid" | "unauthorized" | "unsupported_format" | "validation_failed" | "version_conflict" | "voice_check_busy" | "voice_check_in_progress" | "webhook_not_found" | "webhook_rejected" | "workspace_not_found" | "chat_archived" | "not_implemented" | "not_member" | "reminder_invalid" | "reminder_limit_reached" | "reminder_not_found" | "request_audience_empty" | "request_audience_unavailable" | "request_change_too_late" | "request_closed" | "request_invalid" | "request_limit_reached" | "request_not_found" | "request_remind_too_soon" | "request_too_many_recipients" | "request_audience_forbidden" | "org_invalid" | "org_name_taken" | "org_cycle" | "org_depth_exceeded" | "org_limit_reached" | "org_version_conflict" | "department_not_found" | "position_not_found" | "department_chat_exists" | "department_chat_invalid";
         File: {
             /** Format: uuid */
             id: string;
@@ -3235,7 +3478,7 @@ export interface components {
             parts?: components["schemas"]["CompletedFilePart"][];
         };
         /** @enum {string} */
-        DurableEventTypeV1: "message.created" | "message.updated" | "message.deleted" | "message.pinned" | "message.unpinned" | "message.saved" | "message.unsaved" | "reaction.added" | "reaction.removed" | "thread.followed" | "thread.unfollowed" | "read.marked" | "draft.updated" | "draft.deleted" | "chat.created" | "chat.updated" | "chat.archived" | "member.joined" | "member.updated" | "member.removed" | "actor.status.updated" | "actor.avatar.updated" | "scheduled_message.created" | "scheduled_message.updated" | "scheduled_message.deleted" | "scheduled_message.sent" | "scheduled_message.failed" | "request.assigned" | "request.updated" | "request.tally.updated" | "request.answer.updated" | "request.reminded" | "request.auto_reminded" | "reminder.created" | "reminder.updated" | "reminder.deleted" | "reminder.fired";
+        DurableEventTypeV1: "message.created" | "message.updated" | "message.deleted" | "message.pinned" | "message.unpinned" | "message.saved" | "message.unsaved" | "reaction.added" | "reaction.removed" | "thread.followed" | "thread.unfollowed" | "read.marked" | "draft.updated" | "draft.deleted" | "chat.created" | "chat.updated" | "chat.archived" | "member.joined" | "member.updated" | "member.removed" | "actor.status.updated" | "actor.avatar.updated" | "scheduled_message.created" | "scheduled_message.updated" | "scheduled_message.deleted" | "scheduled_message.sent" | "scheduled_message.failed" | "request.assigned" | "request.updated" | "request.tally.updated" | "request.answer.updated" | "request.reminded" | "request.auto_reminded" | "reminder.created" | "reminder.updated" | "reminder.deleted" | "reminder.fired" | "org.updated";
         /**
          * Format: int32
          * @enum {integer}
@@ -3332,7 +3575,7 @@ export interface components {
             ack_interval_ms: number;
             ack_batch_size: number;
             max_unacked_events: number;
-            /** @description Optional protocol additions this server accepts. typing_actions: the action field on typing frames. message_requests: requests («Запрос») — the request REST routes, Message.request and the request.* events. message_reminders: personal reminders («Напомнить мне») — the reminder REST routes and the reminder.* events. A client hides a feature the server does not list. */
+            /** @description Optional protocol additions this server accepts. typing_actions: the action field on typing frames. message_requests: requests («Запрос») — the request REST routes, Message.request and the request.* events. message_reminders: personal reminders («Напомнить мне») — the reminder REST routes and the reminder.* events. org_structure: departments and positions («Оргструктура») — the org REST routes, the org fields of ActorSummary, OrganizationMember and Message, mentioned_department_ids in message, request and scheduled message bodies, the department and position request audiences and the org.updated event. A client hides a feature the server does not list. */
             features?: string[];
         };
         RealtimeDurableEventFrameV1: {
@@ -3349,7 +3592,7 @@ export interface components {
             chat_id?: string | null;
             /** Format: uuid */
             subject_id: string;
-            /** @description Event payload. For message.created, message.updated and message.deleted it is the message in the shape of the REST feed (components/schemas/Message: files with metadata and no links, thread_reply_count, mentioned_actor_ids, blocks, agent_provenance and request when present; never request_viewer, which is per reader), read when the event is delivered, plus silent on message.created and thread_root_reply_count on thread replies. A frame that would exceed the frame limit (WS_MAX_FRAME_BYTES) is never sent as is: its data becomes a stub with truncated: true — for message.* the Message shape with an empty body, no files and no blocks, for other events only their short scalar fields — and the client loads the record by REST. The data of request.* and reminder.* events is described by the RequestAssignedEvent … ReminderFiredEvent definitions: it never carries message text, notes, comments or who answered what. Frames are encoded without HTML escaping. */
+            /** @description Event payload. For message.created, message.updated and message.deleted it is the message in the shape of the REST feed (components/schemas/Message: files with metadata and no links, thread_reply_count, mentioned_actor_ids, blocks, agent_provenance and request when present; never request_viewer, which is per reader), read when the event is delivered, plus silent on message.created and thread_root_reply_count on thread replies. A frame that would exceed the frame limit (WS_MAX_FRAME_BYTES) is never sent as is: its data becomes a stub with truncated: true — for message.* the Message shape with an empty body, no files and no blocks, for other events only their short scalar fields — and the client loads the record by REST. The data of request.* and reminder.* events is described by the RequestAssignedEvent … ReminderFiredEvent definitions: it never carries message text, notes, comments or who answered what. The data of org.updated is OrgUpdatedEvent: only the new version and a reason, never names or people. Frames are encoded without HTML escaping. */
             data: {
                 [key: string]: unknown;
             };
@@ -3552,6 +3795,13 @@ export interface components {
             fired_at: string;
             late: boolean;
             version: number;
+        };
+        /** @description data of org.updated, sent to the whole workspace (chat_id null, subject_id is the organization id) once per transaction that changed the org structure, including deactivating or reactivating a person who had a membership, a position or led a department. Carries no content: the client reloads GET /api/v1/org with If-None-Match (after about 500 ms, to merge bursts) and drops the event when version is not greater than the cached one. */
+        RealtimeOrgUpdatedEventV1: {
+            /** Format: int64 */
+            version: number;
+            /** @enum {string} */
+            reason: "department" | "position" | "membership" | "person_status";
         };
         BootstrapStatus: {
             bootstrapped: boolean;
@@ -4804,7 +5054,7 @@ export interface components {
             expires_at: string | null;
         };
         /** @enum {string} */
-        Permission: "members.manage" | "invitations.manage" | "workspace.settings" | "workspace.policies" | "branding.manage" | "integrations.manage" | "agents.manage" | "agents.build" | "agents.publish" | "agents.approve" | "agents.observe" | "audit.read" | "chats.moderate" | "knowledge.manage";
+        Permission: "members.manage" | "invitations.manage" | "workspace.settings" | "workspace.policies" | "branding.manage" | "integrations.manage" | "agents.manage" | "agents.build" | "agents.publish" | "agents.approve" | "agents.observe" | "audit.read" | "chats.moderate" | "knowledge.manage" | "org.manage" | "requests.address_groups";
         TokenResponse: {
             access_token: string;
             /** Format: date-time */
@@ -4955,13 +5205,23 @@ export interface components {
             status_expires_at: string | null;
             /** Format: int64 */
             avatar_version: number;
+            /**
+             * Format: uuid
+             * @description The position from the org structure (people only); null without one. Present when the server announces org_structure.
+             */
+            position_id?: string | null;
+            /**
+             * Format: uuid
+             * @description The primary department (people only); null without one. Present when the server announces org_structure; the rest of the assignment is in getOrgStructure.
+             */
+            primary_department_id?: string | null;
         };
         UpdateOrganizationMemberRequest: {
             /** @enum {string|null} */
             role?: "admin" | "member" | null;
             /** @enum {string|null} */
             status?: "active" | "deactivated" | null;
-            /** @description Replaces explicit permissions. The owner sets them for administrators and members. An administrator with members.manage may set only member-grantable permissions (knowledge.manage), only for regular members other than themselves, without a role change, and only while holding those permissions personally. */
+            /** @description Replaces explicit permissions. The owner sets them for administrators and members. An administrator with members.manage may set only member-grantable permissions (knowledge.manage, org.manage, requests.address_groups), only for regular members other than themselves and without a role change. The server compares the old and the new set code by code: every permission the call turns on or off must be held by the administrator personally (403 forbidden otherwise); the member's other permissions are left as they are. requests.address_groups is never granted to administrators automatically; the owner always has it. */
             permissions?: components["schemas"]["Permission"][] | null;
         };
         TransferOwnershipRequest: {
@@ -5113,6 +5373,16 @@ export interface components {
              * @enum {string}
              */
             last_seen_approx?: "recently" | "within_week" | "within_month" | "long_ago";
+            /**
+             * Format: uuid
+             * @description The position from the org structure (people only); null without one. Present when the server announces org_structure.
+             */
+            position_id?: string | null;
+            /**
+             * Format: uuid
+             * @description The primary department (people only); null without one. Present when the server announces org_structure; the rest of the assignment is in getOrgStructure.
+             */
+            primary_department_id?: string | null;
         };
         ActorPage: {
             actors: components["schemas"]["ActorSummary"][];
@@ -5259,6 +5529,10 @@ export interface components {
             deleted_at?: string | null;
             forwarded_from?: components["schemas"]["ForwardAttribution"] | null;
             mentioned_actor_ids: string[];
+            /** @description Departments mentioned in the body (phase 6.5 wave 2). Their people who were chat members at the moment of sending or of the last edit are already in mentioned_actor_ids, which is the union of people mentioned directly and expanded departments. Absent from servers without the org_structure feature. */
+            mentioned_department_ids?: string[];
+            /** @description One entry per mentioned department: how many people it notified. Same for every reader; clients show the note to the author only. */
+            mentioned_departments?: components["schemas"]["MessageDepartmentMention"][];
             /**
              * Format: int64
              * @description Number of non-deleted replies when this message is a thread root.
@@ -5409,6 +5683,7 @@ export interface components {
              */
             run_id?: string;
             mentioned_actor_ids?: string[];
+            mentioned_department_ids?: components["schemas"]["MentionedDepartmentIds"];
             file_ids?: string[];
             /** @description Agent API keys with messages:interactive only. A blank body is replaced by a generated text fallback. */
             blocks?: components["schemas"]["MessageBlocks"];
@@ -5424,6 +5699,7 @@ export interface components {
             body_format: "plain" | "markdown";
             expected_version: number;
             mentioned_actor_ids?: string[];
+            mentioned_department_ids?: components["schemas"]["MentionedDepartmentIds"];
         };
         ForwardAttribution: {
             author_name: string;
@@ -5655,6 +5931,8 @@ export interface components {
             /** @enum {string} */
             body_format: "plain" | "markdown";
             mentioned_actor_ids: string[];
+            /** @description Mentioned departments, expanded into people only when the message is sent. Cleared after sending, like the other mentions. Absent from servers without the org_structure feature. */
+            mentioned_department_ids?: string[];
             files: components["schemas"]["File"][];
             silent: boolean;
             /** Format: date-time */
@@ -5693,6 +5971,7 @@ export interface components {
             /** Format: uuid */
             thread_root_id?: string;
             mentioned_actor_ids?: string[];
+            mentioned_department_ids?: components["schemas"]["MentionedDepartmentIds"];
             /** @description Ready files uploaded by the current user. */
             file_ids?: string[];
             /**
@@ -5709,6 +5988,7 @@ export interface components {
             /** @enum {string} */
             body_format?: "plain" | "markdown";
             mentioned_actor_ids?: string[];
+            mentioned_department_ids?: components["schemas"]["MentionedDepartmentIds"];
             /** @description Replaces the attachments: ready files uploaded by the current user and not attached to any other message. Files left out become unattached again and are cleaned up as usual. */
             file_ids?: string[];
             /** Format: date-time */
@@ -5744,7 +6024,7 @@ export interface components {
             options?: string[];
         };
         /**
-         * @description Whom the request asks. Wave 1 serves people and chat only: department and position get 422 request_audience_unavailable until wave 2 and clients do not offer them.
+         * @description Whom the request asks. people and chat: any member who may write to the chat. department and position (phase 6.5 wave 2) are served by servers that announce org_structure; others answer 422 request_audience_unavailable and clients do not offer them. They need requests.address_groups in the author's effective permissions (the owner always has it) and get 403 request_audience_forbidden otherwise; the permission is checked when the request is created only.
          * @enum {string}
          */
         RequestAudienceKind: "people" | "chat" | "department" | "position";
@@ -5754,21 +6034,31 @@ export interface components {
             actor_ids?: string[];
             /**
              * Format: uuid
-             * @description Wave 2. Rejected with 422 request_audience_unavailable in wave 1.
+             * @description Required for department. Expanded into the active people of the department and its subdepartments (primary and additional members) who are active members of the chat, the author left out. 404 department_not_found for an unknown department.
              */
             department_id?: string;
             /**
              * Format: uuid
-             * @description Wave 2. Rejected with 422 request_audience_unavailable in wave 1.
+             * @description Required for position. Expanded into the active people with the position who are active members of the chat, the author left out. 404 position_not_found for an unknown position.
              */
             position_id?: string;
         };
         RequestAudience: {
             kind: components["schemas"]["RequestAudienceKind"];
-            /** @description The name of the only recipient (or, from wave 2, of the department or position) at the moment of sending; empty for chat and for several people. Never lists names. */
+            /** @description The name of the only recipient, or of the department or position, at the moment of sending; empty for chat and for several people. Never lists names. Kept when the department or position is renamed or deleted later. */
             label: string;
             /** @description Current denominator of «N из M»: recipients who are still active members of the chat plus those who answered. A recipient who left without answering drops out of it. */
             count: number;
+            /**
+             * Format: uuid
+             * @description department only: the addressed department for a link to its card; null once the department is deleted. Absent for other kinds and from servers without org_structure.
+             */
+            department_id?: string | null;
+            /**
+             * Format: uuid
+             * @description position only: the addressed position; null once it is deleted. Absent for other kinds and from servers without org_structure.
+             */
+            position_id?: string | null;
         };
         CreateRequestRequest: {
             /** Format: uuid */
@@ -5781,6 +6071,7 @@ export interface components {
              */
             body_format: "plain" | "markdown";
             mentioned_actor_ids?: string[];
+            mentioned_department_ids?: components["schemas"]["MentionedDepartmentIds"];
             audience: components["schemas"]["RequestAudienceInput"];
             answer: components["schemas"]["RequestAnswerSpec"];
             /** @default true */
@@ -5969,6 +6260,204 @@ export interface components {
         ReminderIds: {
             reminders: components["schemas"]["ReminderIdEntry"][];
         };
+        /** @description 1–60 characters (Unicode code points) after trimming. */
+        OrgName: string;
+        OrgDepartment: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: uuid
+             * @description null for a top-level department.
+             */
+            parent_id: string | null;
+            name: string;
+            /**
+             * Format: uuid
+             * @description The lead, always a member of the department; null without one or while the lead is not active.
+             */
+            lead_actor_id: string | null;
+            /**
+             * Format: uuid
+             * @description The department chat, only when the reader is a member of it; null otherwise.
+             */
+            chat_id: string | null;
+            /** @description The department has a linked chat, whether or not the reader is a member. */
+            has_chat: boolean;
+            /** @description The linked chat is archived («Чат в архиве»); false without a chat. */
+            chat_archived: boolean;
+            /** @description Manual order among siblings; null — by name until the first manual move. */
+            sort_key: number | null;
+            version: number;
+        };
+        OrgPosition: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @description Manual order; null — by name. */
+            sort_key: number | null;
+            version: number;
+        };
+        /** @description The org assignment of one active person. */
+        OrgPerson: {
+            /** Format: uuid */
+            actor_id: string;
+            /** Format: uuid */
+            primary_department_id: string | null;
+            /** @description Oldest membership first. Empty without a primary department. */
+            additional_department_ids: string[];
+            /** Format: uuid */
+            position_id: string | null;
+        };
+        OrgStructure: {
+            /**
+             * Format: int64
+             * @description Grows by one with every write of the structure; org.updated carries it.
+             */
+            version: number;
+            departments: components["schemas"]["OrgDepartment"][];
+            positions: components["schemas"]["OrgPosition"][];
+            /** @description Active people with a membership or a position; everyone else has none. */
+            people: components["schemas"]["OrgPerson"][];
+        };
+        DepartmentMemberInput: {
+            /** Format: uuid */
+            actor_id: string;
+            /** @description true moves the person's primary department here; false adds it as an additional one. */
+            primary: boolean;
+        };
+        CreateDepartmentRequest: {
+            name: components["schemas"]["OrgName"];
+            /** Format: uuid */
+            parent_id?: string;
+            /** Format: uuid */
+            lead_actor_id?: string;
+            /** @description Each person at most once (422 org_invalid). */
+            members?: components["schemas"]["DepartmentMemberInput"][];
+        };
+        /** @description Fields left out are not changed. */
+        UpdateDepartmentRequest: {
+            name?: components["schemas"]["OrgName"];
+            /**
+             * Format: uuid
+             * @description null moves the department to the top level.
+             */
+            parent_id?: string | null;
+            /**
+             * Format: uuid
+             * @description null clears the lead.
+             */
+            lead_actor_id?: string | null;
+            expected_version: number;
+        };
+        MoveDepartmentRequest: {
+            /** @enum {string} */
+            direction: "up" | "down";
+        };
+        DepartmentWrite: {
+            department: components["schemas"]["OrgDepartment"];
+            /**
+             * Format: int64
+             * @description The org version after the write.
+             */
+            version: number;
+        };
+        SetDepartmentMemberRequest: {
+            primary: boolean;
+            /**
+             * @description With primary true — keep the previous primary department as an additional one instead of leaving it.
+             * @default false
+             */
+            keep_previous: boolean;
+        };
+        SetPersonOrgRequest: {
+            /** Format: uuid */
+            primary_department_id: string | null;
+            additional_department_ids: string[];
+            /** Format: uuid */
+            position_id: string | null;
+            /**
+             * Format: int64
+             * @description The org version the client saw; 409 org_version_conflict when the structure changed since.
+             */
+            expected_org_version?: number;
+        };
+        OrgPersonWrite: {
+            person: components["schemas"]["OrgPerson"];
+            /** Format: int64 */
+            version: number;
+        };
+        AssignPeopleOrgRequest: {
+            actor_ids: string[];
+            /** Format: uuid */
+            primary_department_id?: string;
+            /** Format: uuid */
+            add_department_id?: string;
+            /**
+             * Format: uuid
+             * @description null clears the position.
+             */
+            position_id?: string | null;
+        };
+        AssignPeopleOrgResult: {
+            people: components["schemas"]["OrgPerson"][];
+            /** Format: int64 */
+            version: number;
+        };
+        CreatePositionRequest: {
+            name: components["schemas"]["OrgName"];
+        };
+        CreatePositionsRequest: {
+            names: components["schemas"]["OrgName"][];
+        };
+        UpdatePositionRequest: {
+            name?: components["schemas"]["OrgName"];
+            expected_version: number;
+        };
+        PositionWrite: {
+            position: components["schemas"]["OrgPosition"];
+            /** Format: int64 */
+            version: number;
+        };
+        CreatePositionsResult: {
+            created: components["schemas"]["OrgPosition"][];
+            /** @description Names left out because a position with that name exists or the name repeats. */
+            skipped: string[];
+            /** Format: int64 */
+            version: number;
+        };
+        TitleSuggestion: {
+            title: string;
+            count: number;
+            /** @description Active people whose title it is; candidates for the position once created. */
+            actor_ids: string[];
+        };
+        TitleSuggestionList: {
+            suggestions: components["schemas"]["TitleSuggestion"][];
+        };
+        LinkDepartmentChatRequest: {
+            /** Format: uuid */
+            chat_id: string;
+        };
+        DepartmentChatResult: {
+            chat: components["schemas"]["Chat"];
+            department: components["schemas"]["OrgDepartment"];
+            /** Format: int64 */
+            version: number;
+        };
+        DepartmentChatMissing: {
+            actors: components["schemas"]["ActorSummary"][];
+        };
+        DepartmentChatAddMissingResult: {
+            added: number;
+        };
+        MessageDepartmentMention: {
+            /** Format: uuid */
+            department_id: string;
+            /** @description Active people of the department and its subdepartments who are members of the chat, the author left out, at the moment of sending or of the last edit. Clients show «Уведомлены N человек» to the author only. */
+            notified_count: number;
+        };
+        /** @description Departments mentioned with the same token as a person, @[Name](department id). The server expands each into the active people of the department and its subdepartments who are members of the chat, without the author, and adds them to mentioned_actor_ids. More than 10 get 422 validation_failed (details.field mentioned_department_ids). A department id sent in mentioned_actor_ids by an older client is moved here instead of being rejected. Servers without the org_structure feature reject the unknown field, so clients send it only when the server announces the feature. */
+        MentionedDepartmentIds: string[];
         ChatUnread: {
             /** Format: uuid */
             chat_id: string;
@@ -6197,6 +6686,8 @@ export interface components {
         ScheduledMessageId: string;
         MessageId: string;
         ReminderId: string;
+        DepartmentId: string;
+        PositionId: string;
         UploadId: string;
         FileId: string;
         AgentId: string;
@@ -7334,6 +7825,557 @@ export interface operations {
             403: components["responses"]["Error"];
         };
     };
+    getOrgStructure: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The ETag of the cached structure, "org-{version}". */
+                "If-None-Match"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current structure. */
+            200: {
+                headers: {
+                    /** @description "org-{version}" */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgStructure"];
+                };
+            };
+            /** @description The cached structure is current. */
+            304: {
+                headers: {
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    createDepartment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDepartmentRequest"];
+            };
+        };
+        responses: {
+            /** @description The new department and the org version after the write. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepartmentWrite"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    deleteDepartment: {
+        parameters: {
+            query?: {
+                /** @description Department id that becomes the primary department of the primary members, or none. Absent means the parent. It must not be the deleted department or one of its descendants (422 org_invalid). */
+                members_to?: string | "none";
+            };
+            header?: never;
+            path: {
+                department_id: components["parameters"]["DepartmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    updateDepartment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                department_id: components["parameters"]["DepartmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDepartmentRequest"];
+            };
+        };
+        responses: {
+            /** @description The department and the org version after the write. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepartmentWrite"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    moveDepartment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                department_id: components["parameters"]["DepartmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveDepartmentRequest"];
+            };
+        };
+        responses: {
+            /** @description The department and the org version after the move; siblings changed too. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepartmentWrite"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    setDepartmentMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                department_id: components["parameters"]["DepartmentId"];
+                actor_id: components["parameters"]["ActorId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetDepartmentMemberRequest"];
+            };
+        };
+        responses: {
+            /** @description The person's assignment and the org version after the write. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgPersonWrite"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    removeDepartmentMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                department_id: components["parameters"]["DepartmentId"];
+                actor_id: components["parameters"]["ActorId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    setPersonOrg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                actor_id: components["parameters"]["ActorId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetPersonOrgRequest"];
+            };
+        };
+        responses: {
+            /** @description The person's assignment and the org version after the write. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgPersonWrite"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    assignPeopleOrg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignPeopleOrgRequest"];
+            };
+        };
+        responses: {
+            /** @description The assignments of the people and the org version after the write. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssignPeopleOrgResult"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    createPosition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePositionRequest"];
+            };
+        };
+        responses: {
+            /** @description The new position and the org version after the write. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PositionWrite"];
+                };
+            };
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    createPositions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePositionsRequest"];
+            };
+        };
+        responses: {
+            /** @description Created and skipped names and the org version after the write. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatePositionsResult"];
+                };
+            };
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    deletePosition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                position_id: components["parameters"]["PositionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    updatePosition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                position_id: components["parameters"]["PositionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePositionRequest"];
+            };
+        };
+        responses: {
+            /** @description The position and the org version after the write. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PositionWrite"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    listTitleSuggestions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Suggestions, at most 200. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TitleSuggestionList"];
+                };
+            };
+            403: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    linkDepartmentChat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                department_id: components["parameters"]["DepartmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkDepartmentChatRequest"];
+            };
+        };
+        responses: {
+            /** @description The department with the link and the org version. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepartmentWrite"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    createDepartmentChat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                department_id: components["parameters"]["DepartmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The chat, the department with the link and the org version. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepartmentChatResult"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    unlinkDepartmentChat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                department_id: components["parameters"]["DepartmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unlinked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    listDepartmentChatMissing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                department_id: components["parameters"]["DepartmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The missing people. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepartmentChatMissing"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
+    addDepartmentChatMissing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                department_id: components["parameters"]["DepartmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description How many people were added. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DepartmentChatAddMissingResult"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            501: components["responses"]["Error"];
+        };
+    };
     listInvitations: {
         parameters: {
             query?: never;
@@ -7499,6 +8541,7 @@ export interface operations {
     listActors: {
         parameters: {
             query?: {
+                /** @description Matches the name, handle and title; with the org_structure feature also the position name and the names of the person's departments (primary and additional). */
                 q?: string;
                 after_id?: string;
                 limit?: number;

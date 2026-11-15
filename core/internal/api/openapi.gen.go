@@ -1725,6 +1725,7 @@ const (
 	DurableEventTypeV1MessageUnpinned         DurableEventTypeV1 = "message.unpinned"
 	DurableEventTypeV1MessageUnsaved          DurableEventTypeV1 = "message.unsaved"
 	DurableEventTypeV1MessageUpdated          DurableEventTypeV1 = "message.updated"
+	DurableEventTypeV1OrgUpdated              DurableEventTypeV1 = "org.updated"
 	DurableEventTypeV1ReactionAdded           DurableEventTypeV1 = "reaction.added"
 	DurableEventTypeV1ReactionRemoved         DurableEventTypeV1 = "reaction.removed"
 	DurableEventTypeV1ReadMarked              DurableEventTypeV1 = "read.marked"
@@ -1783,6 +1784,8 @@ func (e DurableEventTypeV1) Valid() bool {
 	case DurableEventTypeV1MessageUnsaved:
 		return true
 	case DurableEventTypeV1MessageUpdated:
+		return true
+	case DurableEventTypeV1OrgUpdated:
 		return true
 	case DurableEventTypeV1ReactionAdded:
 		return true
@@ -1851,6 +1854,9 @@ const (
 	ErrorCodeChatArchived                 ErrorCode = "chat_archived"
 	ErrorCodeChatConflict                 ErrorCode = "chat_conflict"
 	ErrorCodeChatNotFound                 ErrorCode = "chat_not_found"
+	ErrorCodeDepartmentChatExists         ErrorCode = "department_chat_exists"
+	ErrorCodeDepartmentChatInvalid        ErrorCode = "department_chat_invalid"
+	ErrorCodeDepartmentNotFound           ErrorCode = "department_not_found"
 	ErrorCodeEmailTaken                   ErrorCode = "email_taken"
 	ErrorCodeFileConflict                 ErrorCode = "file_conflict"
 	ErrorCodeFileNotFound                 ErrorCode = "file_not_found"
@@ -1869,9 +1875,16 @@ const (
 	ErrorCodeMessageNotFound              ErrorCode = "message_not_found"
 	ErrorCodeNotImplemented               ErrorCode = "not_implemented"
 	ErrorCodeNotMember                    ErrorCode = "not_member"
+	ErrorCodeOrgCycle                     ErrorCode = "org_cycle"
+	ErrorCodeOrgDepthExceeded             ErrorCode = "org_depth_exceeded"
+	ErrorCodeOrgInvalid                   ErrorCode = "org_invalid"
+	ErrorCodeOrgLimitReached              ErrorCode = "org_limit_reached"
+	ErrorCodeOrgNameTaken                 ErrorCode = "org_name_taken"
+	ErrorCodeOrgVersionConflict           ErrorCode = "org_version_conflict"
 	ErrorCodeOriginNotAllowed             ErrorCode = "origin_not_allowed"
 	ErrorCodePasswordChangeRequired       ErrorCode = "password_change_required"
 	ErrorCodePayloadTooLarge              ErrorCode = "payload_too_large"
+	ErrorCodePositionNotFound             ErrorCode = "position_not_found"
 	ErrorCodePushUnavailable              ErrorCode = "push_unavailable"
 	ErrorCodeRateLimited                  ErrorCode = "rate_limited"
 	ErrorCodeReauthenticationFailed       ErrorCode = "reauthentication_failed"
@@ -1879,6 +1892,7 @@ const (
 	ErrorCodeReminderLimitReached         ErrorCode = "reminder_limit_reached"
 	ErrorCodeReminderNotFound             ErrorCode = "reminder_not_found"
 	ErrorCodeRequestAudienceEmpty         ErrorCode = "request_audience_empty"
+	ErrorCodeRequestAudienceForbidden     ErrorCode = "request_audience_forbidden"
 	ErrorCodeRequestAudienceUnavailable   ErrorCode = "request_audience_unavailable"
 	ErrorCodeRequestChangeTooLate         ErrorCode = "request_change_too_late"
 	ErrorCodeRequestClosed                ErrorCode = "request_closed"
@@ -1952,6 +1966,12 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeChatNotFound:
 		return true
+	case ErrorCodeDepartmentChatExists:
+		return true
+	case ErrorCodeDepartmentChatInvalid:
+		return true
+	case ErrorCodeDepartmentNotFound:
+		return true
 	case ErrorCodeEmailTaken:
 		return true
 	case ErrorCodeFileConflict:
@@ -1988,11 +2008,25 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeNotMember:
 		return true
+	case ErrorCodeOrgCycle:
+		return true
+	case ErrorCodeOrgDepthExceeded:
+		return true
+	case ErrorCodeOrgInvalid:
+		return true
+	case ErrorCodeOrgLimitReached:
+		return true
+	case ErrorCodeOrgNameTaken:
+		return true
+	case ErrorCodeOrgVersionConflict:
+		return true
 	case ErrorCodeOriginNotAllowed:
 		return true
 	case ErrorCodePasswordChangeRequired:
 		return true
 	case ErrorCodePayloadTooLarge:
+		return true
+	case ErrorCodePositionNotFound:
 		return true
 	case ErrorCodePushUnavailable:
 		return true
@@ -2007,6 +2041,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeReminderNotFound:
 		return true
 	case ErrorCodeRequestAudienceEmpty:
+		return true
+	case ErrorCodeRequestAudienceForbidden:
 		return true
 	case ErrorCodeRequestAudienceUnavailable:
 		return true
@@ -2804,6 +2840,24 @@ func (e MobilePushDeviceRequestPlatform) Valid() bool {
 	}
 }
 
+// Defines values for MoveDepartmentRequestDirection.
+const (
+	Down MoveDepartmentRequestDirection = "down"
+	Up   MoveDepartmentRequestDirection = "up"
+)
+
+// Valid indicates whether the value is a known member of the MoveDepartmentRequestDirection enum.
+func (e MoveDepartmentRequestDirection) Valid() bool {
+	switch e {
+	case Down:
+		return true
+	case Up:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for NotificationScheduleDays0.
 const (
 	NotificationScheduleDays0All      NotificationScheduleDays0 = "all"
@@ -2881,20 +2935,22 @@ func (e OrganizationSettingsInvitationDefaultRole) Valid() bool {
 
 // Defines values for Permission.
 const (
-	AgentsApprove      Permission = "agents.approve"
-	AgentsBuild        Permission = "agents.build"
-	AgentsManage       Permission = "agents.manage"
-	AgentsObserve      Permission = "agents.observe"
-	AgentsPublish      Permission = "agents.publish"
-	AuditRead          Permission = "audit.read"
-	BrandingManage     Permission = "branding.manage"
-	ChatsModerate      Permission = "chats.moderate"
-	IntegrationsManage Permission = "integrations.manage"
-	InvitationsManage  Permission = "invitations.manage"
-	KnowledgeManage    Permission = "knowledge.manage"
-	MembersManage      Permission = "members.manage"
-	WorkspacePolicies  Permission = "workspace.policies"
-	WorkspaceSettings  Permission = "workspace.settings"
+	AgentsApprove         Permission = "agents.approve"
+	AgentsBuild           Permission = "agents.build"
+	AgentsManage          Permission = "agents.manage"
+	AgentsObserve         Permission = "agents.observe"
+	AgentsPublish         Permission = "agents.publish"
+	AuditRead             Permission = "audit.read"
+	BrandingManage        Permission = "branding.manage"
+	ChatsModerate         Permission = "chats.moderate"
+	IntegrationsManage    Permission = "integrations.manage"
+	InvitationsManage     Permission = "invitations.manage"
+	KnowledgeManage       Permission = "knowledge.manage"
+	MembersManage         Permission = "members.manage"
+	OrgManage             Permission = "org.manage"
+	RequestsAddressGroups Permission = "requests.address_groups"
+	WorkspacePolicies     Permission = "workspace.policies"
+	WorkspaceSettings     Permission = "workspace.settings"
 )
 
 // Valid indicates whether the value is a known member of the Permission enum.
@@ -2923,6 +2979,10 @@ func (e Permission) Valid() bool {
 	case KnowledgeManage:
 		return true
 	case MembersManage:
+		return true
+	case OrgManage:
+		return true
+	case RequestsAddressGroups:
 		return true
 	case WorkspacePolicies:
 		return true
@@ -3173,6 +3233,30 @@ const (
 func (e RealtimeMessageStreamingFrameV1Op) Valid() bool {
 	switch e {
 	case RealtimeMessageStreamingFrameV1OpMessageStreaming:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RealtimeOrgUpdatedEventV1Reason.
+const (
+	RealtimeOrgUpdatedEventV1ReasonDepartment   RealtimeOrgUpdatedEventV1Reason = "department"
+	RealtimeOrgUpdatedEventV1ReasonMembership   RealtimeOrgUpdatedEventV1Reason = "membership"
+	RealtimeOrgUpdatedEventV1ReasonPersonStatus RealtimeOrgUpdatedEventV1Reason = "person_status"
+	RealtimeOrgUpdatedEventV1ReasonPosition     RealtimeOrgUpdatedEventV1Reason = "position"
+)
+
+// Valid indicates whether the value is a known member of the RealtimeOrgUpdatedEventV1Reason enum.
+func (e RealtimeOrgUpdatedEventV1Reason) Valid() bool {
+	switch e {
+	case RealtimeOrgUpdatedEventV1ReasonDepartment:
+		return true
+	case RealtimeOrgUpdatedEventV1ReasonMembership:
+		return true
+	case RealtimeOrgUpdatedEventV1ReasonPersonStatus:
+		return true
+	case RealtimeOrgUpdatedEventV1ReasonPosition:
 		return true
 	default:
 		return false
@@ -4685,6 +4769,21 @@ func (e DownloadKnowledgeDocumentFileParamsDelivery) Valid() bool {
 	}
 }
 
+// Defines values for DeleteDepartmentParamsMembersTo1.
+const (
+	DeleteDepartmentParamsMembersTo1None DeleteDepartmentParamsMembersTo1 = "none"
+)
+
+// Valid indicates whether the value is a known member of the DeleteDepartmentParamsMembersTo1 enum.
+func (e DeleteDepartmentParamsMembersTo1) Valid() bool {
+	switch e {
+	case DeleteDepartmentParamsMembersTo1None:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListOrganizationAuditParamsCategory.
 const (
 	ListOrganizationAuditParamsCategoryAgents         ListOrganizationAuditParamsCategory = "agents"
@@ -4837,12 +4936,18 @@ type ActorSummary struct {
 	LastSeenApprox *ActorSummaryLastSeenApprox `json:"last_seen_approx,omitempty"`
 
 	// LastSeenAt Direct chat peer only — when the person was last online, when neither side hides last seen.
-	LastSeenAt      *time.Time       `json:"last_seen_at,omitempty"`
-	StatusEmoji     string           `json:"status_emoji"`
-	StatusExpiresAt *time.Time       `json:"status_expires_at"`
-	StatusText      string           `json:"status_text"`
-	Title           string           `json:"title"`
-	Type            ActorSummaryType `json:"type"`
+	LastSeenAt *time.Time `json:"last_seen_at,omitempty"`
+
+	// PositionId The position from the org structure (people only); null without one. Present when the server announces org_structure.
+	PositionId *openapi_types.UUID `json:"position_id,omitempty"`
+
+	// PrimaryDepartmentId The primary department (people only); null without one. Present when the server announces org_structure; the rest of the assignment is in getOrgStructure.
+	PrimaryDepartmentId *openapi_types.UUID `json:"primary_department_id,omitempty"`
+	StatusEmoji         string              `json:"status_emoji"`
+	StatusExpiresAt     *time.Time          `json:"status_expires_at"`
+	StatusText          string              `json:"status_text"`
+	Title               string              `json:"title"`
+	Type                ActorSummaryType    `json:"type"`
 }
 
 // ActorSummaryLastSeenApprox Direct chat peer only — rough last seen used instead of last_seen_at when the person or the viewer hides the exact time.
@@ -5508,6 +5613,22 @@ type ArchitectTestExample struct {
 	Prompt      string              `json:"prompt"`
 }
 
+// AssignPeopleOrgRequest defines model for AssignPeopleOrgRequest.
+type AssignPeopleOrgRequest struct {
+	ActorIds        []openapi_types.UUID `json:"actor_ids"`
+	AddDepartmentId *openapi_types.UUID  `json:"add_department_id,omitempty"`
+
+	// PositionId null clears the position.
+	PositionId          *openapi_types.UUID `json:"position_id,omitempty"`
+	PrimaryDepartmentId *openapi_types.UUID `json:"primary_department_id,omitempty"`
+}
+
+// AssignPeopleOrgResult defines model for AssignPeopleOrgResult.
+type AssignPeopleOrgResult struct {
+	People  []OrgPerson `json:"people"`
+	Version int64       `json:"version"`
+}
+
 // AuditEntry defines model for AuditEntry.
 type AuditEntry struct {
 	Action     string                 `json:"action"`
@@ -6023,6 +6144,18 @@ type CreateChatRequestKind string
 // CreateChatRequestVisibility defines model for CreateChatRequest.Visibility.
 type CreateChatRequestVisibility string
 
+// CreateDepartmentRequest defines model for CreateDepartmentRequest.
+type CreateDepartmentRequest struct {
+	LeadActorId *openapi_types.UUID `json:"lead_actor_id,omitempty"`
+
+	// Members Each person at most once (422 org_invalid).
+	Members *[]DepartmentMemberInput `json:"members,omitempty"`
+
+	// Name 1–60 characters (Unicode code points) after trimming.
+	Name     OrgName             `json:"name"`
+	ParentId *openapi_types.UUID `json:"parent_id,omitempty"`
+}
+
 // CreateFileUploadRequest defines model for CreateFileUploadRequest.
 type CreateFileUploadRequest struct {
 	Mime   string  `json:"mime"`
@@ -6102,7 +6235,10 @@ type CreateMessageRequest struct {
 	ClientMsgId       openapi_types.UUID              `json:"client_msg_id"`
 	FileIds           *[]openapi_types.UUID           `json:"file_ids,omitempty"`
 	MentionedActorIds *[]openapi_types.UUID           `json:"mentioned_actor_ids,omitempty"`
-	ReplyToId         *openapi_types.UUID             `json:"reply_to_id,omitempty"`
+
+	// MentionedDepartmentIds Departments mentioned with the same token as a person, @[Name](department id). The server expands each into the active people of the department and its subdepartments who are members of the chat, without the author, and adds them to mentioned_actor_ids. More than 10 get 422 validation_failed (details.field mentioned_department_ids). A department id sent in mentioned_actor_ids by an older client is moved here instead of being rejected. Servers without the org_structure feature reject the unknown field, so clients send it only when the server announces the feature.
+	MentionedDepartmentIds *MentionedDepartmentIds `json:"mentioned_department_ids,omitempty"`
+	ReplyToId              *openapi_types.UUID     `json:"reply_to_id,omitempty"`
 
 	// RunId Required when authenticating with an agent API key.
 	RunId *openapi_types.UUID `json:"run_id,omitempty"`
@@ -6114,6 +6250,26 @@ type CreateMessageRequest struct {
 
 // CreateMessageRequestBodyFormat defines model for CreateMessageRequest.BodyFormat.
 type CreateMessageRequestBodyFormat string
+
+// CreatePositionRequest defines model for CreatePositionRequest.
+type CreatePositionRequest struct {
+	// Name 1–60 characters (Unicode code points) after trimming.
+	Name OrgName `json:"name"`
+}
+
+// CreatePositionsRequest defines model for CreatePositionsRequest.
+type CreatePositionsRequest struct {
+	Names []OrgName `json:"names"`
+}
+
+// CreatePositionsResult defines model for CreatePositionsResult.
+type CreatePositionsResult struct {
+	Created []OrgPosition `json:"created"`
+
+	// Skipped Names left out because a position with that name exists or the name repeats.
+	Skipped []string `json:"skipped"`
+	Version int64    `json:"version"`
+}
 
 // CreateRequestRequest defines model for CreateRequestRequest.
 type CreateRequestRequest struct {
@@ -6132,6 +6288,9 @@ type CreateRequestRequest struct {
 	// DueAt At least 10 minutes and at most 90 days ahead.
 	DueAt             *time.Time            `json:"due_at,omitempty"`
 	MentionedActorIds *[]openapi_types.UUID `json:"mentioned_actor_ids,omitempty"`
+
+	// MentionedDepartmentIds Departments mentioned with the same token as a person, @[Name](department id). The server expands each into the active people of the department and its subdepartments who are members of the chat, without the author, and adds them to mentioned_actor_ids. More than 10 get 422 validation_failed (details.field mentioned_department_ids). A department id sent in mentioned_actor_ids by an older client is moved here instead of being rejected. Servers without the org_structure feature reject the unknown field, so clients send it only when the server announces the feature.
+	MentionedDepartmentIds *MentionedDepartmentIds `json:"mentioned_department_ids,omitempty"`
 }
 
 // CreateRequestRequestBodyFormat defines model for CreateRequestRequest.BodyFormat.
@@ -6146,7 +6305,10 @@ type CreateScheduledMessageRequest struct {
 	// FileIds Ready files uploaded by the current user.
 	FileIds           *[]openapi_types.UUID `json:"file_ids,omitempty"`
 	MentionedActorIds *[]openapi_types.UUID `json:"mentioned_actor_ids,omitempty"`
-	ReplyToId         *openapi_types.UUID   `json:"reply_to_id,omitempty"`
+
+	// MentionedDepartmentIds Departments mentioned with the same token as a person, @[Name](department id). The server expands each into the active people of the department and its subdepartments who are members of the chat, without the author, and adds them to mentioned_actor_ids. More than 10 get 422 validation_failed (details.field mentioned_department_ids). A department id sent in mentioned_actor_ids by an older client is moved here instead of being rejected. Servers without the org_structure feature reject the unknown field, so clients send it only when the server announces the feature.
+	MentionedDepartmentIds *MentionedDepartmentIds `json:"mentioned_department_ids,omitempty"`
+	ReplyToId              *openapi_types.UUID     `json:"reply_to_id,omitempty"`
 
 	// SendAt Must be in the future and at most 365 days ahead.
 	SendAt time.Time `json:"send_at"`
@@ -6179,6 +6341,39 @@ type CustomStatus struct {
 	Emoji     string     `json:"emoji"`
 	ExpiresAt *time.Time `json:"expires_at"`
 	Text      string     `json:"text"`
+}
+
+// DepartmentChatAddMissingResult defines model for DepartmentChatAddMissingResult.
+type DepartmentChatAddMissingResult struct {
+	Added int `json:"added"`
+}
+
+// DepartmentChatMissing defines model for DepartmentChatMissing.
+type DepartmentChatMissing struct {
+	Actors []ActorSummary `json:"actors"`
+}
+
+// DepartmentChatResult defines model for DepartmentChatResult.
+type DepartmentChatResult struct {
+	Chat       Chat          `json:"chat"`
+	Department OrgDepartment `json:"department"`
+	Version    int64         `json:"version"`
+}
+
+// DepartmentMemberInput defines model for DepartmentMemberInput.
+type DepartmentMemberInput struct {
+	ActorId openapi_types.UUID `json:"actor_id"`
+
+	// Primary true moves the person's primary department here; false adds it as an additional one.
+	Primary bool `json:"primary"`
+}
+
+// DepartmentWrite defines model for DepartmentWrite.
+type DepartmentWrite struct {
+	Department OrgDepartment `json:"department"`
+
+	// Version The org version after the write.
+	Version int64 `json:"version"`
 }
 
 // DetachMcpConnectionRequest defines model for DetachMcpConnectionRequest.
@@ -6622,6 +6817,11 @@ type KnowledgeSearchResult struct {
 	Semantic bool `json:"semantic"`
 }
 
+// LinkDepartmentChatRequest defines model for LinkDepartmentChatRequest.
+type LinkDepartmentChatRequest struct {
+	ChatId openapi_types.UUID `json:"chat_id"`
+}
+
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
 	Email    openapi_types.Email `json:"email"`
@@ -6698,6 +6898,9 @@ type McpTool struct {
 	ReadOnly bool `json:"read_only"`
 }
 
+// MentionedDepartmentIds Departments mentioned with the same token as a person, @[Name](department id). The server expands each into the active people of the department and its subdepartments who are members of the chat, without the author, and adds them to mentioned_actor_ids. More than 10 get 422 validation_failed (details.field mentioned_department_ids). A department id sent in mentioned_actor_ids by an older client is moved here instead of being rejected. Servers without the org_structure feature reject the unknown field, so clients send it only when the server announces the feature.
+type MentionedDepartmentIds = []openapi_types.UUID
+
 // Message defines model for Message.
 type Message struct {
 	ActorId openapi_types.UUID `json:"actor_id"`
@@ -6719,7 +6922,13 @@ type Message struct {
 	ForwardedFrom     *ForwardAttribution  `json:"forwarded_from,omitempty"`
 	Id                openapi_types.UUID   `json:"id"`
 	MentionedActorIds []openapi_types.UUID `json:"mentioned_actor_ids"`
-	ReplyToId         *openapi_types.UUID  `json:"reply_to_id,omitempty"`
+
+	// MentionedDepartmentIds Departments mentioned in the body (phase 6.5 wave 2). Their people who were chat members at the moment of sending or of the last edit are already in mentioned_actor_ids, which is the union of people mentioned directly and expanded departments. Absent from servers without the org_structure feature.
+	MentionedDepartmentIds *[]openapi_types.UUID `json:"mentioned_department_ids,omitempty"`
+
+	// MentionedDepartments One entry per mentioned department: how many people it notified. Same for every reader; clients show the note to the author only.
+	MentionedDepartments *[]MessageDepartmentMention `json:"mentioned_departments,omitempty"`
+	ReplyToId            *openapi_types.UUID         `json:"reply_to_id,omitempty"`
 
 	// Request Present on messages of type request: the request as every reader sees it, without recipients or anyone's answers. Also in realtime message.* frames.
 	Request *MessageRequest `json:"request,omitempty"`
@@ -6859,6 +7068,14 @@ type MessageCardItemsState string
 
 // MessageCardStatusTone defines model for MessageCard.Status.Tone.
 type MessageCardStatusTone string
+
+// MessageDepartmentMention defines model for MessageDepartmentMention.
+type MessageDepartmentMention struct {
+	DepartmentId openapi_types.UUID `json:"department_id"`
+
+	// NotifiedCount Active people of the department and its subdepartments who are members of the chat, the author left out, at the moment of sending or of the last edit. Clients show «Уведомлены N человек» to the author only.
+	NotifiedCount int `json:"notified_count"`
+}
 
 // MessagePage defines model for MessagePage.
 type MessagePage struct {
@@ -7023,6 +7240,14 @@ type MobilePushDeviceRequest struct {
 // MobilePushDeviceRequestPlatform defines model for MobilePushDeviceRequest.Platform.
 type MobilePushDeviceRequestPlatform string
 
+// MoveDepartmentRequest defines model for MoveDepartmentRequest.
+type MoveDepartmentRequest struct {
+	Direction MoveDepartmentRequestDirection `json:"direction"`
+}
+
+// MoveDepartmentRequestDirection defines model for MoveDepartmentRequest.Direction.
+type MoveDepartmentRequestDirection string
+
 // NotificationSchedule defines model for NotificationSchedule.
 type NotificationSchedule struct {
 	Days NotificationSchedule_Days `json:"days"`
@@ -7050,22 +7275,94 @@ type ObjectLink struct {
 	Url string `json:"url"`
 }
 
+// OrgDepartment defines model for OrgDepartment.
+type OrgDepartment struct {
+	// ChatArchived The linked chat is archived («Чат в архиве»); false without a chat.
+	ChatArchived bool `json:"chat_archived"`
+
+	// ChatId The department chat, only when the reader is a member of it; null otherwise.
+	ChatId *openapi_types.UUID `json:"chat_id"`
+
+	// HasChat The department has a linked chat, whether or not the reader is a member.
+	HasChat bool               `json:"has_chat"`
+	Id      openapi_types.UUID `json:"id"`
+
+	// LeadActorId The lead, always a member of the department; null without one or while the lead is not active.
+	LeadActorId *openapi_types.UUID `json:"lead_actor_id"`
+	Name        string              `json:"name"`
+
+	// ParentId null for a top-level department.
+	ParentId *openapi_types.UUID `json:"parent_id"`
+
+	// SortKey Manual order among siblings; null — by name until the first manual move.
+	SortKey *int `json:"sort_key"`
+	Version int  `json:"version"`
+}
+
+// OrgName 1–60 characters (Unicode code points) after trimming.
+type OrgName = string
+
+// OrgPerson The org assignment of one active person.
+type OrgPerson struct {
+	ActorId openapi_types.UUID `json:"actor_id"`
+
+	// AdditionalDepartmentIds Oldest membership first. Empty without a primary department.
+	AdditionalDepartmentIds []openapi_types.UUID `json:"additional_department_ids"`
+	PositionId              *openapi_types.UUID  `json:"position_id"`
+	PrimaryDepartmentId     *openapi_types.UUID  `json:"primary_department_id"`
+}
+
+// OrgPersonWrite defines model for OrgPersonWrite.
+type OrgPersonWrite struct {
+	// Person The org assignment of one active person.
+	Person  OrgPerson `json:"person"`
+	Version int64     `json:"version"`
+}
+
+// OrgPosition defines model for OrgPosition.
+type OrgPosition struct {
+	Id   openapi_types.UUID `json:"id"`
+	Name string             `json:"name"`
+
+	// SortKey Manual order; null — by name.
+	SortKey *int `json:"sort_key"`
+	Version int  `json:"version"`
+}
+
+// OrgStructure defines model for OrgStructure.
+type OrgStructure struct {
+	Departments []OrgDepartment `json:"departments"`
+
+	// People Active people with a membership or a position; everyone else has none.
+	People    []OrgPerson   `json:"people"`
+	Positions []OrgPosition `json:"positions"`
+
+	// Version Grows by one with every write of the structure; org.updated carries it.
+	Version int64 `json:"version"`
+}
+
 // OrganizationMember defines model for OrganizationMember.
 type OrganizationMember struct {
-	ActorId         openapi_types.UUID       `json:"actor_id"`
-	AvatarVersion   int64                    `json:"avatar_version"`
-	CreatedAt       time.Time                `json:"created_at"`
-	DisplayName     string                   `json:"display_name"`
-	Email           openapi_types.Email      `json:"email"`
-	Handle          string                   `json:"handle"`
-	LastSeenAt      *time.Time               `json:"last_seen_at"`
-	Permissions     []Permission             `json:"permissions"`
-	Role            OrganizationMemberRole   `json:"role"`
-	Status          OrganizationMemberStatus `json:"status"`
-	StatusEmoji     string                   `json:"status_emoji"`
-	StatusExpiresAt *time.Time               `json:"status_expires_at"`
-	StatusText      string                   `json:"status_text"`
-	Title           string                   `json:"title"`
+	ActorId       openapi_types.UUID  `json:"actor_id"`
+	AvatarVersion int64               `json:"avatar_version"`
+	CreatedAt     time.Time           `json:"created_at"`
+	DisplayName   string              `json:"display_name"`
+	Email         openapi_types.Email `json:"email"`
+	Handle        string              `json:"handle"`
+	LastSeenAt    *time.Time          `json:"last_seen_at"`
+	Permissions   []Permission        `json:"permissions"`
+
+	// PositionId The position from the org structure (people only); null without one. Present when the server announces org_structure.
+	PositionId *openapi_types.UUID `json:"position_id,omitempty"`
+
+	// PrimaryDepartmentId The primary department (people only); null without one. Present when the server announces org_structure; the rest of the assignment is in getOrgStructure.
+	PrimaryDepartmentId *openapi_types.UUID      `json:"primary_department_id,omitempty"`
+	Role                OrganizationMemberRole   `json:"role"`
+	Status              OrganizationMemberStatus `json:"status"`
+	StatusEmoji         string                   `json:"status_emoji"`
+	StatusExpiresAt     *time.Time               `json:"status_expires_at"`
+	StatusText          string                   `json:"status_text"`
+	Title               string                   `json:"title"`
 }
 
 // OrganizationMemberRole defines model for OrganizationMember.Role.
@@ -7099,6 +7396,12 @@ type Permission string
 
 // PinnedChatIds defines model for PinnedChatIds.
 type PinnedChatIds = []openapi_types.UUID
+
+// PositionWrite defines model for PositionWrite.
+type PositionWrite struct {
+	Position OrgPosition `json:"position"`
+	Version  int64       `json:"version"`
+}
 
 // PublicBranding defines model for PublicBranding.
 type PublicBranding struct {
@@ -7263,7 +7566,7 @@ type RealtimeDurableEventFrameV1 struct {
 	ActorId openapi_types.UUID  `json:"actor_id"`
 	ChatId  *openapi_types.UUID `json:"chat_id,omitempty"`
 
-	// Data Event payload. For message.created, message.updated and message.deleted it is the message in the shape of the REST feed (components/schemas/Message: files with metadata and no links, thread_reply_count, mentioned_actor_ids, blocks, agent_provenance and request when present; never request_viewer, which is per reader), read when the event is delivered, plus silent on message.created and thread_root_reply_count on thread replies. A frame that would exceed the frame limit (WS_MAX_FRAME_BYTES) is never sent as is: its data becomes a stub with truncated: true — for message.* the Message shape with an empty body, no files and no blocks, for other events only their short scalar fields — and the client loads the record by REST. The data of request.* and reminder.* events is described by the RequestAssignedEvent … ReminderFiredEvent definitions: it never carries message text, notes, comments or who answered what. Frames are encoded without HTML escaping.
+	// Data Event payload. For message.created, message.updated and message.deleted it is the message in the shape of the REST feed (components/schemas/Message: files with metadata and no links, thread_reply_count, mentioned_actor_ids, blocks, agent_provenance and request when present; never request_viewer, which is per reader), read when the event is delivered, plus silent on message.created and thread_root_reply_count on thread replies. A frame that would exceed the frame limit (WS_MAX_FRAME_BYTES) is never sent as is: its data becomes a stub with truncated: true — for message.* the Message shape with an empty body, no files and no blocks, for other events only their short scalar fields — and the client loads the record by REST. The data of request.* and reminder.* events is described by the RequestAssignedEvent … ReminderFiredEvent definitions: it never carries message text, notes, comments or who answered what. The data of org.updated is OrgUpdatedEvent: only the new version and a reason, never names or people. Frames are encoded without HTML escaping.
 	Data       map[string]interface{}        `json:"data"`
 	OccurredAt time.Time                     `json:"occurred_at"`
 	Op         RealtimeDurableEventFrameV1Op `json:"op"`
@@ -7282,7 +7585,7 @@ type RealtimeHelloFrameV1 struct {
 	ConnectionId  openapi_types.UUID `json:"connection_id"`
 	CurrentSeq    int64              `json:"current_seq"`
 
-	// Features Optional protocol additions this server accepts. typing_actions: the action field on typing frames. message_requests: requests («Запрос») — the request REST routes, Message.request and the request.* events. message_reminders: personal reminders («Напомнить мне») — the reminder REST routes and the reminder.* events. A client hides a feature the server does not list.
+	// Features Optional protocol additions this server accepts. typing_actions: the action field on typing frames. message_requests: requests («Запрос») — the request REST routes, Message.request and the request.* events. message_reminders: personal reminders («Напомнить мне») — the reminder REST routes and the reminder.* events. org_structure: departments and positions («Оргструктура») — the org REST routes, the org fields of ActorSummary, OrganizationMember and Message, mentioned_department_ids in message, request and scheduled message bodies, the department and position request audiences and the org.updated event. A client hides a feature the server does not list.
 	Features            *[]string              `json:"features,omitempty"`
 	HeartbeatIntervalMs int                    `json:"heartbeat_interval_ms"`
 	MaxUnackedEvents    int                    `json:"max_unacked_events"`
@@ -7328,6 +7631,15 @@ type RealtimeMessageStreamingFrameV1 struct {
 
 // RealtimeMessageStreamingFrameV1Op defines model for RealtimeMessageStreamingFrameV1.Op.
 type RealtimeMessageStreamingFrameV1Op string
+
+// RealtimeOrgUpdatedEventV1 data of org.updated, sent to the whole workspace (chat_id null, subject_id is the organization id) once per transaction that changed the org structure, including deactivating or reactivating a person who had a membership, a position or led a department. Carries no content: the client reloads GET /api/v1/org with If-None-Match (after about 500 ms, to merge bursts) and drops the event when version is not greater than the cached one.
+type RealtimeOrgUpdatedEventV1 struct {
+	Reason  RealtimeOrgUpdatedEventV1Reason `json:"reason"`
+	Version int64                           `json:"version"`
+}
+
+// RealtimeOrgUpdatedEventV1Reason defines model for RealtimeOrgUpdatedEventV1.Reason.
+type RealtimeOrgUpdatedEventV1Reason string
 
 // RealtimePresenceEventFrameV1 defines model for RealtimePresenceEventFrameV1.
 type RealtimePresenceEventFrameV1 struct {
@@ -7649,11 +7961,17 @@ type RequestAudience struct {
 	// Count Current denominator of «N из M»: recipients who are still active members of the chat plus those who answered. A recipient who left without answering drops out of it.
 	Count int `json:"count"`
 
-	// Kind Whom the request asks. Wave 1 serves people and chat only: department and position get 422 request_audience_unavailable until wave 2 and clients do not offer them.
+	// DepartmentId department only: the addressed department for a link to its card; null once the department is deleted. Absent for other kinds and from servers without org_structure.
+	DepartmentId *openapi_types.UUID `json:"department_id,omitempty"`
+
+	// Kind Whom the request asks. people and chat: any member who may write to the chat. department and position (phase 6.5 wave 2) are served by servers that announce org_structure; others answer 422 request_audience_unavailable and clients do not offer them. They need requests.address_groups in the author's effective permissions (the owner always has it) and get 403 request_audience_forbidden otherwise; the permission is checked when the request is created only.
 	Kind RequestAudienceKind `json:"kind"`
 
-	// Label The name of the only recipient (or, from wave 2, of the department or position) at the moment of sending; empty for chat and for several people. Never lists names.
+	// Label The name of the only recipient, or of the department or position, at the moment of sending; empty for chat and for several people. Never lists names. Kept when the department or position is renamed or deleted later.
 	Label string `json:"label"`
+
+	// PositionId position only: the addressed position; null once it is deleted. Absent for other kinds and from servers without org_structure.
+	PositionId *openapi_types.UUID `json:"position_id,omitempty"`
 }
 
 // RequestAudienceInput defines model for RequestAudienceInput.
@@ -7661,17 +7979,17 @@ type RequestAudienceInput struct {
 	// ActorIds Required for people. Intersected with the active members of the chat at the moment of sending, the author left out; an empty result gets 422 request_audience_empty.
 	ActorIds *[]openapi_types.UUID `json:"actor_ids,omitempty"`
 
-	// DepartmentId Wave 2. Rejected with 422 request_audience_unavailable in wave 1.
+	// DepartmentId Required for department. Expanded into the active people of the department and its subdepartments (primary and additional members) who are active members of the chat, the author left out. 404 department_not_found for an unknown department.
 	DepartmentId *openapi_types.UUID `json:"department_id,omitempty"`
 
-	// Kind Whom the request asks. Wave 1 serves people and chat only: department and position get 422 request_audience_unavailable until wave 2 and clients do not offer them.
+	// Kind Whom the request asks. people and chat: any member who may write to the chat. department and position (phase 6.5 wave 2) are served by servers that announce org_structure; others answer 422 request_audience_unavailable and clients do not offer them. They need requests.address_groups in the author's effective permissions (the owner always has it) and get 403 request_audience_forbidden otherwise; the permission is checked when the request is created only.
 	Kind RequestAudienceKind `json:"kind"`
 
-	// PositionId Wave 2. Rejected with 422 request_audience_unavailable in wave 1.
+	// PositionId Required for position. Expanded into the active people with the position who are active members of the chat, the author left out. 404 position_not_found for an unknown position.
 	PositionId *openapi_types.UUID `json:"position_id,omitempty"`
 }
 
-// RequestAudienceKind Whom the request asks. Wave 1 serves people and chat only: department and position get 422 request_audience_unavailable until wave 2 and clients do not offer them.
+// RequestAudienceKind Whom the request asks. people and chat: any member who may write to the chat. department and position (phase 6.5 wave 2) are served by servers that announce org_structure; others answer 422 request_audience_unavailable and clients do not offer them. They need requests.address_groups in the author's effective permissions (the owner always has it) and get 403 request_audience_forbidden otherwise; the permission is checked when the request is created only.
 type RequestAudienceKind string
 
 // RequestInboxItem defines model for RequestInboxItem.
@@ -7845,15 +8163,18 @@ type ScheduledMessage struct {
 	Files             []File                         `json:"files"`
 	Id                openapi_types.UUID             `json:"id"`
 	MentionedActorIds []openapi_types.UUID           `json:"mentioned_actor_ids"`
-	MessageId         *openapi_types.UUID            `json:"message_id"`
-	ReplyToId         *openapi_types.UUID            `json:"reply_to_id"`
-	SendAt            time.Time                      `json:"send_at"`
-	SentAt            *time.Time                     `json:"sent_at,omitempty"`
-	Silent            bool                           `json:"silent"`
-	Status            ScheduledMessageStatus         `json:"status"`
-	ThreadRootId      *openapi_types.UUID            `json:"thread_root_id"`
-	UpdatedAt         time.Time                      `json:"updated_at"`
-	Version           int                            `json:"version"`
+
+	// MentionedDepartmentIds Mentioned departments, expanded into people only when the message is sent. Cleared after sending, like the other mentions. Absent from servers without the org_structure feature.
+	MentionedDepartmentIds *[]openapi_types.UUID  `json:"mentioned_department_ids,omitempty"`
+	MessageId              *openapi_types.UUID    `json:"message_id"`
+	ReplyToId              *openapi_types.UUID    `json:"reply_to_id"`
+	SendAt                 time.Time              `json:"send_at"`
+	SentAt                 *time.Time             `json:"sent_at,omitempty"`
+	Silent                 bool                   `json:"silent"`
+	Status                 ScheduledMessageStatus `json:"status"`
+	ThreadRootId           *openapi_types.UUID    `json:"thread_root_id"`
+	UpdatedAt              time.Time              `json:"updated_at"`
+	Version                int                    `json:"version"`
 }
 
 // ScheduledMessageBodyFormat defines model for ScheduledMessage.BodyFormat.
@@ -7926,6 +8247,23 @@ type Session struct {
 	LastSeenAt time.Time          `json:"last_seen_at"`
 	RevokedAt  *time.Time         `json:"revoked_at,omitempty"`
 	UserAgent  string             `json:"user_agent"`
+}
+
+// SetDepartmentMemberRequest defines model for SetDepartmentMemberRequest.
+type SetDepartmentMemberRequest struct {
+	// KeepPrevious With primary true — keep the previous primary department as an additional one instead of leaving it.
+	KeepPrevious *bool `json:"keep_previous,omitempty"`
+	Primary      bool  `json:"primary"`
+}
+
+// SetPersonOrgRequest defines model for SetPersonOrgRequest.
+type SetPersonOrgRequest struct {
+	AdditionalDepartmentIds []openapi_types.UUID `json:"additional_department_ids"`
+
+	// ExpectedOrgVersion The org version the client saw; 409 org_version_conflict when the structure changed since.
+	ExpectedOrgVersion  *int64              `json:"expected_org_version,omitempty"`
+	PositionId          *openapi_types.UUID `json:"position_id"`
+	PrimaryDepartmentId *openapi_types.UUID `json:"primary_department_id"`
 }
 
 // SetReminderRequest defines model for SetReminderRequest.
@@ -8015,6 +8353,19 @@ type ThreadUnread struct {
 	MentionCount int64              `json:"mention_count"`
 	ThreadRootId openapi_types.UUID `json:"thread_root_id"`
 	UnreadCount  int64              `json:"unread_count"`
+}
+
+// TitleSuggestion defines model for TitleSuggestion.
+type TitleSuggestion struct {
+	// ActorIds Active people whose title it is; candidates for the position once created.
+	ActorIds []openapi_types.UUID `json:"actor_ids"`
+	Count    int                  `json:"count"`
+	Title    string               `json:"title"`
+}
+
+// TitleSuggestionList defines model for TitleSuggestionList.
+type TitleSuggestionList struct {
+	Suggestions []TitleSuggestion `json:"suggestions"`
 }
 
 // TokenResponse defines model for TokenResponse.
@@ -8164,6 +8515,20 @@ type UpdateChatRequest struct {
 // UpdateChatRequestVisibility defines model for UpdateChatRequest.Visibility.
 type UpdateChatRequestVisibility string
 
+// UpdateDepartmentRequest Fields left out are not changed.
+type UpdateDepartmentRequest struct {
+	ExpectedVersion int `json:"expected_version"`
+
+	// LeadActorId null clears the lead.
+	LeadActorId *openapi_types.UUID `json:"lead_actor_id,omitempty"`
+
+	// Name 1–60 characters (Unicode code points) after trimming.
+	Name *OrgName `json:"name,omitempty"`
+
+	// ParentId null moves the department to the top level.
+	ParentId *openapi_types.UUID `json:"parent_id,omitempty"`
+}
+
 // UpdateInfrastructureSettingsRequest defines model for UpdateInfrastructureSettingsRequest.
 type UpdateInfrastructureSettingsRequest struct {
 	ExpectedVersion int64                   `json:"expected_version"`
@@ -8224,6 +8589,9 @@ type UpdateMessageRequest struct {
 	BodyFormat        *UpdateMessageRequestBodyFormat `json:"body_format,omitempty"`
 	ExpectedVersion   int                             `json:"expected_version"`
 	MentionedActorIds *[]openapi_types.UUID           `json:"mentioned_actor_ids,omitempty"`
+
+	// MentionedDepartmentIds Departments mentioned with the same token as a person, @[Name](department id). The server expands each into the active people of the department and its subdepartments who are members of the chat, without the author, and adds them to mentioned_actor_ids. More than 10 get 422 validation_failed (details.field mentioned_department_ids). A department id sent in mentioned_actor_ids by an older client is moved here instead of being rejected. Servers without the org_structure feature reject the unknown field, so clients send it only when the server announces the feature.
+	MentionedDepartmentIds *MentionedDepartmentIds `json:"mentioned_department_ids,omitempty"`
 }
 
 // UpdateMessageRequestBodyFormat defines model for UpdateMessageRequest.BodyFormat.
@@ -8231,7 +8599,7 @@ type UpdateMessageRequestBodyFormat string
 
 // UpdateOrganizationMemberRequest defines model for UpdateOrganizationMemberRequest.
 type UpdateOrganizationMemberRequest struct {
-	// Permissions Replaces explicit permissions. The owner sets them for administrators and members. An administrator with members.manage may set only member-grantable permissions (knowledge.manage), only for regular members other than themselves, without a role change, and only while holding those permissions personally.
+	// Permissions Replaces explicit permissions. The owner sets them for administrators and members. An administrator with members.manage may set only member-grantable permissions (knowledge.manage, org.manage, requests.address_groups), only for regular members other than themselves and without a role change. The server compares the old and the new set code by code: every permission the call turns on or off must be held by the administrator personally (403 forbidden otherwise); the member's other permissions are left as they are. requests.address_groups is never granted to administrators automatically; the owner always has it.
 	Permissions *[]Permission                          `json:"permissions,omitempty"`
 	Role        *UpdateOrganizationMemberRequestRole   `json:"role,omitempty"`
 	Status      *UpdateOrganizationMemberRequestStatus `json:"status,omitempty"`
@@ -8259,6 +8627,14 @@ type UpdateOrganizationSettingsRequest struct {
 
 // UpdateOrganizationSettingsRequestInvitationDefaultRole defines model for UpdateOrganizationSettingsRequest.InvitationDefaultRole.
 type UpdateOrganizationSettingsRequestInvitationDefaultRole string
+
+// UpdatePositionRequest defines model for UpdatePositionRequest.
+type UpdatePositionRequest struct {
+	ExpectedVersion int `json:"expected_version"`
+
+	// Name 1–60 characters (Unicode code points) after trimming.
+	Name *OrgName `json:"name,omitempty"`
+}
 
 // UpdatePreferencesRequest defines model for UpdatePreferencesRequest.
 type UpdatePreferencesRequest struct {
@@ -8318,8 +8694,11 @@ type UpdateScheduledMessageRequest struct {
 	// FileIds Replaces the attachments: ready files uploaded by the current user and not attached to any other message. Files left out become unattached again and are cleaned up as usual.
 	FileIds           *[]openapi_types.UUID `json:"file_ids,omitempty"`
 	MentionedActorIds *[]openapi_types.UUID `json:"mentioned_actor_ids,omitempty"`
-	SendAt            *time.Time            `json:"send_at,omitempty"`
-	Silent            *bool                 `json:"silent,omitempty"`
+
+	// MentionedDepartmentIds Departments mentioned with the same token as a person, @[Name](department id). The server expands each into the active people of the department and its subdepartments who are members of the chat, without the author, and adds them to mentioned_actor_ids. More than 10 get 422 validation_failed (details.field mentioned_department_ids). A department id sent in mentioned_actor_ids by an older client is moved here instead of being rejected. Servers without the org_structure feature reject the unknown field, so clients send it only when the server announces the feature.
+	MentionedDepartmentIds *MentionedDepartmentIds `json:"mentioned_department_ids,omitempty"`
+	SendAt                 *time.Time              `json:"send_at,omitempty"`
+	Silent                 *bool                   `json:"silent,omitempty"`
 }
 
 // UpdateScheduledMessageRequestBodyFormat defines model for UpdateScheduledMessageRequest.BodyFormat.
@@ -8438,6 +8817,9 @@ type ChatId = openapi_types.UUID
 // ClientKind defines model for ClientKind.
 type ClientKind string
 
+// DepartmentId defines model for DepartmentId.
+type DepartmentId = openapi_types.UUID
+
 // FileId defines model for FileId.
 type FileId = openapi_types.UUID
 
@@ -8453,6 +8835,9 @@ type MessageId = openapi_types.UUID
 // ObjectDelivery defines model for ObjectDelivery.
 type ObjectDelivery string
 
+// PositionId defines model for PositionId.
+type PositionId = openapi_types.UUID
+
 // ReminderId defines model for ReminderId.
 type ReminderId = openapi_types.UUID
 
@@ -8467,6 +8852,7 @@ type Tokens = TokenResponse
 
 // ListActorsParams defines parameters for ListActors.
 type ListActorsParams struct {
+	// Q Matches the name, handle and title; with the org_structure feature also the position name and the names of the person's departments (primary and additional).
 	Q       *string             `form:"q,omitempty" json:"q,omitempty"`
 	AfterId *openapi_types.UUID `form:"after_id,omitempty" json:"after_id,omitempty"`
 	Limit   *int                `form:"limit,omitempty" json:"limit,omitempty"`
@@ -8647,6 +9033,26 @@ type ListThreadMessagesParams struct {
 	BeforeSeq *int64 `form:"before_seq,omitempty" json:"before_seq,omitempty"`
 	Limit     *int   `form:"limit,omitempty" json:"limit,omitempty"`
 }
+
+// GetOrgStructureParams defines parameters for GetOrgStructure.
+type GetOrgStructureParams struct {
+	// IfNoneMatch The ETag of the cached structure, "org-{version}".
+	IfNoneMatch *string `json:"If-None-Match,omitempty"`
+}
+
+// DeleteDepartmentParams defines parameters for DeleteDepartment.
+type DeleteDepartmentParams struct {
+	// MembersTo Department id that becomes the primary department of the primary members, or none. Absent means the parent. It must not be the deleted department or one of its descendants (422 org_invalid).
+	MembersTo *struct {
+		union json.RawMessage
+	} `form:"members_to,omitempty" json:"members_to,omitempty"`
+}
+
+// DeleteDepartmentParamsMembersTo0 defines parameters for DeleteDepartment.
+type DeleteDepartmentParamsMembersTo0 = openapi_types.UUID
+
+// DeleteDepartmentParamsMembersTo1 defines parameters for DeleteDepartment.
+type DeleteDepartmentParamsMembersTo1 string
 
 // ListOrganizationAuditParams defines parameters for ListOrganizationAudit.
 type ListOrganizationAuditParams struct {
@@ -8953,6 +9359,36 @@ type SetMessageReminderJSONRequestBody = SetReminderRequest
 
 // MarkThreadReadJSONRequestBody defines body for MarkThreadRead for application/json ContentType.
 type MarkThreadReadJSONRequestBody = MarkReadRequest
+
+// CreateDepartmentJSONRequestBody defines body for CreateDepartment for application/json ContentType.
+type CreateDepartmentJSONRequestBody = CreateDepartmentRequest
+
+// UpdateDepartmentJSONRequestBody defines body for UpdateDepartment for application/json ContentType.
+type UpdateDepartmentJSONRequestBody = UpdateDepartmentRequest
+
+// LinkDepartmentChatJSONRequestBody defines body for LinkDepartmentChat for application/json ContentType.
+type LinkDepartmentChatJSONRequestBody = LinkDepartmentChatRequest
+
+// SetDepartmentMemberJSONRequestBody defines body for SetDepartmentMember for application/json ContentType.
+type SetDepartmentMemberJSONRequestBody = SetDepartmentMemberRequest
+
+// MoveDepartmentJSONRequestBody defines body for MoveDepartment for application/json ContentType.
+type MoveDepartmentJSONRequestBody = MoveDepartmentRequest
+
+// AssignPeopleOrgJSONRequestBody defines body for AssignPeopleOrg for application/json ContentType.
+type AssignPeopleOrgJSONRequestBody = AssignPeopleOrgRequest
+
+// SetPersonOrgJSONRequestBody defines body for SetPersonOrg for application/json ContentType.
+type SetPersonOrgJSONRequestBody = SetPersonOrgRequest
+
+// CreatePositionJSONRequestBody defines body for CreatePosition for application/json ContentType.
+type CreatePositionJSONRequestBody = CreatePositionRequest
+
+// CreatePositionsJSONRequestBody defines body for CreatePositions for application/json ContentType.
+type CreatePositionsJSONRequestBody = CreatePositionsRequest
+
+// UpdatePositionJSONRequestBody defines body for UpdatePosition for application/json ContentType.
+type UpdatePositionJSONRequestBody = UpdatePositionRequest
 
 // UpdateOrganizationSettingsJSONRequestBody defines body for UpdateOrganizationSettings for application/json ContentType.
 type UpdateOrganizationSettingsJSONRequestBody = UpdateOrganizationSettingsRequest

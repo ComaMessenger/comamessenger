@@ -1,0 +1,13 @@
+{
+  "op": "event",
+  "seq": 2103,
+  "type": "org.updated",
+  "occurred_at": "2026-11-17T09:05:00Z",
+  "actor_id": "0198c17d-9a31-7d4e-b0f2-5c8e1a7b6d01",
+  "chat_id": null,
+  "subject_id": "0198c17c-0000-7000-8000-000000000001",
+  "data": {
+    "version": 42,
+    "reason": "membership"
+  }
+}

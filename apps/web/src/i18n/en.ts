@@ -154,6 +154,8 @@ export const en: Record<keyof typeof ru, string> = {
   permissionAuditRead: "Audit log",
   permissionChatsModerate: "Chat moderation",
   permissionKnowledgeManage: "Knowledge base management",
+  permissionOrgManage: "Manage the org structure",
+  permissionRequestsAddressGroups: "Address departments and positions",
   personalPreferences: "Personal preferences",
   appearance: "Appearance",
   privacy: "Privacy",

@@ -37,6 +37,8 @@ export const permissionLabelKeys: Record<Permission, string> = {
   "audit.read": "permissionAuditRead",
   "chats.moderate": "permissionChatsModerate",
   "knowledge.manage": "permissionKnowledgeManage",
+  "org.manage": "permissionOrgManage",
+  "requests.address_groups": "permissionRequestsAddressGroups",
 };
 
 export type SettingsPageID =

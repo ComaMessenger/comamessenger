@@ -1000,6 +1000,8 @@ export const ru = {
   permissionIntegrationsManage: "Подключения",
   permissionInvitationsManage: "Приглашения",
   permissionKnowledgeManage: "Управление базой знаний",
+  permissionOrgManage: "Вести оргструктуру",
+  permissionRequestsAddressGroups: "Обращаться к отделам и ролям",
   permissionMembersManage: "Участники",
   permissionWorkspacePolicies: "Политики",
   permissionWorkspaceSettings: "Общие настройки",
