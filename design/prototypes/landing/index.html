@@ -84,6 +84,7 @@ button { font: inherit; color: inherit; }
 .ph { color: var(--placeholder); background: var(--placeholder-soft); border: 1px dashed currentColor; border-radius: 6px; padding: 0 6px; font-weight: 500; white-space: nowrap; }
 
 /* ---------- prototype bar ---------- */
+.proto[hidden] { display: none; }
 .proto { background: var(--canvas); border-bottom: 1px dashed var(--border-strong); font-size: 13px; }
 .proto .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding-block: 8px; }
 .proto b { font-weight: 600; }
@@ -677,7 +678,7 @@ h3 { font-size: 20px; line-height: 1.25; font-weight: 600; letter-spacing: -.01e
 </svg>
 
 <!-- ============ прототипная панель (не часть лендинга) ============ -->
-<div class="proto" role="region" aria-label="Настройки прототипа">
+<div class="proto" hidden role="region" aria-label="Настройки прототипа">
   <div class="wrap">
     <b>Прототип лендинга</b>
     <span class="grp"><span class="lbl">Первый экран:</span>
@@ -702,7 +703,7 @@ h3 { font-size: 20px; line-height: 1.25; font-weight: 600; letter-spacing: -.01e
     </nav>
     <span class="sp"></span>
     <a class="gh" href="https://github.com/ComaMessenger/comamessenger" target="_blank" rel="noopener"><svg class="ic"><use href="#i-gh"/></svg>GitHub</a>
-    <a class="btn pri sm" href="#demo" data-demo>Попробовать демо</a>
+    <a class="btn pri sm" href="#demo" data-demo>Демо скоро</a>
     <button class="burger" id="burger" type="button" aria-expanded="false" aria-controls="mnav" aria-label="Меню"><svg class="ic"><use href="#i-menu"/></svg></button>
   </div>
   <nav class="mnav" id="mnav" aria-label="Разделы">
@@ -725,7 +726,7 @@ h3 { font-size: 20px; line-height: 1.25; font-weight: 600; letter-spacing: -.01e
       <h1 id="h1a">Запросы, задачи и регламенты в телефоне сотрудника</h1>
       <p class="lead">Инструктор, медсестра или мастер на выезде отвечает на запросы, закрывает задачи и получает напоминания в одном приложении. ИИ-агент отвечает на вопросы по вашим регламентам. Сервер стоит у вас, код открыт.</p>
       <div class="cta-row">
-        <div class="cta"><a class="btn pri" href="#demo" data-demo>Попробовать демо</a><small>В браузере, ничего не устанавливать</small></div>
+        <div class="cta"><a class="btn pri" href="#demo" data-demo>Демо скоро</a><small>Готовим публичное демо в браузере</small></div>
         <div class="cta"><a class="btn sec" href="https://github.com/ComaMessenger/comamessenger" target="_blank" rel="noopener"><svg class="ic"><use href="#i-gh"/></svg>Развернуть у себя</a><small>Бесплатно, код на GitHub</small></div>
       </div>
       <p class="more"><a class="link-arrow" href="#lead">Обсудить внедрение <svg class="ic"><use href="#i-arrow"/></svg></a></p>
@@ -759,7 +760,7 @@ h3 { font-size: 20px; line-height: 1.25; font-weight: 600; letter-spacing: -.01e
       <h1 id="h1b">Мессенджер и ИИ-агенты на вашем сервере</h1>
       <p class="lead">Переписка, база знаний, модели и ключи доступа хранятся у компании. Агент делает только то, что вы разрешили, а каждый его шаг записан в журнал.</p>
       <div class="cta-row">
-        <div class="cta"><a class="btn light" href="#demo" data-demo>Попробовать демо</a><small>В браузере, ничего не устанавливать</small></div>
+        <div class="cta"><a class="btn light" href="#demo" data-demo>Демо скоро</a><small>Готовим публичное демо в браузере</small></div>
         <div class="cta"><a class="btn ghost-deep" href="https://github.com/ComaMessenger/comamessenger" target="_blank" rel="noopener"><svg class="ic"><use href="#i-gh"/></svg>Развернуть у себя</a><small>Бесплатно, код на GitHub</small></div>
       </div>
       <p class="more"><a class="link-arrow" href="#lead">Обсудить внедрение <svg class="ic"><use href="#i-arrow"/></svg></a></p>
@@ -798,7 +799,7 @@ h3 { font-size: 20px; line-height: 1.25; font-weight: 600; letter-spacing: -.01e
     <div class="facts">
       <div class="fact"><svg class="ic"><use href="#i-code"/></svg>Открытый код: AGPL-3.0 и Apache-2.0</div>
       <div class="fact"><svg class="ic"><use href="#i-server"/></svg>Разворачивается через Docker Compose</div>
-      <div class="fact"><svg class="ic"><use href="#i-phone"/></svg>Приложения для iOS и Android</div>
+      <div class="fact"><svg class="ic"><use href="#i-phone"/></svg>Приложение для iPhone в TestFlight</div>
       <div class="fact"><svg class="ic"><use href="#i-spark"/></svg>Модели: Anthropic, OpenAI или своя</div>
     </div>
     <div class="logos"><span class="lbl">Работают в Coma:</span><span class="logo-ph">[логотип клиента]</span><span class="logo-ph">[логотип клиента]</span><span class="logo-ph">[логотип клиента]</span><span class="logo-ph">[логотип клиента]</span></div>
@@ -946,10 +947,8 @@ h3 { font-size: 20px; line-height: 1.25; font-weight: 600; letter-spacing: -.01e
       <div><svg class="ic"><use href="#i-send"/></svg>Сообщения отправятся, когда появится связь</div>
     </div>
     <div class="stores">
-      <a class="store" href="#app-store" data-ph="Ссылка на App Store появится после публикации"><svg class="ic"><use href="#i-phone"/></svg><span>Загрузить в<b>App Store</b></span></a>
-      <a class="store" href="#google-play" data-ph="Ссылка на Google Play появится после публикации"><svg class="ic"><use href="#i-phone"/></svg><span>Доступно в<b>Google Play</b></span></a>
-      <span class="qr">[QR-код]</span>
-      <span class="ph">[ссылки на сторы]</span>
+      <a class="store" href="#lead"><svg class="ic"><use href="#i-phone"/></svg><span>iPhone, по приглашению<b>TestFlight</b></span></a>
+      <span class="store" aria-disabled="true"><svg class="ic"><use href="#i-phone"/></svg><span>Android<b>Скоро</b></span></span>
     </div>
   </div>
 </section>
@@ -1223,7 +1222,7 @@ h3 { font-size: 20px; line-height: 1.25; font-weight: 600; letter-spacing: -.01e
         <h3>Свой сервер</h3>
         <div class="amt">0 ₽</div>
         <p>Устанавливаете сами по инструкции.</p>
-        <ul><li><svg class="ic"><use href="#i-check"/></svg>Все функции</li><li><svg class="ic"><use href="#i-check"/></svg>Без ограничений по числу сотрудников</li><li><svg class="ic"><use href="#i-check"/></svg>Приложения для iOS и Android</li></ul>
+        <ul><li><svg class="ic"><use href="#i-check"/></svg>Все функции</li><li><svg class="ic"><use href="#i-check"/></svg>Без ограничений по числу сотрудников</li><li><svg class="ic"><use href="#i-check"/></svg>Приложение для телефона</li></ul>
         <a class="btn pri" href="https://github.com/ComaMessenger/comamessenger" target="_blank" rel="noopener">Развернуть у себя</a>
       </article>
       <article class="card price rv">
@@ -1279,9 +1278,9 @@ h3 { font-size: 20px; line-height: 1.25; font-weight: 600; letter-spacing: -.01e
       <details><summary>Есть ли звонки и видеосвязь?<svg class="ic"><use href="#i-plus"/></svg></summary><p>Нет. Coma нужен для переписки и рабочих задач, звонков и видеосвязи в нём нет. Для звонков оставьте сервис, которым пользуетесь сейчас.</p></details>
       <details><summary>Нужен ли свой программист?<svg class="ic"><use href="#i-plus"/></svg></summary><p>Чтобы развернуть самостоятельно, нужен человек, который умеет работать с Docker. Если такого нет, развернём и поддержим сами.</p></details>
       <details><summary>Видит ли сервис уведомлений текст сообщений?<svg class="ic"><use href="#i-plus"/></svg></summary><p>Нет. Уведомление шифруется ключом устройства, сервис доставки передаёт его, не видя текста.</p></details>
-      <details><summary>Можно ли перенести переписку из Telegram или WhatsApp?<svg class="ic"><use href="#i-plus"/></svg></summary><p>Автоматического переноса пока нет. <span class="ph">[уточнить планы]</span></p></details>
-      <details><summary>Есть ли Coma в реестре российского ПО?<svg class="ic"><use href="#i-plus"/></svg></summary><p>Нет. <span class="ph">[уточнить планы]</span></p></details>
-      <details><summary>Есть ли приложение для компьютера?<svg class="ic"><use href="#i-plus"/></svg></summary><p>Coma работает в браузере. Мобильные приложения есть для телефонов на iOS и Android.</p></details>
+      <details><summary>Есть ли Coma в реестре российского ПО?<svg class="ic"><use href="#i-plus"/></svg></summary><p>Пока нет.</p></details>
+      <details><summary>Есть ли приложение для компьютера?<svg class="ic"><use href="#i-plus"/></svg></summary><p>Coma работает в браузере. Приложение для iPhone сейчас в TestFlight, доступ по приглашению. Версию для Android готовим.</p></details>
+      <details><summary>Почему Coma?<svg class="ic"><use href="#i-plus"/></svg></summary><p>От английского comma, запятая. Запятая ставится там, где разговор продолжается: «человек, агент, коллега». Поэтому и маскот у нас в виде запятой.</p></details>
       <details><summary>Чем Coma отличается от Telegram?<svg class="ic"><use href="#i-plus"/></svg></summary><p>Рабочие чаты принадлежат компании, у сотрудников есть запросы, задачи и оргструктура, а ИИ-агенты работают по вашим правилам.</p></details>
     </div>
   </div>
@@ -1292,9 +1291,9 @@ h3 { font-size: 20px; line-height: 1.25; font-weight: 600; letter-spacing: -.01e
   <div class="wrap rv">
     <svg class="mascot big-m" aria-hidden="true"><use href="#mascot"/></svg>
     <h2 id="fn-h">Посмотрите Coma на своих задачах</h2>
-    <p class="lead">Откройте демо в браузере или разверните на своём сервере.</p>
+    <p class="lead">Разверните Coma на своём сервере или оставьте заявку, поможем с внедрением.</p>
     <div class="cta-row">
-      <div class="cta"><a class="btn light" href="#demo" data-demo>Попробовать демо</a><small>В браузере, ничего не устанавливать</small></div>
+      <div class="cta"><a class="btn light" href="#demo" data-demo>Демо скоро</a><small>Готовим публичное демо в браузере</small></div>
       <div class="cta"><a class="btn ghost-deep" href="https://github.com/ComaMessenger/comamessenger" target="_blank" rel="noopener"><svg class="ic"><use href="#i-gh"/></svg>Развернуть у себя</a><small>Бесплатно, код на GitHub</small></div>
     </div>
   </div>
@@ -1340,6 +1339,7 @@ h3 { font-size: 20px; line-height: 1.25; font-weight: 600; letter-spacing: -.01e
 
   /* ---------- prototype controls: hero variant & theme ---------- */
   const params = new URLSearchParams(location.search);
+  if (params.has('proto')) document.querySelector('.proto').hidden = false;
   function setParam(k, v) {
     const p = new URLSearchParams(location.search);
     if (v == null) p.delete(k); else p.set(k, v);
@@ -1376,7 +1376,7 @@ h3 { font-size: 20px; line-height: 1.25; font-weight: 600; letter-spacing: -.01e
   $$('a', mnav).forEach(a => a.addEventListener('click', () => { mnav.classList.remove('open'); burger.setAttribute('aria-expanded', 'false'); burger.innerHTML = icon('i-menu'); }));
 
   /* ---------- placeholder links ---------- */
-  $$('[data-demo]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); toast('Демо откроется по адресу [адрес демо]. Ссылку добавим, когда поднимем демо-сервер.'); }));
+  $$('[data-demo]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); toast('Демо скоро откроем. А пока можно развернуть Coma у себя или оставить заявку.'); }));
   $$('[data-ph]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); toast(a.dataset.ph); }));
   $$('[data-plan]').forEach(a => a.addEventListener('click', () => {
     const g = $('#goal');
