@@ -16,6 +16,7 @@ import (
 	"github.com/comamessenger/comamessenger/core/internal/id"
 	"github.com/comamessenger/comamessenger/core/internal/identity"
 	"github.com/comamessenger/comamessenger/core/internal/permission"
+	"github.com/comamessenger/comamessenger/core/internal/reminder"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -689,6 +690,9 @@ func (s *Service) Delete(ctx context.Context, user identity.User, messageID stri
 	// Savers learn about it from message.deleted, which every member gets.
 	if _, err := tx.Exec(ctx, `DELETE FROM saved_messages WHERE org_id = $1 AND message_id = $2`, user.OrgID, result.ID); err != nil {
 		return Message{}, fmt.Errorf("drop saves of deleted message: %w", err)
+	}
+	if err := reminder.OnMessageDeletedTx(ctx, tx, user.OrgID, result.ID); err != nil {
+		return Message{}, err
 	}
 	// Its files and links leave the chat's shared media.
 	if err := dropShared(ctx, tx, result.ID); err != nil {

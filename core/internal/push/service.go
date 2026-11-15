@@ -738,22 +738,24 @@ func (w *Worker) materialize(ctx context.Context) error {
 			  SELECT e.audience_actor_id,'default',NULL,NULL,'{}'::uuid[],NULL::uuid,'scheduled'
 			  FROM event e
 			  WHERE e.type='scheduled_message.failed' AND `+scheduledFailureCurrent+`
+			  `+reminderRecipients+`
 			), eligible AS (
 			SELECT e.org_id,e.seq,e.occurred_at,r.*,u.preferences
 			FROM event e JOIN recipients r ON true
 			JOIN users u ON u.org_id=e.org_id AND u.actor_id=r.recipient_id
 			JOIN actors recipient ON recipient.org_id=e.org_id AND recipient.id=r.recipient_id
 			WHERE (r.muted_until IS NULL OR r.muted_until<=e.occurred_at)
-			  AND NOT EXISTS (
+			  AND (`+reminderBypassesQuiet+` OR NOT EXISTS (
 			    SELECT 1 FROM notification_snoozes ns
 			    WHERE ns.org_id=e.org_id AND ns.actor_id=r.recipient_id
 			      AND e.occurred_at>=ns.starts_at AND e.occurred_at<ns.ends_at
-			  )
+			  ))
 			  AND CASE r.category
 			    WHEN 'reaction' THEN COALESCE((u.preferences->>'notify_reactions')::boolean,true)
 			    WHEN 'invite' THEN COALESCE((u.preferences->>'notify_invites')::boolean,true)
 			    WHEN 'system' THEN COALESCE((u.preferences->>'notify_system')::boolean,true)
 			    WHEN 'scheduled' THEN true
+			    WHEN 'reminder' THEN true
 			    ELSE CASE r.notify_level
 			      WHEN 'all' THEN true
 			      WHEN 'mentions' THEN r.recipient_id=ANY(r.mentioned_actor_ids)
@@ -770,7 +772,7 @@ func (w *Worker) materialize(ctx context.Context) error {
 			      END)
 			    END
 			  END
-			  AND (
+			  AND (`+reminderBypassesQuiet+` OR
 			    u.preferences->'schedule' IS NULL OR jsonb_typeof(u.preferences->'schedule')='null' OR (
 			      CASE
 			        WHEN u.preferences#>>'{schedule,from}' = u.preferences#>>'{schedule,to}' THEN true
@@ -794,7 +796,7 @@ func (w *Worker) materialize(ctx context.Context) error {
 			  INSERT INTO email_digest_items(org_id,event_seq,actor_id,available_at)
 			  SELECT org_id,seq,recipient_id,occurred_at+interval '15 minutes'
 			  FROM eligible
-			  WHERE COALESCE((preferences->>'email_digest')::boolean,false) AND category<>'scheduled'
+			  WHERE COALESCE((preferences->>'email_digest')::boolean,false) AND category NOT IN ('scheduled','reminder')
 			  ON CONFLICT DO NOTHING
 			  RETURNING 1
 			), mobile_items AS (
@@ -839,7 +841,7 @@ func (w *Worker) deliver(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	rows, err := w.pool.Query(ctx, `SELECT d.org_id,d.event_seq,d.subscription_id,s.actor_id,s.endpoint,s.p256dh,s.auth,e.type,e.data,e.chat_id,m.thread_root_id,m.body,c.name,a.display_name,COALESCE((u.preferences->>'push_preview')::boolean,false),COALESCE(u.preferences->>'locale','ru'),(SELECT f.voice_duration_ms FROM message_files mf JOIN files f ON f.org_id=mf.org_id AND f.id=mf.file_id WHERE mf.message_id=m.id AND f.voice_duration_ms IS NOT NULL LIMIT 1),`+quietNotification+`,`+scheduledStillFailed+` FROM notification_deliveries d JOIN web_push_subscriptions s ON s.id=d.subscription_id JOIN events e ON e.org_id=d.org_id AND e.seq=d.event_seq LEFT JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id LEFT JOIN chats c ON c.org_id=e.org_id AND c.id=e.chat_id JOIN actors a ON a.org_id=e.org_id AND a.id=e.actor_id JOIN users u ON u.org_id=s.org_id AND u.actor_id=s.actor_id WHERE d.lease_token=$1 ORDER BY d.event_seq`, leaseToken)
+	rows, err := w.pool.Query(ctx, `SELECT d.org_id,d.event_seq,d.subscription_id,s.actor_id,s.endpoint,s.p256dh,s.auth,e.type,e.data,e.chat_id,m.thread_root_id,m.body,c.name,a.display_name,COALESCE((u.preferences->>'push_preview')::boolean,false),COALESCE(u.preferences->>'locale','ru'),(SELECT f.voice_duration_ms FROM message_files mf JOIN files f ON f.org_id=mf.org_id AND f.id=mf.file_id WHERE mf.message_id=m.id AND f.voice_duration_ms IS NOT NULL LIMIT 1),`+quietNotification+`,`+scheduledStillFailed+` AND `+reminderStillFired+` FROM notification_deliveries d JOIN web_push_subscriptions s ON s.id=d.subscription_id JOIN events e ON e.org_id=d.org_id AND e.seq=d.event_seq LEFT JOIN messages m ON m.org_id=e.org_id AND m.id=e.subject_id LEFT JOIN chats c ON c.org_id=e.org_id AND c.id=e.chat_id JOIN actors a ON a.org_id=e.org_id AND a.id=e.actor_id JOIN users u ON u.org_id=s.org_id AND u.actor_id=s.actor_id WHERE d.lease_token=$1 ORDER BY d.event_seq`, leaseToken)
 	if err != nil {
 		return err
 	}
@@ -862,7 +864,12 @@ func (w *Worker) deliver(ctx context.Context) error {
 			_, _ = w.pool.Exec(ctx, `UPDATE notification_deliveries SET sent_at=now(),last_error='suppressed_active',lease_token=NULL,lease_until=NULL WHERE org_id=$1 AND event_seq=$2 AND subscription_id=$3 AND lease_token=$4`, org, seq, subID, leaseToken)
 			continue
 		}
-		content := buildNotification(eventType, eventData, author, locale, preview, chatID, threadID, messageText(body, voiceMs, locale), name)
+		content, contentErr := w.reminderNotification(ctx, org, actor, eventType, eventData, locale, preview,
+			buildNotification(eventType, eventData, author, locale, preview, chatID, threadID, messageText(body, voiceMs, locale), name))
+		if contentErr != nil {
+			_, _ = w.pool.Exec(ctx, `UPDATE notification_deliveries SET attempts=attempts+1,last_error=$4,available_at=now()+interval '30 seconds',lease_token=NULL,lease_until=NULL WHERE org_id=$1 AND event_seq=$2 AND subscription_id=$3 AND lease_token=$5`, org, seq, subID, contentErr.Error(), leaseToken)
+			continue
+		}
 		encoded := webPushPayload(content, silent)
 		response, sendErr := webpush.SendNotificationWithContext(ctx, encoded, &webpush.Subscription{Endpoint: endpoint, Keys: webpush.Keys{P256dh: p256dh, Auth: auth}}, &webpush.Options{Subscriber: w.config.VAPIDSubject, VAPIDPublicKey: w.config.VAPIDPublicKey, VAPIDPrivateKey: w.config.VAPIDPrivateKey, TTL: 120})
 		if response != nil {
@@ -1017,6 +1024,8 @@ type notificationContent struct {
 	URL          string `json:"url,omitempty"`
 	ChatID       string `json:"chat_id,omitempty"`
 	ThreadRootID string `json:"thread_root_id,omitempty"`
+	// Kind names a notification the apps show with actions: "reminder".
+	Kind string `json:"kind,omitempty"`
 }
 
 func buildNotification(eventType string, eventData []byte, author, locale string, preview bool, chatID, threadID, body, chatName *string) notificationContent {

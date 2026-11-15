@@ -247,6 +247,7 @@ func main() {
 		os.Exit(1)
 	}
 	go scheduledService.RunCleanup(realtimeCtx, time.Minute)
+	reminderService, stopReminders := startReminders(realtimeCtx, pool, afterCommit, logger)
 	searchService := search.NewService(pool)
 	knowledgeService := knowledge.NewService(pool, fileService, agentConfigService, knowledge.NewHTTPEmbedder())
 	knowledgeClient, err := knowledge.NewIndexingClient(pool, knowledgeService, logger)
@@ -303,7 +304,7 @@ func main() {
 		Addr: cfg.HTTPAddr,
 		Handler: serverhttp.NewHandler(logger, cfg.PublicAppURL, pool.Ping, serverhttp.Dependencies{
 			Identity: identityService, Agents: agentService, AgentConfig: agentConfigService, AgentProvider: agentProviderService, AgentTools: agentToolExecutor, AgentRuns: agentRunService, AgentTriggers: agentTriggerService, Architect: architectService, Chats: chatService,
-			Messages: messageService, Scheduled: scheduledService, UserState: userStateService, Push: pushService, Workspace: workspaceService, Files: fileService, Search: searchService, Knowledge: knowledgeService, Interactive: interactiveService, Webhooks: webhookService, Realtime: realtimeServer,
+			Messages: messageService, Scheduled: scheduledService, Reminders: reminderService, UserState: userStateService, Push: pushService, Workspace: workspaceService, Files: fileService, Search: searchService, Knowledge: knowledgeService, Interactive: interactiveService, Webhooks: webhookService, Realtime: realtimeServer,
 			CookieSecure: cfg.Auth.CookieSecure, RefreshTokenTTL: cfg.Auth.RefreshTokenTTL,
 			BootstrapToken: cfg.BootstrapToken, RequireBootstrapToken: cfg.AppEnv != "development",
 			TrustedProxyCIDRs: cfg.TrustedProxyCIDRs, RevokeRealtimeSession: realtimeServer.RevokeSession,
@@ -346,6 +347,7 @@ func main() {
 	if err := scheduledClient.Stop(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		logger.Error("scheduled message shutdown failed", "error", err)
 	}
+	stopReminders(ctx)
 	if err := server.Shutdown(ctx); err != nil {
 		logger.Error("graceful shutdown failed", "error", err)
 		os.Exit(1)
