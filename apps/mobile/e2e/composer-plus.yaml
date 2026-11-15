@@ -28,6 +28,12 @@ appId: com.comamessenger.app
 - assertVisible: ПОПРОСИТЬ И ПОРУЧИТЬ
 - assertVisible:
     id: composer-action-request
+# «Задача» (phase 6.6) comes with message_tasks on the server; «Опрос» has
+# no phone screens yet.
+- assertVisible:
+    id: composer-action-task
+- assertNotVisible:
+    id: composer-action-poll
 - assertNotVisible:
     id: composer-action-schedule
 - takeScreenshot: ${THEME}-plus-menu

@@ -1,0 +1,80 @@
+# The slot under the chat header (phase 6.6, decision 17) with pinned and
+# scheduled messages: one line, counters on the right switch the kind, a tap
+# on the pinned line goes to the message, on the scheduled one to the list.
+# Run after sign-in.yaml:
+#   SLOT_ONLY=1 node e2e/seed-tasks.mjs && maestro test -e THEME=light e2e/chat-slot.yaml
+# THEME (light or dark) names the screenshots; no default here, a flow
+# default would override -e.
+appId: com.comamessenger.app
+---
+- runScript: scripts/login.js
+- runScript: scripts/clear-scheduled.js
+- runFlow: open-app.yaml
+- tapOn: .*Инструкторы · задачи.*
+- extendedWaitUntil:
+    visible:
+      id: chat-slot-pinned
+    timeout: 10000
+- assertVisible: .*Закреплённое.*Ключи от раздевалки.*
+- takeScreenshot: ${THEME}-slot-pinned
+
+# A scheduled message joins the slot as a second kind with its icon.
+- tapOn:
+    id: composer-input
+- inputText: Напоминаю про слот в большом зале
+- longPressOn:
+    id: composer-send
+- extendedWaitUntil:
+    visible:
+      id: send-options
+    timeout: 5000
+- tapOn:
+    id: send-options-later
+- extendedWaitUntil:
+    visible:
+      id: schedule-sheet
+    timeout: 5000
+- tapOn:
+    id: schedule-choice-tomorrowMorning
+- tapOn:
+    id: schedule-confirm
+- extendedWaitUntil:
+    visible:
+      id: chat-slot-chip-scheduled
+    timeout: 10000
+# The pinned message stays first; the icons switch the kind.
+- assertVisible:
+    id: chat-slot-pinned
+- takeScreenshot: ${THEME}-slot-chips
+- tapOn:
+    id: chat-slot-chip-scheduled
+- extendedWaitUntil:
+    visible:
+      id: chat-slot-scheduled
+    timeout: 5000
+- assertVisible: .*Отложено · .*Напоминаю про слот.*
+- takeScreenshot: ${THEME}-slot-scheduled
+- tapOn:
+    id: chat-slot-scheduled
+- extendedWaitUntil:
+    visible:
+      id: scheduled-screen
+    timeout: 10000
+- tapOn:
+    id: scheduled-back
+- extendedWaitUntil:
+    visible:
+      id: conversation
+    timeout: 10000
+# Back on pinned: a tap leads to the message.
+- tapOn:
+    id: chat-slot-chip-pinned
+- tapOn:
+    id: chat-slot-pinned
+- extendedWaitUntil:
+    visible: Ключи от раздевалки теперь на стойке администратора
+    timeout: 10000
+- runScript: scripts/clear-scheduled.js
+- tapOn:
+    id: conversation-back
+    retryTapIfNoChange: true

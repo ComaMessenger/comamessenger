@@ -1,0 +1,20 @@
+# Shows one kind of the slot under the chat header (phase 6.6): the slot
+# shows the most urgent kind first, the others behind their icons on the
+# right. Pass the kind: runFlow: { file: slot-kind.yaml, env: { KIND: scheduled } }.
+appId: com.comamessenger.app
+---
+- extendedWaitUntil:
+    visible:
+      id: chat-slot
+    timeout: 10000
+- runFlow:
+    when:
+      visible:
+        id: chat-slot-chip-${KIND}
+    commands:
+      - tapOn:
+          id: chat-slot-chip-${KIND}
+- extendedWaitUntil:
+    visible:
+      id: chat-slot-${KIND}
+    timeout: 10000

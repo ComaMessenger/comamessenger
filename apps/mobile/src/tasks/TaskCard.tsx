@@ -379,17 +379,24 @@ export function TaskCardView({
               interactive && permissions.checkItems.includes(item.id);
             const done = Boolean(item.done_at);
             return (
-              <View key={item.id} style={styles.item}>
+              // The whole line ticks the item (prototype `.cli`).
+              <Pressable
+                key={item.id}
+                testID={`task-item-${index}`}
+                accessibilityRole="checkbox"
+                accessibilityLabel={item.text}
+                accessibilityState={{
+                  checked: done,
+                  disabled: !allowed || busy === "item",
+                }}
+                disabled={!allowed || busy === "item"}
+                onPress={() => void actions.checkItem(item.id, !done)}
+                style={styles.item}
+              >
                 <TaskCheck
-                  testID={`task-item-${index}`}
                   checked={done}
                   label={item.text}
-                  disabled={!allowed || busy === "item"}
-                  onPress={
-                    allowed
-                      ? () => void actions.checkItem(item.id, !done)
-                      : undefined
-                  }
+                  disabled={!allowed}
                 />
                 <Text
                   size={15}
@@ -425,7 +432,7 @@ export function TaskCardView({
                     />
                   </View>
                 ) : null}
-              </View>
+              </Pressable>
             );
           })}
         </View>

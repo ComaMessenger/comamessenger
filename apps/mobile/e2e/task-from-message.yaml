@@ -1,0 +1,50 @@
+# «Сделать задачей» (phase 6.6): a long press on Анна's message, the form
+# with its text as the title and «из сообщения Анна Иванова: «…»», the task
+# on the reader; the card keeps the link to the message. Run after
+# sign-in.yaml:
+#   node e2e/seed-tasks.mjs && maestro test -e THEME=light e2e/task-from-message.yaml
+# THEME (light or dark) names the screenshots; no default here, a flow
+# default would override -e.
+appId: com.comamessenger.app
+---
+- runFlow: open-app.yaml
+- tapOn: .*Инструкторы · задачи.*
+- extendedWaitUntil:
+    visible: .*проверить аптечку в большом зале.*
+    timeout: 10000
+- longPressOn: .*проверить аптечку в большом зале.*
+- extendedWaitUntil:
+    visible:
+      id: message-action-makeTask
+    timeout: 5000
+- takeScreenshot: ${THEME}-task-message-menu
+- tapOn:
+    id: message-action-makeTask
+- extendedWaitUntil:
+    visible:
+      id: task-sheet
+    timeout: 5000
+- assertVisible: .*из сообщения Анна Иванова.*
+- tapOn:
+    id: task-person-me
+- takeScreenshot: ${THEME}-task-from-message
+- scrollUntilVisible:
+    element:
+      id: task-create
+    direction: DOWN
+    visibilityPercentage: 100
+- tapOn:
+    id: task-create
+- extendedWaitUntil:
+    notVisible:
+      id: task-sheet
+    timeout: 10000
+- extendedWaitUntil:
+    visible:
+      id: task-source
+    timeout: 10000
+- assertVisible: .*Вы · отвечает.*
+- takeScreenshot: ${THEME}-task-from-message-card
+- tapOn:
+    id: conversation-back
+    retryTapIfNoChange: true

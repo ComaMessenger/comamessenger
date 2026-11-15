@@ -63,30 +63,39 @@ export function TaskCheck({
   onPress?(): void;
 }) {
   const theme = useTheme();
+  const box = [
+    styles.check,
+    {
+      width: size,
+      height: size,
+      borderRadius: round ? size / 2 : 7,
+      backgroundColor: checked ? theme.primary : theme.surface,
+      borderColor: checked ? theme.primary : theme.borderStrong,
+      opacity: disabled && !checked ? 0.55 : 1,
+    },
+  ];
+  const mark = checked ? (
+    <Check size={size * 0.64} strokeWidth={2.6} color={theme.onPrimary} />
+  ) : null;
+  // Without an action it is a picture: the line around it takes the tap.
+  if (!onPress)
+    return (
+      <View testID={testID} pointerEvents="none" style={box}>
+        {mark}
+      </View>
+    );
   return (
     <Pressable
       testID={testID}
       accessibilityRole="checkbox"
       accessibilityLabel={label}
       accessibilityState={{ checked, disabled: Boolean(disabled) }}
-      disabled={disabled || !onPress}
+      disabled={disabled}
       hitSlop={10}
       onPress={onPress}
-      style={[
-        styles.check,
-        {
-          width: size,
-          height: size,
-          borderRadius: round ? size / 2 : 7,
-          backgroundColor: checked ? theme.primary : theme.surface,
-          borderColor: checked ? theme.primary : theme.borderStrong,
-          opacity: disabled && !checked ? 0.55 : 1,
-        },
-      ]}
+      style={box}
     >
-      {checked ? (
-        <Check size={size * 0.64} strokeWidth={2.6} color={theme.onPrimary} />
-      ) : null}
+      {mark}
     </Pressable>
   );
 }
