@@ -60,8 +60,9 @@ export type NotificationContent = {
   silent: boolean;
   /**
    * What the push is about (phase 6.4): "reminder" gets the «Через час /
-   * Завтра / Готово» buttons, "request" is a request or its reminder.
-   * Absent for messages and from older servers.
+   * Завтра / Готово» buttons, "request" is a request or its reminder,
+   * "task" a task (phase 6.6: assigned, due soon, overdue, done…) that opens
+   * its card in the chat. Absent for messages and from older servers.
    */
   kind?: NotificationKind;
   /** The message a reminder is about, for its buttons. */
@@ -70,7 +71,7 @@ export type NotificationContent = {
   reminderID?: string;
 };
 
-export type NotificationKind = "reminder" | "request";
+export type NotificationKind = "reminder" | "request" | "task";
 
 const uuid = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 
@@ -116,7 +117,9 @@ export function parseNotification(json: string): NotificationContent | null {
         ? value.badge
         : undefined,
     silent: value.silent === true,
-    ...(value.kind === "reminder" || value.kind === "request"
+    ...(value.kind === "reminder" ||
+    value.kind === "request" ||
+    value.kind === "task"
       ? { kind: value.kind }
       : {}),
     ...(isUUID(value.message_id) ? { messageID: value.message_id } : {}),

@@ -106,4 +106,22 @@ describe("notification codec", () => {
     expect(plain?.kind).toBeUndefined();
     expect(plain?.messageID).toBeUndefined();
   });
+  it("reads a task push and opens its card in the chat", () => {
+    const message = "0192f0c4-5555-7000-8000-000000000005";
+    const url = `/chat/${chat}?message=${message}`;
+    const content = parseNotification(
+      JSON.stringify({
+        v: 1,
+        title: "Задача · Марина",
+        body: "Инструкторы: Повесить расписание · до 12:00",
+        url,
+        chat_id: chat,
+        event_seq: 7,
+        kind: "task",
+        message_id: message,
+      }),
+    );
+    expect(content).toMatchObject({ kind: "task", url, messageID: message });
+    expect(notificationRoute({ url })).toBe(url);
+  });
 });

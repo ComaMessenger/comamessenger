@@ -179,6 +179,8 @@ export default function ChatsScreen() {
                 mentionCount={count?.mention_count ?? 0}
                 requestsWaiting={count?.requests_waiting ?? 0}
                 requestsDueAt={count?.requests_next_due_at ?? null}
+                tasksOpen={count?.tasks_mine_open ?? 0}
+                tasksDueAt={count?.tasks_mine_next_due_at ?? null}
                 pinned={pinned.has(item.id)}
                 draft={drafts[item.id]}
                 presence={

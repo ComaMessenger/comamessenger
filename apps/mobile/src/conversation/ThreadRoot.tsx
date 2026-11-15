@@ -27,6 +27,7 @@ import { MessageFiles } from "./MessageFiles";
 import { formatTime } from "./MessageRow";
 import { useReactions } from "./reactions";
 import { RequestCard } from "@/requests/RequestCard";
+import { TaskCard } from "@/tasks/TaskCard";
 
 /** The message a thread grew from, pinned on white above the replies. */
 export function ThreadRoot({
@@ -115,6 +116,12 @@ export function ThreadRoot({
             <Text tone="muted" size={15} style={styles.italic}>
               {t("messageDeleted")}
             </Text>
+          ) : message.task ? (
+            <TaskCard
+              message={{ ...message, task: message.task }}
+              members={members}
+              onNotice={onNotice}
+            />
           ) : (
             !blocks?.card &&
             Boolean(message.body.trim()) && <Markdown source={message.body} />

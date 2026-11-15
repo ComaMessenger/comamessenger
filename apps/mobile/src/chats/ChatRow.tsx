@@ -1,17 +1,25 @@
 import { memo } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import { BellOff, MessageCircleCheck, Pin } from "lucide-react-native";
+import {
+  BellOff,
+  MessageCircleCheck,
+  Pin,
+  SquareCheck,
+} from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import {
   chatAvatarSource,
   chatPreview,
   chatRequestBadge,
+  chatTaskBadge,
   formatListTime,
   formatRequestDueDay,
   isChatMuted,
   type Chat,
 } from "@comamessenger/core";
 import { calendarLocale } from "@/requests/locale";
+import { useClock } from "@/scheduled/clock";
+import { formatTaskBadgeDue } from "@/tasks/format";
 import { useTheme } from "@/lib/theme";
 import type { Presence } from "@/ui/Avatar";
 import { CountBadge } from "@/ui/CountBadge";
@@ -32,6 +40,8 @@ export const ChatRow = memo(function ChatRow({
   draft,
   requestsWaiting = 0,
   requestsDueAt = null,
+  tasksOpen = 0,
+  tasksDueAt = null,
   onOpen,
   onActions,
   testID,
@@ -48,6 +58,10 @@ export const ChatRow = memo(function ChatRow({
   requestsWaiting?: number;
   /** The earliest due date among them (ChatUnread.requests_next_due_at). */
   requestsDueAt?: string | null;
+  /** Open tasks here on the reader (ChatUnread.tasks_mine_open). */
+  tasksOpen?: number;
+  /** The earliest due date among them: a burning one gives the red mark. */
+  tasksDueAt?: string | null;
   onOpen(chatID: string): void;
   onActions(chatID: string): void;
   testID?: string;
@@ -72,6 +86,21 @@ export const ChatRow = memo(function ChatRow({
     t("yesterday"),
   );
   const mention = mentionCount > 0;
+  const clock = useClock();
+  // A burning task on the reader wins over the yellow request mark
+  // (decision 19); open tasks that do not burn give no mark.
+  const now = new Date();
+  const taskBadge = chatTaskBadge(
+    { tasks_mine_open: tasksOpen, tasks_mine_next_due_at: tasksDueAt },
+    now,
+  );
+  const taskNeed = taskBadge
+    ? taskBadge.kind === "overdue"
+      ? t("taskBadgeOverdue")
+      : t("taskBadgeDue", {
+          when: formatTaskBadgeDue(taskBadge.at, now, clock, i18n.language),
+        })
+    : null;
   const requestBadge = chatRequestBadge({
     requests_waiting: requestsWaiting,
     requests_next_due_at: requestsDueAt,
@@ -95,7 +124,7 @@ export const ChatRow = memo(function ChatRow({
     muted ? t("muted") : "",
     unreadCount > 0 ? t("unreadCount", { count: unreadCount }) : "",
     mention ? t("mentionedYou") : "",
-    need ?? "",
+    taskNeed ?? need ?? "",
     draftText
       ? `${t("draftLabel")}: ${draftText}`
       : `${preview.sender}${preview.text}`,
@@ -179,7 +208,23 @@ export const ChatRow = memo(function ChatRow({
           </Text>
           {pinned && <Pin size={14} color={theme.muted} />}
           {muted && <BellOff size={14} color={theme.muted} />}
-          {need ? (
+          {taskNeed ? (
+            <View
+              testID="chat-row-task"
+              style={[styles.need, { backgroundColor: theme.dangerSoft }]}
+            >
+              <SquareCheck size={13} color={theme.danger} strokeWidth={2.3} />
+              <Text
+                allowFontScaling={false}
+                weight="bold"
+                size={11.5}
+                numberOfLines={1}
+                style={{ color: theme.danger }}
+              >
+                {taskNeed}
+              </Text>
+            </View>
+          ) : need ? (
             <View
               testID="chat-row-request"
               style={[styles.need, { backgroundColor: theme.warningSoft }]}

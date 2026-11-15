@@ -1,3 +1,4 @@
+import { tasksRu } from "../tasks/i18n";
 import { agentBuilderRu } from "../agents/builder/i18n";
 import { orgRu } from "../org/i18n";
 
@@ -1826,4 +1827,7 @@ export const ru = {
   reminderError_unavailable: "Сервер пока не поддерживает напоминания",
   reminderError_network: "Нет связи с сервером",
   reminderError_other: "Не получилось. Попробуйте ещё раз",
+
+  // Tasks and the slot under the chat header (phase 6.6, wave 3)
+  ...tasksRu,
 } as const;

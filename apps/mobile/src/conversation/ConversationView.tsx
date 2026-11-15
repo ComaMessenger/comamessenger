@@ -27,7 +27,8 @@ import {
   compactUUID,
   composerMenu,
   remindLabelKey,
-  waitingStrip,
+  taskDraftFromMessage,
+  tasksAvailable,
   workplaceFeatures,
   type ComposerMenuItemID,
   decodeMentions,
@@ -42,6 +43,7 @@ import {
   type ChatMember,
   type ClientMessage,
   type FeedRow,
+  type SlotItem,
 } from "@comamessenger/core";
 import { spacing } from "@comamessenger/tokens";
 import { useSignedIn } from "@/session/SessionProvider";
@@ -64,7 +66,6 @@ import { pickFiles, type PickSource } from "@/files/pick";
 import { saveFailureKey } from "@/important/saved";
 import { RowBoundary } from "@/ui/RowBoundary";
 import { ScheduledBubbles } from "@/scheduled/ScheduledBubbles";
-import { ScheduledStrip } from "@/scheduled/ScheduledStrip";
 import { useScheduleComposer } from "@/scheduled/useScheduleComposer";
 import { useChatScheduled } from "@/scheduled/useScheduled";
 import { AgentPicker } from "./AgentPicker";
@@ -74,7 +75,12 @@ import { Composer, type ComposerContext } from "./Composer";
 import { ComposerSheet } from "./ComposerSheet";
 import { useMessenger } from "@/messenger/MessengerProvider";
 import { RequestSheet } from "@/requests/RequestSheet";
-import { ReminderStrip, WaitingStrip } from "@/requests/WaitingStrip";
+import { ReminderStrip } from "@/requests/WaitingStrip";
+import { ChatTasksDrop } from "@/tasks/ChatTasksDrop";
+import { useTaskViewer } from "@/tasks/format";
+import { TaskJumpContext } from "@/tasks/parts";
+import { TaskSheet, type TaskSource } from "@/tasks/TaskSheet";
+import { ChatSlotBar, useChatSlot } from "./ChatSlot";
 import { ReminderSheet } from "@/reminders/ReminderSheet";
 import { findReminder, useChatReminders } from "@/reminders/useReminders";
 import { ForwardSheet } from "./ForwardSheet";
@@ -138,6 +144,10 @@ export function ConversationView({
   const [focusRequest, setFocusRequest] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
   const [requestOpen, setRequestOpen] = useState(false);
+  // «Новая задача»: from «+» (no source) or «Сделать задачей».
+  const [taskSheet, setTaskSheet] = useState<{
+    source: TaskSource | null;
+  } | null>(null);
   // «Напомнить мне»: the message and, when one is set, its time and note.
   const [remindFor, setRemindFor] = useState<{
     message: ClientMessage;
@@ -151,10 +161,6 @@ export function ConversationView({
   const features = useStore(store, (state) => state.features);
   const workplace = workplaceFeatures(features);
   const reminders = useChatReminders(chatID, workplace.reminders);
-  const requestViewers = useStore(store, (state) => state.requestViewers);
-  const chatUnread = useStore(store, (state) =>
-    state.unread.chats.find((item) => item.chat_id === chatID),
-  );
   const attachments = useAttachments(api, typingScope(chatID, threadRootID));
   useUploadActivity(chatID, threadRootID);
   const list = useRef<FlashListRef<FeedRow>>(null);
@@ -294,11 +300,16 @@ export function ConversationView({
     [feed],
   );
 
-  // «Ждут вашего ответа» under the header: counts from /unread, the
-  // message to scroll to from the loaded feed.
-  const strip = workplace.requests
-    ? waitingStrip(chatUnread, conversation.messages, requestViewers)
-    : null;
+  // A message of this chat: scrolled to when loaded, else the chat opens
+  // again around it (pinned, a task's source).
+  const jumpTo = useCallback(
+    (messageID: string) => {
+      if (feed.some((row) => row.message.id === messageID))
+        goToMessage(messageID);
+      else router.push(`/chat/${chatID}?message=${messageID}`);
+    },
+    [chatID, feed, goToMessage],
+  );
 
   function jumpToBottom() {
     if (conversation.hasLater) {
@@ -414,8 +425,8 @@ export function ConversationView({
   // The "+" sheet, variant A: attachments, «Попросить и поручить», agents.
   // The items and their rules live in @comamessenger/core with the web's;
   // sending later stays on a long press of «Отправить».
-  // «Задача» (wave 3) and «Опрос» (wave 4) have no phone screens yet: they
-  // stay out of the menu until they come, a dead item would be a stub.
+  // «Опрос» (wave 4) has no phone screens yet: it stays out of the menu
+  // until they come, a dead item would be a stub.
   const composerGroups = composerMenu({
     platform: "mobile",
     readonly: conversation.readonly,
@@ -425,11 +436,48 @@ export function ConversationView({
   })
     .map((group) => ({
       ...group,
-      items: group.items.filter(
-        (item) => item.id !== "task" && item.id !== "poll",
-      ),
+      items: group.items.filter((item) => item.id !== "poll"),
     }))
     .filter((group) => group.items.length > 0);
+  // Tasks (wave 3): «Задача» in «+», «Сделать задачей», the task kinds of
+  // the slot. Only with message_tasks on the server and the right to post.
+  const tasksOn = tasksAvailable(features);
+  const canCreateTask = tasksOn && !conversation.readonly;
+  const taskViewer = useTaskViewer(chatID, members);
+  const slot = useChatSlot({
+    chatID,
+    messages: conversation.messages,
+    viewer: taskViewer,
+    scheduled: chatScheduled.items,
+    scheduledLoaded:
+      chatScheduled.query.data !== undefined || chatScheduled.query.isError,
+    enabled: !inThread,
+  });
+  function openSlot(item: SlotItem) {
+    switch (item.kind) {
+      case "hot":
+        if (item.targetType === "task") slot.setOpen((value) => !value);
+        else if (item.targetMessageId) jumpTo(item.targetMessageId);
+        else router.push("/important?tab=waiting");
+        return;
+      case "pinned":
+        if (item.targetMessageId) jumpTo(item.targetMessageId);
+        slot.nextPin(item);
+        return;
+      case "requests":
+        if (item.targetMessageId) jumpTo(item.targetMessageId);
+        else router.push("/important?tab=waiting");
+        return;
+      case "tasks":
+        slot.setOpen((value) => !value);
+        return;
+      case "scheduled":
+        router.push(`/chat/${chatID}/scheduled`);
+        return;
+      case "away":
+        return;
+    }
+  }
   function pickComposerItem(id: ComposerMenuItemID) {
     switch (id) {
       case "photo":
@@ -442,6 +490,7 @@ export function ConversationView({
       case "request":
         return setRequestOpen(true);
       case "task":
+        return setTaskSheet({ source: null });
       case "poll":
         return;
       case "agent":
@@ -505,6 +554,18 @@ export function ConversationView({
         return;
       case "remind":
         afterMenu(() => void openReminder(message));
+        return;
+      case "makeTask":
+        afterMenu(() =>
+          setTaskSheet({
+            source: {
+              messageID: message.id,
+              authorName: authorName(message.actor_id),
+              excerpt: messagePlainText(message.body).trim().slice(0, 140),
+              draft: taskDraftFromMessage(message),
+            },
+          }),
+        );
         return;
       case "copyLink":
         void Clipboard.setStringAsync(
@@ -602,6 +663,8 @@ export function ConversationView({
         persisted: menuPersisted,
         reminders: workplace.reminders,
         reminded: reminders.reminded.has(menuFor.id),
+        tasks: canCreateTask,
+        messageType: menuFor.type,
       })
     : [];
   const placementOf = (message: ClientMessage): BubblePlacement => {
@@ -680,7 +743,7 @@ export function ConversationView({
     </View>
   );
 
-  return (
+  const view = (
     <MediaViewerHost
       items={media}
       hasOlder={conversation.hasOlder}
@@ -739,21 +802,8 @@ export function ConversationView({
               void removeReminder(focusMessageID);
             }}
           />
-        ) : !inThread && strip ? (
-          <WaitingStrip
-            strip={strip}
-            onPress={() =>
-              strip.messageID
-                ? goToMessage(strip.messageID)
-                : router.push("/important?tab=waiting")
-            }
-          />
         ) : !inThread ? (
-          <ScheduledStrip
-            chatID={chatID}
-            items={chatScheduled.items}
-            onPress={() => router.push(`/chat/${chatID}/scheduled`)}
-          />
+          <ChatSlotBar state={slot} onTap={openSlot} onNotice={setNotice} />
         ) : null}
         {inThread && root && (
           <RowBoundary kind="message" resetKey={root}>
@@ -829,7 +879,7 @@ export function ConversationView({
                 ListFooterComponent={
                   <>
                     {/* A recorded voice message is a bubble at once: it
-                      uploads here, then sends as an ordinary message. */}
+                    uploads here, then sends as an ordinary message. */}
                     <VoiceOutboxStrip
                       chatID={chatID}
                       threadRootID={threadRootID}
@@ -939,6 +989,28 @@ export function ConversationView({
                 }}
               />
             )}
+            {slot.open ? (
+              <ChatTasksDrop
+                tasks={slot.taskMessages}
+                viewer={taskViewer}
+                members={members}
+                canCreate={canCreateTask}
+                onNotice={setNotice}
+                onOpenTask={(id) => {
+                  slot.setOpen(false);
+                  jumpTo(id);
+                }}
+                onAll={() => {
+                  slot.setOpen(false);
+                  router.push(`/chat/${chatID}/tasks`);
+                }}
+                onNew={() => {
+                  slot.setOpen(false);
+                  setTaskSheet({ source: null });
+                }}
+                onClose={() => slot.setOpen(false)}
+              />
+            ) : null}
             {showJump && (
               <Pressable
                 accessibilityRole="button"
@@ -946,7 +1018,10 @@ export function ConversationView({
                 onPress={jumpToBottom}
                 style={[
                   styles.jump,
-                  { backgroundColor: theme.surface, borderColor: theme.border },
+                  {
+                    backgroundColor: theme.surface,
+                    borderColor: theme.border,
+                  },
                 ]}
               >
                 <ArrowDown size={20} color={theme.foreground} />
@@ -1017,6 +1092,19 @@ export function ConversationView({
             onNotice={(text) => {
               setNotice(text);
               list.current?.scrollToEnd({ animated: true });
+            }}
+          />
+        ) : null}
+        {tasksOn ? (
+          <TaskSheet
+            visible={taskSheet !== null}
+            chatID={chatID}
+            members={members}
+            source={taskSheet?.source ?? null}
+            onClose={() => setTaskSheet(null)}
+            onNotice={(text) => {
+              setNotice(text);
+              if (!inThread) list.current?.scrollToEnd({ animated: true });
             }}
           />
         ) : null}
@@ -1116,6 +1204,10 @@ export function ConversationView({
         />
       </SafeAreaView>
     </MediaViewerHost>
+  );
+  // «из сообщения» and the task list scroll the feed instead of reopening it.
+  return (
+    <TaskJumpContext.Provider value={jumpTo}>{view}</TaskJumpContext.Provider>
   );
 }
 

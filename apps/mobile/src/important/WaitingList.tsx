@@ -17,6 +17,7 @@ import {
   formatRequestDue,
   messagePlainText,
   requestKeys,
+  waitingFilters,
   waitingSections,
   type RequestInboxItem,
 } from "@comamessenger/core";
@@ -30,23 +31,42 @@ import { Text } from "@/ui/Text";
 import { useNow } from "@/scheduled/clock";
 import { calendarLocale } from "@/requests/locale";
 import { RequestCard } from "@/requests/RequestCard";
+import { phoneInboxFeatures } from "./features";
+import { WaitingWithTasks } from "./WaitingWithTasks";
 
-function useInbox(state: "waiting" | "answered") {
+export function useInbox(state: "waiting" | "answered", enabled = true) {
   const { api, user } = useSignedIn();
   return useInfiniteQuery({
     queryKey: requestKeys.inbox(user.id, state),
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) => api.requestInbox({ state, cursor: pageParam }),
     getNextPageParam: (page) => page.next_cursor ?? undefined,
+    enabled,
   });
 }
 
 /**
- * «Важные → Ждут вас»: requests waiting for the reader's answer, with the
- * buttons right in the card (soonest due date first), then «Отвечено» —
- * open requests the reader already answered, to change the answer.
+ * «Важные → Ждут вас». With tasks on the server: chips «Всё · Запросы ·
+ * Задачи» over one list in due order, «На мне / Поставил(а) я» inside
+ * «Задачи» (WaitingWithTasks). Without them: requests as in wave 1.
  */
-export function WaitingList({
+export function WaitingList({ onNotice }: { onNotice(text: string): void }) {
+  const { store } = useMessenger();
+  const features = useStore(store, (state) => state.features);
+  const filters = waitingFilters(phoneInboxFeatures(features));
+  return filters.length ? (
+    <WaitingWithTasks filters={filters} onNotice={onNotice} />
+  ) : (
+    <RequestWaitingList onNotice={onNotice} />
+  );
+}
+
+/**
+ * Requests waiting for the reader's answer, with the buttons right in the
+ * card (soonest due date first), then «Отвечено» — open requests the
+ * reader already answered, to change the answer.
+ */
+function RequestWaitingList({
   header,
   onNotice,
 }: {
@@ -157,7 +177,7 @@ export function WaitingList({
 }
 
 /** One request in «Ждут вас» (prototype `.imp` with the request buttons). */
-const WaitingRow = memo(function WaitingRow({
+export const WaitingRow = memo(function WaitingRow({
   item,
   testID,
   onNotice,
