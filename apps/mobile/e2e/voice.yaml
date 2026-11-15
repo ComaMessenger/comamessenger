@@ -44,6 +44,20 @@ appId: com.comamessenger.app
 - tapOn: (Пауза|Pause)
 - assertVisible:
     id: voice-speed
+# A drag to the left along the waveform rewinds to the start; the row's
+# swipe to reply (also to the left) must not take it.
+# The position is read in the bubble's label (one accessible element).
+- swipe:
+    from:
+      id: voice-seek
+      index: -1
+    direction: LEFT
+    duration: 600
+- extendedWaitUntil:
+    visible: .*Позиция в записи, 0:00.*
+    timeout: 5000
+- assertNotVisible: Отменить ответ
+- takeScreenshot: voice-rewound
 # Empty composer: the microphone instead of the send button.
 - assertVisible:
     id: composer-mic
