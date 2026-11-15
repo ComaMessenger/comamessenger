@@ -83,6 +83,9 @@ type Message struct {
 	// person's view with the counts when they may see them.
 	Poll       *poll.Poll   `json:"poll,omitempty"`
 	PollViewer *poll.Viewer `json:"poll_viewer,omitempty"`
+	// AutoReply: the server sent this message on behalf of its author, who
+	// is away («АВТООТВЕТ», phase 6.7). Set by hydrateFiles.
+	AutoReply bool `json:"auto_reply,omitempty"`
 }
 
 type ForwardAttribution struct {
@@ -117,6 +120,8 @@ type CreateInput struct {
 	task *taskCreation
 	// poll makes the message a poll; set only by CreatePoll.
 	poll *pollCreation
+	// autoReply marks an auto-reply; set only by CreateAutoReplyTx.
+	autoReply bool
 }
 
 // UseLinks attaches links prepared outside the transaction (PrepareLinks).
@@ -169,6 +174,7 @@ type Service struct {
 	requests             *request.Service
 	tasks                *task.Service
 	polls                *poll.Service
+	awayHook             AwayHook
 }
 
 func NewService(pool *pgxpool.Pool, maxBodyBytes, maxPageSize int, afterCommit func(orgID string, highWatermark int64)) *Service {
@@ -442,6 +448,9 @@ func (s *Service) createTx(ctx context.Context, tx pgx.Tx, user identity.User, c
 		result = created[0]
 	}
 	if err := insertEvent(ctx, tx, user, chatID, result.ID, seq, "message.created"); err != nil {
+		return Message{}, false, 0, err
+	}
+	if err := s.afterDirectMessageTx(ctx, tx, user, chatID, kind, isAgent || provenance != nil, input, result.ID); err != nil {
 		return Message{}, false, 0, err
 	}
 	highWatermark := seq
@@ -1344,6 +1353,9 @@ func hydrateFiles(ctx context.Context, tx pgx.Tx, orgID string, messages []Messa
 		return err
 	}
 	if err := hydratePolls(ctx, tx, orgID, messages); err != nil {
+		return err
+	}
+	if err := hydrateAutoReplies(ctx, tx, orgID, messages); err != nil {
 		return err
 	}
 	return hydrateAgentProvenance(ctx, tx, orgID, messages)

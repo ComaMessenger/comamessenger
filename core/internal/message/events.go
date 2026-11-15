@@ -68,6 +68,7 @@ func CompleteEventMessages(ctx context.Context, tx pgx.Tx, orgID string, items [
 		// never a viewer.
 		message.Poll = full.Poll
 		message.PollViewer = nil
+		message.AutoReply = full.AutoReply
 		if message.ThreadRootID != nil {
 			count := rootCounts[*message.ThreadRootID]
 			message.ThreadRootReplyCount = &count

@@ -65,6 +65,10 @@ type reminderData struct {
 // the owner can still read the message (the rule of «Important») and has
 // push_preview on; the note only with push_preview on.
 func (w *Worker) reminderNotification(ctx context.Context, orgID, actorID, eventType string, eventData []byte, locale string, preview bool, content notificationContent) (notificationContent, error) {
+	if eventType == awayAssignedEvent {
+		// Without a chat the default title is the author's name alone.
+		return w.awayNotification(ctx, orgID, actorID, eventData, content.Title, locale)
+	}
 	if eventType != reminderFiredEvent {
 		return content, nil
 	}

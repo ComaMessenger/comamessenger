@@ -742,12 +742,14 @@ func (w *Worker) materialize(ctx context.Context) error {
 			  `+requestRecipients+`
 			  `+taskRecipients+`
 			  `+pollRecipients+`
+			  `+awayRecipients+`
 			), eligible AS (
-			SELECT e.org_id,e.seq,e.occurred_at,r.*,u.preferences
+			SELECT e.org_id,e.seq,e.occurred_at,r.*,u.preferences,`+awayMuted+` AS away_muted
 			FROM event e JOIN recipients r ON true
 			JOIN users u ON u.org_id=e.org_id AND u.actor_id=r.recipient_id
 			JOIN actors recipient ON recipient.org_id=e.org_id AND recipient.id=r.recipient_id
 			WHERE (r.muted_until IS NULL OR r.muted_until<=e.occurred_at)
+			  AND `+awayAllows+`
 			  AND (`+reminderBypassesQuiet+` OR NOT EXISTS (
 			    SELECT 1 FROM notification_snoozes ns
 			    WHERE ns.org_id=e.org_id AND ns.actor_id=r.recipient_id
@@ -762,6 +764,7 @@ func (w *Worker) materialize(ctx context.Context) error {
 			    `+requestCategories+`
 			    `+taskCategories+`
 			    `+pollCategories+`
+			    `+awayCategories+`
 			    ELSE CASE r.notify_level
 			      WHEN 'all' THEN true
 			      WHEN 'mentions' THEN r.recipient_id=ANY(r.mentioned_actor_ids)
@@ -802,7 +805,7 @@ func (w *Worker) materialize(ctx context.Context) error {
 			  INSERT INTO email_digest_items(org_id,event_seq,actor_id,available_at)
 			  SELECT org_id,seq,recipient_id,occurred_at+interval '15 minutes'
 			  FROM eligible
-			  WHERE COALESCE((preferences->>'email_digest')::boolean,false) AND category NOT IN ('scheduled','reminder')
+			  WHERE COALESCE((preferences->>'email_digest')::boolean,false) AND category NOT IN ('scheduled','reminder','away') AND NOT away_muted
 			  ON CONFLICT DO NOTHING
 			  RETURNING 1
 			), mobile_items AS (
@@ -909,6 +912,9 @@ type digestItem struct {
 }
 
 func (w *Worker) deliverDigests(ctx context.Context) error {
+	if _, err := w.pool.Exec(ctx, awayDigestSuppressed); err != nil {
+		return err
+	}
 	leaseToken, err := id.New()
 	if err != nil {
 		return err
@@ -1141,7 +1147,9 @@ func GenerateVAPIDKeys() (string, string, error) {
 
 // quietNotification is true when the event is a message its author sent
 // without sound; reactions and other events always use the default sound.
-const quietNotification = `COALESCE(e.type='message.created' AND m.silent,false)`
+// While the recipient is away with mute_push, what still reaches them is
+// silent too (awayQuiet).
+var quietNotification = `(COALESCE(e.type='message.created' AND m.silent,false) OR ` + awayQuiet + `)`
 
 // webPushPayload is what the service worker receives. "silent" maps to the
 // Notifications API option of the same name: shown without sound or
