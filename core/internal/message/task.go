@@ -102,7 +102,7 @@ func (s *Service) CreateTask(ctx context.Context, user identity.User, chatID str
 // prepareTaskTx runs inside createTx under the organization lock, before
 // the message is written.
 func (s *Service) prepareTaskTx(ctx context.Context, tx pgx.Tx, user identity.User, chatID, messageID string, input CreateInput) (task.Prepared, error) {
-	if input.ThreadRootID != nil || input.ReplyToID != nil || len(input.FileIDs) > 0 || input.Blocks != nil || input.Silent || len(input.MentionedActorIDs) > 0 {
+	if input.ThreadRootID != nil || input.ReplyToID != nil || len(input.FileIDs) > 0 || input.Blocks != nil || input.Silent || len(input.MentionedActorIDs) > 0 || len(input.MentionedDepartmentIDs) > 0 {
 		return task.Prepared{}, invalid("a task is a plain message of the main feed")
 	}
 	return s.tasks.PrepareTx(ctx, tx, user, chatID, messageID, input.task.plan)
