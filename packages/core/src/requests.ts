@@ -7,7 +7,9 @@ import {
   weekdayShort,
   type CalendarLocale,
 } from "./calendar";
+import { canAddressGroups, expandDepartment, expandPosition } from "./org";
 import { pluralCategory } from "./presenceText";
+import { hasServerFeature, serverFeature } from "./realtime";
 import type {
   ChatMember,
   CreateRequestRequest,
@@ -16,6 +18,7 @@ import type {
   MessageRequest,
   MessageRequestViewer,
   MessageRequestViewerAnswer,
+  OrgStructure,
   RequestAnswer,
   RequestAnswerCounts,
   RequestAnswerPreset,
@@ -28,6 +31,7 @@ import type {
   RequestRemindResult,
   RequestTallyUpdatedEvent,
   RequestUpdatedEvent,
+  User,
 } from "./types";
 
 /**
@@ -121,7 +125,38 @@ export function requestOptionLabels(
 
 export type RequestDraftAudience =
   | { kind: "chat" }
-  | { kind: "people"; actorIDs: string[] };
+  | { kind: "people"; actorIDs: string[] }
+  /** Wave 2: everyone of the department and its subdepartments. */
+  | { kind: "department"; departmentID: string }
+  /** Wave 2: everyone with the position. */
+  | { kind: "position"; positionID: string };
+
+export type RequestAudienceSegment = RequestDraftAudience["kind"];
+
+/**
+ * The segments of «Кому» in the request form: «Весь чат» and «Люди» for
+ * everyone; «Отдел» and «Должность» only when the server announced both
+ * message_requests and org_structure and the author may address groups
+ * (requests.address_groups, the owner always). With a structure, a segment
+ * with nothing to choose (no departments, no positions) is left out.
+ */
+export function audienceSegments(
+  user: User,
+  features: Iterable<string> | null | undefined,
+  structure?: OrgStructure | null,
+): RequestAudienceSegment[] {
+  const segments: RequestAudienceSegment[] = ["chat", "people"];
+  const list = features ? [...features] : [];
+  if (
+    !hasServerFeature(list, serverFeature.requests) ||
+    !hasServerFeature(list, serverFeature.orgStructure) ||
+    !canAddressGroups(user)
+  )
+    return segments;
+  if (!structure || structure.departments.length) segments.push("department");
+  if (!structure || structure.positions.length) segments.push("position");
+  return segments;
+}
 
 export type RequestDraft = {
   body: string;
@@ -159,22 +194,48 @@ export function requestCustomOptions(
 
 /**
  * Who will be asked: active people of the chat for «Весь чат», the chosen
- * ones for «Люди», never the author and never agents. The server does the
- * same at the moment of sending; this is for «Ждём от N человек».
+ * ones for «Люди», the people of the department (with subdepartments) or
+ * of the position who are in the chat; never the author and never agents.
+ * The server does the same at the moment of sending; this is for «Ждём от N
+ * человек». A department or position needs the structure; without it
+ * nobody is counted.
  */
 export function requestRecipientIDs(
   audience: RequestDraftAudience,
   members: readonly Pick<ChatMember, "actor_id" | "type">[],
   selfID: string,
+  structure?: OrgStructure | null,
 ): string[] {
   const people = members.filter(
     (member) => member.type === "user" && member.actor_id !== selfID,
   );
   if (audience.kind === "chat") return people.map((member) => member.actor_id);
+  if (audience.kind === "department" || audience.kind === "position") {
+    if (!structure) return [];
+    const options = {
+      chatMemberIDs: people.map((member) => member.actor_id),
+      excludeActorID: selfID,
+    };
+    const expansion =
+      audience.kind === "department"
+        ? expandDepartment(structure, audience.departmentID, options)
+        : expandPosition(structure, audience.positionID, options);
+    return expansion.inChat.map((person) => person.actorID);
+  }
   const chosen = new Set(audience.actorIDs);
   return people
     .filter((member) => chosen.has(member.actor_id))
     .map((member) => member.actor_id);
+}
+
+/** «Ждём от N человек»: requestRecipientIDs(...).length. */
+export function audienceCount(
+  audience: RequestDraftAudience,
+  structure: OrgStructure | null | undefined,
+  members: readonly Pick<ChatMember, "actor_id" | "type">[],
+  authorID: string,
+): number {
+  return requestRecipientIDs(audience, members, authorID, structure).length;
 }
 
 export type RequestDueProblem = "past" | "tooFar";
@@ -270,16 +331,15 @@ export function toCreateRequestInput(
   extra: {
     bodyFormat?: "plain" | "markdown";
     mentionedActorIDs?: string[];
+    /** Only when the server announced org_structure. */
+    mentionedDepartmentIDs?: string[];
   } = {},
 ): CreateRequestRequest {
   const input: CreateRequestRequest = {
     client_msg_id: clientMsgID,
     body: draft.body.trim(),
     body_format: extra.bodyFormat ?? "plain",
-    audience:
-      draft.audience.kind === "chat"
-        ? { kind: "chat" }
-        : { kind: "people", actor_ids: [...draft.audience.actorIDs] },
+    audience: audienceInput(draft.audience),
     answer:
       draft.preset === "custom"
         ? { preset: "custom", options: requestCustomOptions(draft) }
@@ -290,7 +350,24 @@ export function toCreateRequestInput(
   if (draft.dueAt) input.due_at = draft.dueAt.toISOString();
   if (extra.mentionedActorIDs?.length)
     input.mentioned_actor_ids = [...extra.mentionedActorIDs];
+  if (extra.mentionedDepartmentIDs?.length)
+    input.mentioned_department_ids = [...extra.mentionedDepartmentIDs];
   return input;
+}
+
+function audienceInput(
+  audience: RequestDraftAudience,
+): CreateRequestRequest["audience"] {
+  switch (audience.kind) {
+    case "chat":
+      return { kind: "chat" };
+    case "people":
+      return { kind: "people", actor_ids: [...audience.actorIDs] };
+    case "department":
+      return { kind: "department", department_id: audience.departmentID };
+    case "position":
+      return { kind: "position", position_id: audience.positionID };
+  }
 }
 
 /**
@@ -304,12 +381,15 @@ export function requestSignature(input: CreateRequestRequest): string {
     input.body_format ?? "plain",
     input.audience.kind,
     [...(input.audience.actor_ids ?? [])].sort(),
+    input.audience.department_id ?? null,
+    input.audience.position_id ?? null,
     input.answer.preset,
     input.answer.options ?? [],
     input.allow_comment ?? true,
     input.due_at ?? null,
     Boolean(input.auto_remind),
     [...(input.mentioned_actor_ids ?? [])].sort(),
+    [...(input.mentioned_department_ids ?? [])].sort(),
   ]);
 }
 
@@ -410,6 +490,50 @@ export function requestAudienceText(
     ? { one: "человек", few: "человека", many: "человек" }
     : { one: "person", few: "people", many: "people" };
   return `${audience.count} ${forms[pluralCategory(audience.count, locale)]}`;
+}
+
+/**
+ * The chosen addressee in the form, before sending: «отдел «Зал ЛФК»»,
+ * «должность «Врач»», «весь чат», «3 человека». `peopleCount` is the number
+ * of chosen people for «Люди».
+ */
+export function requestDraftAudienceText(
+  audience: RequestDraftAudience,
+  structure: OrgStructure | null | undefined,
+  locale: CalendarLocale,
+): string {
+  switch (audience.kind) {
+    case "chat":
+      return requestAudienceText({ kind: "chat", label: "", count: 0 }, locale);
+    case "people":
+      return requestAudienceText(
+        { kind: "people", label: "", count: audience.actorIDs.length },
+        locale,
+      );
+    case "department":
+      return requestAudienceText(
+        {
+          kind: "department",
+          label:
+            structure?.departments.find(
+              (item) => item.id === audience.departmentID,
+            )?.name ?? "",
+          count: 0,
+        },
+        locale,
+      );
+    case "position":
+      return requestAudienceText(
+        {
+          kind: "position",
+          label:
+            structure?.positions.find((item) => item.id === audience.positionID)
+              ?.name ?? "",
+          count: 0,
+        },
+        locale,
+      );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1088,6 +1212,10 @@ export type RequestErrorKind =
   | "tooManyRecipients"
   /** Departments and positions before wave 2. */
   | "audienceUnavailable"
+  /** A department or position without requests.address_groups. */
+  | "audienceForbidden"
+  /** The department or position was deleted meanwhile. */
+  | "audienceGone"
   | "limit"
   /** A manual reminder too soon; see APIError.retryAfterSeconds. */
   | "remindTooSoon"
@@ -1120,6 +1248,11 @@ export function requestErrorKind(error: unknown): RequestErrorKind {
       return "tooManyRecipients";
     case "request_audience_unavailable":
       return "audienceUnavailable";
+    case "request_audience_forbidden":
+      return "audienceForbidden";
+    case "department_not_found":
+    case "position_not_found":
+      return "audienceGone";
     case "request_limit_reached":
       return "limit";
     case "request_remind_too_soon":

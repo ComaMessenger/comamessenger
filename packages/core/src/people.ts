@@ -1,4 +1,5 @@
-import type { ActorSummary, ChatMember } from "./types";
+import { personOrgSearchText } from "./org";
+import type { ActorSummary, ChatMember, OrgStructure } from "./types";
 
 /**
  * Searching and ordering people and agents of the workspace: the people
@@ -10,18 +11,33 @@ export type PeopleFilter = "all" | "online" | "people" | "agents";
 type Person = Pick<
   ActorSummary,
   "actor_id" | "display_name" | "handle" | "title" | "type"
->;
+> & { position_id?: string | null };
 
 /** Lower case, «ё» as «е», no leading «@»: how both sides are compared. */
 export function normalizeSearch(value: string) {
   return value.trim().toLocaleLowerCase().replace(/ё/g, "е").replace(/^@+/, "");
 }
 
-/** Every word of the query is found in the name, the handle or the job title. */
-export function matchesPerson(person: Person, query: string) {
+/**
+ * Every word of the query is found in the name, the handle, the caption
+ * (`title`) or, with the org structure, the position and the names of the
+ * person's departments (primary and additional).
+ */
+export function matchesPerson(
+  person: Person,
+  query: string,
+  structure?: OrgStructure | null,
+) {
   const words = normalizeSearch(query).split(/\s+/).filter(Boolean);
   if (!words.length) return true;
-  const haystack = [person.display_name, person.handle, person.title]
+  const haystack = [
+    person.display_name,
+    person.handle,
+    person.title,
+    structure
+      ? personOrgSearchText(structure, person.actor_id, person.position_id)
+      : "",
+  ]
     .map((value) => normalizeSearch(value ?? ""))
     .join(" ");
   return words.every((word) => haystack.includes(word.replace(/^@+/, "")));
@@ -58,6 +74,8 @@ export function filterPeople<T extends Person>(
     presence?: Readonly<Record<string, PersonPresence>>;
     /** Hidden: the reader, members already chosen or already in the chat. */
     exclude?: Iterable<string>;
+    /** Search positions and departments too (org_structure). */
+    structure?: OrgStructure | null;
   } = {},
 ): T[] {
   const hidden = new Set(options.exclude ?? []);
@@ -72,7 +90,7 @@ export function filterPeople<T extends Person>(
       (person.type !== "user" || presence[person.actor_id] !== "online")
     )
       return false;
-    return matchesPerson(person, options.query ?? "");
+    return matchesPerson(person, options.query ?? "", options.structure);
   });
 }
 
