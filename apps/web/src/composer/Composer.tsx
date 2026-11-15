@@ -18,6 +18,7 @@ import {
   Image,
   Link2,
   Megaphone,
+  ListChecks,
   MessageSquareMore,
   Plus,
   SendHorizontal,
@@ -64,6 +65,7 @@ const plusIcons: Record<ComposerMenuItemID, ReactNode> = {
   file: <FileText />,
   markdownFile: <Code2 />,
   request: <MessageSquareMore />,
+  task: <ListChecks />,
   agent: <Sparkles />,
 };
 
@@ -171,7 +173,13 @@ export function Composer({
     hasAgents: !compact && agents.length > 0,
     features: onRequest ? features : [],
     inThread: compact,
-  });
+  })
+    // Tasks (wave 3) have no web screens yet: no dead item in the menu.
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((entry) => entry.id !== "task"),
+    }))
+    .filter((group) => group.items.length > 0);
   const atAttachmentLimit = attachments.length >= attachmentLimit;
 
   useEffect(() => {
