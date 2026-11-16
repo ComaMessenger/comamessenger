@@ -64,16 +64,27 @@ jobs:
         run: |
           set -o pipefail
           workspace=$(ls -d *.xcworkspace | head -1)
-          # Signed ad hoc so the archive keeps its entitlements (App Group,
-          # push); the owner's Mac re-signs it for the App Store on export.
+          # Xcode no longer signs iOS builds ad hoc, so the archive is built
+          # unsigned and then signed ad hoc by codesign with the target
+          # entitlements (App Group, push): the owner's Mac re-signs it for
+          # the App Store on export and keeps those entitlements.
           xcodebuild archive \
             -workspace "$workspace" -scheme "${workspace%.xcworkspace}" \
             -configuration Release -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/Coma.xcarchive" \
-            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO \
-            PROVISIONING_PROFILE_SPECIFIER= PROVISIONING_PROFILE= \
-            | tee "$RUNNER_TEMP/archive.log" | grep -E "error:|warning: .*entitlement|ARCHIVE (SUCCEEDED|FAILED)" || true
-          test -d "$RUNNER_TEMP/Coma.xcarchive/Products/Applications"
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            | tee "$RUNNER_TEMP/archive.log" | grep -E "error:|ARCHIVE (SUCCEEDED|FAILED)" || true
+          app=$(ls -d "$RUNNER_TEMP"/Coma.xcarchive/Products/Applications/*.app | head -1)
+          test -d "$app"
+          find "$app" -path '*/Frameworks/*' \( -name '*.framework' -o -name '*.dylib' \) -prune -print0 \
+            | xargs -0 -I{} codesign --force --sign - --timestamp=none {}
+          for appex in "$app"/PlugIns/*.appex; do
+            [ -d "$appex" ] || continue
+            name=$(basename "$appex" .appex)
+            codesign --force --sign - --timestamp=none --entitlements ".targets/$name/generated.entitlements" "$appex"
+          done
+          codesign --force --sign - --timestamp=none --entitlements "$(basename "$app" .app)/$(basename "$app" .app).entitlements" "$app"
+          codesign -d --entitlements - --xml "$app" | grep -q "group.com" || { echo "app lost its entitlements"; exit 1; }
           ditto -c -k --keepParent "$RUNNER_TEMP/Coma.xcarchive" "$RUNNER_TEMP/Coma.xcarchive.zip"
       - uses: actions/upload-artifact@v5
         with:
