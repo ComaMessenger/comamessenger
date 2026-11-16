@@ -107,14 +107,13 @@ jobs:
       - name: Image runs as non-root on both architectures
         run: |
           image="$REGISTRY/${{ matrix.image }}@${{ steps.build.outputs.digest }}"
+          configs=$(docker buildx imagetools inspect "$image" --format '{{json .Image}}')
           for platform in linux/amd64 linux/arm64; do
-            docker pull --quiet --platform "$platform" "$image" >/dev/null
-            user=$(docker image inspect --format '{{.Config.User}}' "$image")
-            arch=$(docker image inspect --format '{{.Architecture}}' "$image")
+            user=$(printf '%s' "$configs" | jq -r --arg p "$platform" '.[$p].config.User // ""')
+            arch=$(printf '%s' "$configs" | jq -r --arg p "$platform" '.[$p].architecture // ""')
             echo "$platform: architecture=$arch user=$user"
-            [ "linux/$arch" = "$platform" ] || { echo "wrong architecture" >&2; exit 1; }
+            [ "linux/$arch" = "$platform" ] || { echo "no $platform image" >&2; exit 1; }
             case "$user" in "" | 0 | root | 0:0) echo "runs as root" >&2; exit 1 ;; esac
-            docker image rm "$image" >/dev/null
           done
 
   bundle:
