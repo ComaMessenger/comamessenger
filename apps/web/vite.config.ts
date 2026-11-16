@@ -39,6 +39,13 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    build: {
+      // Fonts stay separate files: the CSP allows `font-src 'self'` only, so a
+      // font inlined as a data: URI is refused in production (the dev server
+      // never inlines, which hid it).
+      assetsInlineLimit: (file: string) =>
+        /\.(woff2?|ttf|otf|eot)$/i.test(file) ? false : undefined,
+    },
     server: {
       host: "0.0.0.0",
       port,
