@@ -26,8 +26,8 @@ export async function pickAndUploadChatAvatar(
   });
   if (result.canceled || !result.assets[0]) return false;
   const asset = result.assets[0];
-  if (asset.fileSize && asset.fileSize > maxBytes)
-    throw new ChatAvatarTooLarge();
+  // The cropped copy is what gets sent; Android reports the original's size.
+  if (new File(asset.uri).size > maxBytes) throw new ChatAvatarTooLarge();
   const mime = asset.mimeType === "image/png" ? "image/png" : "image/jpeg";
   const response = await withAuthorization(api, (authorization) =>
     new File(asset.uri).upload(
