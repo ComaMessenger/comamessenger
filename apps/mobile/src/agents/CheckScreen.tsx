@@ -1,13 +1,12 @@
 import { useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   View,
 } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import {
@@ -56,6 +55,7 @@ import {
 import { agentHref, canEditAgent } from "./routes";
 import { RunDocumentRow, useRunDocuments } from "./RunDocuments";
 import { useAgentCheck } from "./useAgentCheck";
+import { dismissKeyboardOnDrag } from "@/lib/keyboard";
 
 /**
  * «Проверка»: ready examples of the role, the answer of the agent draft in a
@@ -92,10 +92,7 @@ export function CheckScreen({ agentID }: { agentID: string }) {
           />
         </View>
       ) : (
-        <KeyboardAvoidingView
-          style={styles.screen}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-        >
+        <KeyboardAvoidingView style={styles.screen} behavior="padding">
           <CheckPanel agent={agent} />
         </KeyboardAvoidingView>
       )}
@@ -140,7 +137,7 @@ function CheckPanel({ agent }: { agent: Agent }) {
     <ScrollView
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
-      keyboardDismissMode="interactive"
+      keyboardDismissMode={dismissKeyboardOnDrag}
     >
       <Text tone="muted" size={14}>
         {t("agentCheckLead")}

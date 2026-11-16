@@ -114,6 +114,7 @@ import {
 import { useAwayNow, useWorkspacePeople } from "@/status/useAway";
 import { useOpenDirect } from "@/people/openDirect";
 import { VoiceOutboxStrip } from "@/voice/VoiceOutbox";
+import { dismissKeyboardOnDrag } from "@/lib/keyboard";
 
 type Context =
   | { kind: "reply"; message: ClientMessage }
@@ -934,7 +935,7 @@ export function ConversationView({
                 onStartReached={() => void conversation.loadOlder()}
                 onScroll={onScroll}
                 scrollEventThrottle={100}
-                keyboardDismissMode="interactive"
+                keyboardDismissMode={dismissKeyboardOnDrag}
                 keyboardShouldPersistTaps="handled"
                 contentContainerStyle={styles.feed}
                 ListHeaderComponent={

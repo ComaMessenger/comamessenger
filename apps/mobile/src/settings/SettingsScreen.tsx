@@ -1,12 +1,6 @@
 import type { ReactNode } from "react";
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  View,
-} from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, View } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { spacing } from "@comamessenger/tokens";
@@ -14,6 +8,7 @@ import { isNetworkError, messageOf } from "@/lib/errors";
 import { useTheme } from "@/lib/theme";
 import { Notice } from "@/ui/Notice";
 import { ScreenHeader } from "@/ui/ScreenHeader";
+import { dismissKeyboardOnDrag } from "@/lib/keyboard";
 
 type Loadable = {
   isPending: boolean;
@@ -96,7 +91,7 @@ export function SettingsScreen({
       <ScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="interactive"
+        keyboardDismissMode={dismissKeyboardOnDrag}
       >
         {children}
       </ScrollView>
@@ -108,10 +103,7 @@ export function SettingsScreen({
       style={[styles.screen, { backgroundColor: theme.canvas }]}
     >
       <ScreenHeader title={title} subtitle={subtitle} trailing={trailing} />
-      <KeyboardAvoidingView
-        style={styles.screen}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
+      <KeyboardAvoidingView style={styles.screen} behavior="padding">
         {body}
       </KeyboardAvoidingView>
     </SafeAreaView>
