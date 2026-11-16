@@ -78,6 +78,11 @@ code=$(curl --silent --show-error --output "$work/owner.json" --write-out '%{htt
 [ "$code" = 201 ] || fail "bootstrap returned $code: $(cat "$work/owner.json")"
 owner_token=$(jq -r .access_token "$work/owner.json")
 
+say "push defaults"
+push=$(json GET /api/v1/push/config "$owner_token")
+[ "$(printf '%s' "$push" | jq -r .mobile_relay_url)" = https://push.coma-chat.com ] || fail "mobile push relay is not the Coma relay: $push"
+[ "$(printf '%s' "$push" | jq -r .enabled)" = true ] || fail "Web Push keys were not generated: $push"
+
 say "invitation"
 invite=$(json POST /api/v1/invitations "$owner_token" '{"email":"member@example.test","role":"member"}')
 [ "$code" = 201 ] || [ "$code" = 200 ] || fail "invitation returned $code: $invite"

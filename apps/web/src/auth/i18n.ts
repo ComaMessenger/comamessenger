@@ -34,7 +34,7 @@ export const authCatalog = defineCatalog(
     bootstrapLeadLong:
       "Сервер ещё не настроен. Укажите организацию и данные владельца — он получит все права и сможет пригласить остальных.",
     bootstrapTokenLabel: "Bootstrap token",
-    bootstrapTokenOptional: "необязательно · из конфигурации сервера",
+    bootstrapTokenOptional: "строка BOOTSTRAP_TOKEN из файла .env на сервере",
     bootstrapSectionOrganization: "Организация",
     bootstrapSectionOwner: "Владелец",
     bootstrapName: "Название",
@@ -51,7 +51,7 @@ export const authCatalog = defineCatalog(
     creating: "Создаём…",
     bootstrapTokenRejected: "Bootstrap token не принят сервером",
     bootstrapTokenRejectedHint:
-      "Проверьте значение COMA_BOOTSTRAP_TOKEN в конфигурации. Введённые данные сохранены.",
+      "Скопируйте значение целиком: на сервере выполните grep BOOTSTRAP_TOKEN .env в папке Coma. Введённые данные сохранены.",
     joinTitle: "Присоединиться",
     joinHandleHint: "Так вас будут упоминать: @{handle}",
     joinHandleTaken: "Handle уже занят",
@@ -93,7 +93,7 @@ export const authCatalog = defineCatalog(
     bootstrapLeadLong:
       "The server is not set up yet. Enter the organization and the owner — they get every permission and can invite the rest.",
     bootstrapTokenLabel: "Bootstrap token",
-    bootstrapTokenOptional: "optional · from the server configuration",
+    bootstrapTokenOptional: "BOOTSTRAP_TOKEN from the .env file on the server",
     bootstrapSectionOrganization: "Organization",
     bootstrapSectionOwner: "Owner",
     bootstrapName: "Name",
@@ -110,7 +110,7 @@ export const authCatalog = defineCatalog(
     creating: "Creating…",
     bootstrapTokenRejected: "The server rejected the bootstrap token",
     bootstrapTokenRejectedHint:
-      "Check COMA_BOOTSTRAP_TOKEN in the configuration. Your input is preserved.",
+      "Copy the whole value: run grep BOOTSTRAP_TOKEN .env in the Coma folder on the server. Your input is preserved.",
     joinTitle: "Join",
     joinHandleHint: "This is how people will mention you: @{handle}",
     joinHandleTaken: "This handle is already taken",

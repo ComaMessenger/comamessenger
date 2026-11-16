@@ -1,6 +1,6 @@
 # Test server deployment
 
-This runbook describes the current single-host Docker deployment used for the public Coma test environment. It is intentionally simpler than the future production topology.
+This runbook describes the single-host Docker deployment of the public Coma test environment, built from source on the server. Companies installing Coma use the published images instead: [install.md](install.md).
 
 ## Topology
 
@@ -11,7 +11,7 @@ This runbook describes the current single-host Docker deployment used for the pu
 - Long-running services use `restart: unless-stopped` and return after a host reboot.
 - Nginx sends `/api/` to Core, including WebSocket upgrade headers for `/api/v1/ws`; the local bucket path goes to MinIO and all other requests go to Web.
 
-The checked-in Nginx template is `deploy/nginx/coma.conf.example`. Replace `__DOMAIN__` and `__CERT_NAME__` when installing it.
+The checked-in Nginx template is `deploy/nginx/coma.conf.example`. Replace `__DOMAIN__` and `__CERT_NAME__` when installing it. The web container serves the static build with nginx on port 8080 inside the container (published on `WEB_PORT`, default 5173) and reads the API address from `PUBLIC_API_URL` at start.
 Keep `blob:` in the `img-src` Content Security Policy: authenticated avatars and file previews are fetched as blobs and displayed through browser-local object URLs.
 
 ## Environment

@@ -4,6 +4,19 @@ Open-source self-hosted corporate messenger with chats, read-only channels, thre
 
 The product specification and phased implementation plan live in [`docs/`](docs/README.md).
 
+## Install on your server
+
+**[Установка на свой сервер → docs/install.md](docs/install.md)** — ready-made images, HTTPS out of the box, backups and updates. No source code or build needed: a Linux server with Docker (2 vCPU, 4 GB RAM, 40 GB SSD for ~100 people) and a domain.
+
+```sh
+mkdir -p /opt/coma && cd /opt/coma
+curl -fsSL https://github.com/ComaMessenger/comamessenger/releases/download/v0.1.0/coma-deploy-0.1.0.tar.gz | tar xz --strip-components 1
+./generate-env.sh chat.example.com
+docker compose up -d --wait
+```
+
+Updates and rollback: [docs/upgrade.md](docs/upgrade.md). Backups: [docs/backup.md](docs/backup.md). Security reports: [SECURITY.md](SECURITY.md).
+
 ## License
 
 The Go server and agent runtime use `AGPL-3.0-only`. Clients, protocol packages, deployment assets and documentation use `Apache-2.0`. See [`LICENSE`](LICENSE) for the directory-level map and [`LICENSES/`](LICENSES/) for the complete terms.
@@ -29,7 +42,9 @@ docs/                Product, architecture and phase documents
 - pnpm 10+
 - Docker with Compose v2
 
-## Local start
+## Local start (development)
+
+The commands below build Coma from source for development. To run Coma for a team, use [docs/install.md](docs/install.md).
 
 ```sh
 ./deploy/generate-env.sh
