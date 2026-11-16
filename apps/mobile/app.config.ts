@@ -103,6 +103,7 @@ const config: ExpoConfig = {
     "@react-native-community/datetimepicker",
     "./plugins/withAndroidReleaseSigning",
     "./plugins/withAndroidGradleMemory",
+    "./plugins/withAndroidLocalCleartext",
     [
       "expo-splash-screen",
       {
