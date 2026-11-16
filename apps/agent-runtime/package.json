@@ -7,7 +7,8 @@
     "build": "tsc -b",
     "dev": "tsx watch src/index.ts",
     "lint": "tsc -b --pretty false",
-    "test": "vitest run"
+    "test": "vitest run",
+    "bundle": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/agent-runtime.mjs --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\""
   },
   "dependencies": {
     "@comamessenger/core": "workspace:*",
@@ -15,6 +16,7 @@
     "undici": "7.16.0"
   },
   "devDependencies": {
+    "esbuild": "0.25.12",
     "tsx": "4.20.5",
     "typescript": "5.9.2",
     "vitest": "3.2.4"

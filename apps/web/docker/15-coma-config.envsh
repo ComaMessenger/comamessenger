@@ -1,0 +1,16 @@
+#!/bin/sh
+# Sourced by the nginx entrypoint before it renders /etc/nginx/templates:
+# checks COMA_API_URL and derives the Content-Security-Policy connect-src.
+COMA_API_URL=$(printf '%s' "${COMA_API_URL:-}" | sed 's:/*$::')
+COMA_CSP_CONNECT=""
+if [ -n "$COMA_API_URL" ]; then
+  if ! printf '%s' "$COMA_API_URL" | grep -Eq '^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?$'; then
+    echo "COMA_API_URL must be an origin like https://api.example.com, without a path (got: $COMA_API_URL)" >&2
+    exit 1
+  fi
+  case "$COMA_API_URL" in
+    https://*) COMA_CSP_CONNECT="$COMA_API_URL wss://${COMA_API_URL#https://}" ;;
+    http://*) COMA_CSP_CONNECT="$COMA_API_URL ws://${COMA_API_URL#http://}" ;;
+  esac
+fi
+export COMA_API_URL COMA_CSP_CONNECT

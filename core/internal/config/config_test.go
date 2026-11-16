@@ -310,6 +310,7 @@ func TestFromEnvironmentUsesSecureCookiesOutsideDevelopment(t *testing.T) {
 	setRequiredEnvironment(t)
 	t.Setenv("APP_ENV", "production")
 	t.Setenv("AUTH_COOKIE_SECURE", "")
+	t.Setenv("PUBLIC_APP_URL", "https://chat.example.com")
 	t.Setenv("BOOTSTRAP_TOKEN", "0123456789abcdef0123456789abcdef")
 
 	cfg, err := FromEnvironment()
@@ -375,6 +376,7 @@ func TestFromEnvironmentRejectsDevelopmentSecretsInProduction(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			setRequiredEnvironment(t)
 			t.Setenv("APP_ENV", "production")
+			t.Setenv("PUBLIC_APP_URL", "https://chat.example.com")
 			t.Setenv("BOOTSTRAP_TOKEN", "0123456789abcdef0123456789abcdef")
 			t.Setenv(tt.key, tt.value)
 			_, err := FromEnvironment()
@@ -441,5 +443,26 @@ func TestFromEnvironmentArchitectLimits(t *testing.T) {
 				t.Fatalf("%s=%s accepted", key, value)
 			}
 		})
+	}
+}
+
+func TestPublicAppURLValidation(t *testing.T) {
+	for _, tc := range []struct {
+		value  string
+		secure bool
+		ok     bool
+	}{
+		{"https://chat.example.com", true, true},
+		{"https://chat.example.com/", true, true},
+		{"http://localhost:5173", false, true},
+		{"http://localhost:8080", true, false},
+		{"chat.example.com", true, false},
+		{"https://chat.example.com/app", true, false},
+		{"ftp://chat.example.com", false, false},
+	} {
+		err := validatePublicAppURL(tc.value, tc.secure)
+		if (err == nil) != tc.ok {
+			t.Errorf("validatePublicAppURL(%q, %v) = %v, want ok=%v", tc.value, tc.secure, err, tc.ok)
+		}
 	}
 }

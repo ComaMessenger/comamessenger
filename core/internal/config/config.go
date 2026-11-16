@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"net/netip"
+	"net/url"
 	"os"
 	"regexp"
 	"strconv"
@@ -310,6 +311,9 @@ func FromEnvironment() (Config, error) {
 	}
 	if cfg.PublicAppURL == "" {
 		return Config{}, fmt.Errorf("PUBLIC_APP_URL must not be empty")
+	}
+	if err := validatePublicAppURL(cfg.PublicAppURL, cfg.Auth.CookieSecure); err != nil {
+		return Config{}, err
 	}
 	if (cfg.S3.AccessKey == "") != (cfg.S3.SecretKey == "") {
 		return Config{}, fmt.Errorf("S3_ACCESS_KEY and S3_SECRET_KEY must be set together")
@@ -671,6 +675,30 @@ func (c RealtimeConfig) validate(messageMaxBodyBytes uint64) error {
 		return fmt.Errorf("WS_EPHEMERAL_RATE_WINDOW must be between 1s and 1m")
 	}
 	return nil
+}
+
+// validatePublicAppURL accepts the browser-facing origin of the installation:
+// scheme and host, no path. Secure cookies are never sent over plain HTTP, so
+// that pairing would let nobody stay signed in.
+func validatePublicAppURL(value string, cookieSecure bool) error {
+	parsed, err := url.Parse(value)
+	if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.Host == "" ||
+		strings.Trim(parsed.Path, "/") != "" || parsed.RawQuery != "" || parsed.User != nil {
+		return fmt.Errorf("PUBLIC_APP_URL must be the address people open, like https://chat.example.com (got %q)", value)
+	}
+	if parsed.Scheme == "http" && cookieSecure {
+		return fmt.Errorf("PUBLIC_APP_URL uses http:// but AUTH_COOKIE_SECURE=true: browsers drop secure cookies over plain HTTP; serve Coma over https:// or set AUTH_COOKIE_SECURE=false for a trial")
+	}
+	return nil
+}
+
+// PublicURLWarning explains what does not work on a plain-HTTP production
+// installation; empty when nothing is missing.
+func (c Config) PublicURLWarning() string {
+	if c.AppEnv == "development" || strings.HasPrefix(c.PublicAppURL, "https://") {
+		return ""
+	}
+	return "PUBLIC_APP_URL is not https: the mobile app, Coma mail and Web Push need an HTTPS address"
 }
 
 // pushRelayURL reads PUSH_RELAY_URL; "off" and empty both disable mobile push.

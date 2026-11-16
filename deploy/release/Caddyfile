@@ -1,0 +1,57 @@
+# HTTPS for Coma. Caddy obtains and renews the Let's Encrypt certificate for
+# COMA_SITE_ADDRESS by itself: the domain must point at this server and ports
+# 80 and 443 must be open. Values come from .env through compose.yaml.
+# No access log is configured on purpose: invitation links carry bearer
+# tokens in the path.
+
+{$COMA_SITE_ADDRESS} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	# API and WebSocket (/api/v1/ws). Caddy passes upgrades through and keeps
+	# idle sockets open; Core sends heartbeats every 25 s.
+	handle /api/* {
+		request_body {
+			max_size {$FILE_UPLOAD_LIMIT}
+		}
+		reverse_proxy core:8080 {
+			flush_interval -1
+			transport http {
+				read_timeout 0
+				write_timeout 0
+			}
+		}
+	}
+
+	handle /healthz {
+		reverse_proxy core:8080
+	}
+
+	handle /readyz {
+		reverse_proxy core:8080
+	}
+
+	# Bundled S3 storage (profile "s3"): browsers upload and download through
+	# signed URLs. Files share the application origin here, so they must never
+	# run as pages or scripts.
+	handle /{$S3_BUCKET}/* {
+		header {
+			defer
+			Content-Security-Policy "sandbox; default-src 'none'"
+			X-Content-Type-Options nosniff
+			Referrer-Policy no-referrer
+		}
+		request_body {
+			max_size {$FILE_UPLOAD_LIMIT}
+		}
+		reverse_proxy s3gw:9000
+	}
+
+	handle {
+		reverse_proxy web:8080
+	}
+}

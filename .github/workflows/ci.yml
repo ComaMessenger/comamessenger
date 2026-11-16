@@ -107,3 +107,38 @@ jobs:
       - name: Stop the s3gw check
         if: always()
         run: docker compose -p s3gwcheck -f deploy/compose.yaml --profile s3gw down -v
+
+  # Installation from ready images, the way docs/install.md describes it:
+  # images built from this commit, installation files from deploy/release,
+  # no source tree next to them (scripts/check-release-install.sh).
+  release-install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - name: Shell scripts
+        run: |
+          shellcheck -S warning deploy/release/*.sh scripts/release-bundle.sh scripts/check-release-install.sh
+      - name: Release compose files are valid
+        run: |
+          dir=$(mktemp -d)
+          cp deploy/release/compose.yaml deploy/release/compose.host-proxy.yaml "$dir/"
+          sed 's/__COMA_VERSION__/0.0.0-ci/' deploy/release/.env.example > "$dir/.env"
+          sed -i 's/^POSTGRES_PASSWORD=$/POSTGRES_PASSWORD=x/; s/^REDIS_PASSWORD=$/REDIS_PASSWORD=x/; s/^AGENT_RUNTIME_API_KEY=$/AGENT_RUNTIME_API_KEY=x/' "$dir/.env"
+          (cd "$dir" && docker compose --profile caddy --profile agents --profile s3 config --quiet)
+          (cd "$dir" && COMPOSE_FILE=compose.yaml:compose.host-proxy.yaml docker compose --profile agents config --quiet)
+      - name: Build images
+        run: |
+          for item in core:core/Dockerfile web:apps/web/Dockerfile agent-runtime:apps/agent-runtime/Dockerfile; do
+            docker build -q -f "${item#*:}" --build-arg COMA_VERSION=0.0.0-ci --build-arg COMA_COMMIT="$GITHUB_SHA" \
+              -t "coma-ci/coma-${item%%:*}:0.0.0-ci" .
+          done
+          for image in core web agent-runtime; do
+            user=$(docker image inspect --format '{{.Config.User}}' "coma-ci/coma-$image:0.0.0-ci")
+            echo "coma-$image runs as '$user'"
+            case "$user" in "" | 0 | root | 0:0) echo "coma-$image runs as root" >&2; exit 1 ;; esac
+          done
+      - name: Install, use, back up and restore
+        run: |
+          COMA_BUNDLE_REGISTRY=coma-ci COMA_BUNDLE_UNPINNED=1 ./scripts/release-bundle.sh 0.0.0-ci dist
+          ./scripts/check-release-install.sh dist/coma-deploy-0.0.0-ci.tar.gz
