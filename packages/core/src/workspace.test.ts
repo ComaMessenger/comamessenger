@@ -3,7 +3,10 @@ import { APIError } from "./api";
 import {
   apiErrorKey,
   filterMembers,
+  comaMailStateKey,
+  comaMailUsage,
   infrastructureDirty,
+  mailDeliveryProblem,
   infrastructureUpdate,
   memberFilterCounts,
   memberRules,
@@ -351,6 +354,93 @@ describe("infrastructure", () => {
     expect(request.s3.secret_key).toBe("s");
     expect(request.smtp.password).toBeNull();
     expect(request.expected_version).toBe(2);
+  });
+});
+
+describe("mail delivery", () => {
+  const base = normalizeInfrastructure({
+    version: 1,
+    s3: {
+      endpoint: "",
+      region: "",
+      bucket: "",
+      prefix: "",
+      force_path_style: false,
+      credentials_configured: false,
+    },
+    smtp: {
+      host: "",
+      port: 587,
+      username: "",
+      from_address: "",
+      from_name: "",
+      security: "starttls",
+      credentials_configured: false,
+    },
+    mail: {
+      delivery: "coma",
+      coma: {
+        state: "active",
+        used: 12,
+        daily_limit: 100,
+        per_recipient_limit: 6,
+      },
+    },
+  });
+  const none = { s3AccessKey: "", s3SecretKey: "", smtpPassword: "" };
+
+  it("sends the chosen delivery and marks the form dirty", () => {
+    const smtp = { ...base, mail: { delivery: "smtp" as const } };
+    expect(infrastructureDirty(smtp, base, none)).toBe(true);
+    expect(infrastructureUpdate(smtp, none).mail_delivery).toBe("smtp");
+  });
+
+  it("requires an SMTP host for own SMTP", () => {
+    expect(mailDeliveryProblem(base)).toBeNull();
+    expect(mailDeliveryProblem({ ...base, mail: { delivery: "smtp" } })).toBe(
+      "smtpHostRequired",
+    );
+  });
+
+  it("reports the daily spend only for active Coma mail", () => {
+    expect(comaMailUsage(base.mail.coma)).toEqual({
+      used: 12,
+      limit: 100,
+      percent: 12,
+      perRecipient: 6,
+      exhausted: false,
+    });
+    expect(
+      comaMailUsage({ state: "registering", per_recipient_limit: 6 }),
+    ).toBeNull();
+    expect(
+      comaMailUsage({
+        state: "active",
+        used: 120,
+        daily_limit: 100,
+        per_recipient_limit: 6,
+      })?.exhausted,
+    ).toBe(true);
+  });
+
+  it("names the state", () => {
+    expect(comaMailStateKey(base.mail.coma)).toBe("comaMailStateActive");
+    expect(
+      comaMailStateKey({
+        state: "unavailable",
+        reason: "public_https_required",
+        per_recipient_limit: 6,
+      }),
+    ).toBe("comaMailStateNeedsHttps");
+  });
+
+  it("defaults old responses to SMTP when a host is stored", () => {
+    const legacy = normalizeInfrastructure({
+      ...base,
+      smtp: { ...base.smtp, host: "smtp.example.com" },
+      mail: undefined as never,
+    });
+    expect(legacy.mail.delivery).toBe("smtp");
   });
 });
 

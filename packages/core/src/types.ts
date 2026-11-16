@@ -100,6 +100,8 @@ export type UpdateInfrastructureSettingsRequest =
   components["schemas"]["UpdateInfrastructureSettingsRequest"];
 export type ConnectionTestResult =
   components["schemas"]["ConnectionTestResult"];
+export type MailDelivery = components["schemas"]["MailDelivery"];
+export type ComaMailStatus = components["schemas"]["ComaMailStatus"];
 export type OrganizationMember = components["schemas"]["OrganizationMember"];
 export type UpdateOrganizationMemberRequest =
   components["schemas"]["UpdateOrganizationMemberRequest"];

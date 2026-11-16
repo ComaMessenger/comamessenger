@@ -4,19 +4,26 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
   canAccessSettingsPage,
+  comaMailStateKey,
+  comaMailUsage,
   infrastructureDirty,
   infrastructureUpdate,
+  mailDeliveryOptions,
+  mailDeliveryProblem,
   normalizeInfrastructure,
   validPort,
   type InfrastructureSettings,
+  type MailDelivery,
 } from "@comamessenger/core";
 import { messageOf } from "@/lib/errors";
 import { useSignedIn } from "@/session/SessionProvider";
 import { Button } from "@/ui/Button";
 import { Notice } from "@/ui/Notice";
 import { PickerSheet } from "@/ui/PickerSheet";
+import { Text } from "@/ui/Text";
 import {
   ActionRow,
+  ChoiceRow,
   Divider,
   GroupBody,
   NavRow,
@@ -27,6 +34,18 @@ import { TextField } from "@/ui/TextField";
 import { SettingsScreen } from "./SettingsScreen";
 
 type Security = InfrastructureSettings["smtp"]["security"];
+
+const deliveryLabel = {
+  coma: "mailDeliveryComa",
+  smtp: "mailDeliverySMTP",
+  off: "mailDeliveryOff",
+} as const satisfies Record<MailDelivery, string>;
+
+const deliveryHint = {
+  coma: "mailDeliveryComaHint",
+  smtp: "mailDeliverySMTPHint",
+  off: "mailDeliveryOffHint",
+} as const satisfies Record<MailDelivery, string>;
 
 /**
  * S3 storage and SMTP mail of the workspace. Saved with an explicit button,
@@ -63,6 +82,9 @@ export function InfrastructureScreen() {
   }, [query.data]);
   const dirty = infrastructureDirty(value, baseline, secrets);
   const portValid = value ? validPort(value.smtp.port) : true;
+  const problem = value ? mailDeliveryProblem(value) : null;
+  const comaStatus = (baseline ?? value)?.mail.coma;
+  const usage = comaMailUsage(comaStatus);
 
   async function save() {
     if (!value) return;
@@ -189,75 +211,142 @@ export function InfrastructureScreen() {
             />
           </SettingsGroup>
 
-          <SettingsGroup title={t("smtpDelivery")} hint={t("smtpDeliveryHint")}>
-            <GroupBody>
-              <TextField
-                testID="smtp-host"
-                label={t("host")}
-                value={value.smtp.host}
-                onChangeText={(host) => smtp({ host })}
-                {...plain}
-              />
-              <TextField
-                testID="smtp-port"
-                label={t("port")}
-                keyboardType="number-pad"
-                value={value.smtp.port ? String(value.smtp.port) : ""}
-                onChangeText={(port) =>
-                  smtp({ port: Number(port.replace(/\D/g, "")) || 0 })
-                }
-                error={portValid ? undefined : t("fieldPort")}
-              />
-              <TextField
-                label={t("username")}
-                value={value.smtp.username}
-                onChangeText={(username) => smtp({ username })}
-                {...plain}
-              />
-              <TextField
-                label={t("password")}
-                secureTextEntry
-                placeholder={
-                  value.smtp.credentials_configured
-                    ? "••••••••"
-                    : t("notConfigured")
-                }
-                value={secrets.smtpPassword}
-                onChangeText={(smtpPassword) =>
-                  setSecrets({ ...secrets, smtpPassword })
-                }
-                {...plain}
-              />
-              <TextField
-                label={t("fromAddress")}
-                keyboardType="email-address"
-                value={value.smtp.from_address}
-                onChangeText={(from_address) => smtp({ from_address })}
-                {...plain}
-              />
-              <TextField
-                label={t("fromName")}
-                value={value.smtp.from_name}
-                onChangeText={(from_name) => smtp({ from_name })}
-              />
-            </GroupBody>
-            <Divider />
-            <NavRow
-              testID="smtp-security"
-              label={t("smtpSecurity")}
-              value={securityLabel(value.smtp.security)}
-              onPress={() => setSecurityPicker(true)}
-            />
-            <Divider />
-            <ActionRow
-              testID="smtp-test"
-              label={t("testConnection")}
-              hint={dirty ? t("testNeedsSave") : undefined}
-              pending={testing === "smtp"}
-              disabled={dirty || pending || testing !== null}
-              onPress={() => void test("smtp")}
-            />
+          <SettingsGroup
+            title={t("mailDelivery")}
+            hint={t(deliveryHint[value.mail.delivery])}
+          >
+            {mailDeliveryOptions.map((option, index) => (
+              <View key={option}>
+                {index > 0 && <Divider />}
+                <ChoiceRow
+                  testID={`mail-delivery-${option}`}
+                  label={t(deliveryLabel[option])}
+                  selected={value.mail.delivery === option}
+                  onPress={() =>
+                    setValue({
+                      ...value,
+                      mail: { ...value.mail, delivery: option },
+                    })
+                  }
+                />
+              </View>
+            ))}
           </SettingsGroup>
+          {value.mail.delivery === "coma" && (
+            <SettingsGroup
+              title={t("mailDeliveryComa")}
+              hint={t("comaMailPrivacy")}
+            >
+              <GroupBody>
+                <Text
+                  testID="coma-mail-state"
+                  weight="semibold"
+                  tone={
+                    comaStatus?.state === "revoked" ||
+                    comaStatus?.state === "error"
+                      ? "danger"
+                      : "default"
+                  }
+                >
+                  {t(comaMailStateKey(comaStatus))}
+                </Text>
+                {usage && (
+                  <>
+                    <Text testID="coma-mail-usage" tone="muted" size={15}>
+                      {t("comaMailUsage", {
+                        used: usage.used,
+                        limit: usage.limit,
+                      })}
+                    </Text>
+                    <Text tone="muted" size={15}>
+                      {t("comaMailPerRecipient", { count: usage.perRecipient })}
+                    </Text>
+                    {usage.exhausted && (
+                      <Text tone="danger" size={15}>
+                        {t("comaMailExhausted")}
+                      </Text>
+                    )}
+                  </>
+                )}
+              </GroupBody>
+            </SettingsGroup>
+          )}
+          {problem && <Notice title={t(problem)} />}
+
+          {value.mail.delivery === "smtp" && (
+            <SettingsGroup
+              title={t("smtpDelivery")}
+              hint={t("smtpDeliveryHint")}
+            >
+              <GroupBody>
+                <TextField
+                  testID="smtp-host"
+                  label={t("host")}
+                  value={value.smtp.host}
+                  onChangeText={(host) => smtp({ host })}
+                  {...plain}
+                />
+                <TextField
+                  testID="smtp-port"
+                  label={t("port")}
+                  keyboardType="number-pad"
+                  value={value.smtp.port ? String(value.smtp.port) : ""}
+                  onChangeText={(port) =>
+                    smtp({ port: Number(port.replace(/\D/g, "")) || 0 })
+                  }
+                  error={portValid ? undefined : t("fieldPort")}
+                />
+                <TextField
+                  label={t("username")}
+                  value={value.smtp.username}
+                  onChangeText={(username) => smtp({ username })}
+                  {...plain}
+                />
+                <TextField
+                  label={t("password")}
+                  secureTextEntry
+                  placeholder={
+                    value.smtp.credentials_configured
+                      ? "••••••••"
+                      : t("notConfigured")
+                  }
+                  value={secrets.smtpPassword}
+                  onChangeText={(smtpPassword) =>
+                    setSecrets({ ...secrets, smtpPassword })
+                  }
+                  {...plain}
+                />
+                <TextField
+                  label={t("fromAddress")}
+                  keyboardType="email-address"
+                  value={value.smtp.from_address}
+                  onChangeText={(from_address) => smtp({ from_address })}
+                  {...plain}
+                />
+                <TextField
+                  label={t("fromName")}
+                  value={value.smtp.from_name}
+                  onChangeText={(from_name) => smtp({ from_name })}
+                />
+              </GroupBody>
+              <Divider />
+              <NavRow
+                testID="smtp-security"
+                label={t("smtpSecurity")}
+                value={securityLabel(value.smtp.security)}
+                onPress={() => setSecurityPicker(true)}
+              />
+              <Divider />
+              <ActionRow
+                testID="smtp-test"
+                label={t("testConnection")}
+                hint={dirty ? t("testNeedsSave") : undefined}
+                pending={testing === "smtp"}
+                disabled={dirty || pending || testing !== null}
+                onPress={() => void test("smtp")}
+              />
+            </SettingsGroup>
+          )}
 
           {result && (
             <Notice
@@ -270,7 +359,7 @@ export function InfrastructureScreen() {
               testID="infrastructure-save"
               label={t("saveInfrastructure")}
               pending={pending}
-              disabled={!dirty || !portValid}
+              disabled={!dirty || !portValid || Boolean(problem)}
               onPress={() => void save()}
             />
           </View>

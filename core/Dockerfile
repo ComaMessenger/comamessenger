@@ -7,7 +7,8 @@ COPY go.work ./go.work
 RUN cd core && go mod download
 COPY core ./core
 RUN CGO_ENABLED=0 go build -o /out/comamessenger ./core/cmd/server \
- && CGO_ENABLED=0 go build -o /out/push-relay ./core/cmd/push-relay
+ && CGO_ENABLED=0 go build -o /out/push-relay ./core/cmd/push-relay \
+ && CGO_ENABLED=0 go build -o /out/mail-relay ./core/cmd/mail-relay
 
 # Push relay run by the Coma project (ADR-0012): docker build --target push-relay
 FROM gcr.io/distroless/static-debian12:nonroot AS push-relay
@@ -15,6 +16,13 @@ FROM gcr.io/distroless/static-debian12:nonroot AS push-relay
 COPY --from=build /out/push-relay /push-relay
 EXPOSE 8090
 ENTRYPOINT ["/push-relay"]
+
+# Mail relay run by the Coma project (ADR-0013): docker build --target mail-relay
+FROM gcr.io/distroless/static-debian12:nonroot AS mail-relay
+
+COPY --from=build /out/mail-relay /mail-relay
+EXPOSE 8091
+ENTRYPOINT ["/mail-relay"]
 
 FROM gcr.io/distroless/static-debian12:nonroot
 

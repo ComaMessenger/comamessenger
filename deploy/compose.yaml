@@ -231,6 +231,7 @@ services:
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@localhost}
       PUSH_POLL_INTERVAL: ${PUSH_POLL_INTERVAL:-1s}
       PUSH_RELAY_URL: ${PUSH_RELAY_URL:-}
+      MAIL_RELAY_URL: ${MAIL_RELAY_URL:-}
       STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
       LOCAL_STORAGE_PATH: /var/lib/coma/files
       LOCAL_STORAGE_QUOTA_BYTES: ${LOCAL_STORAGE_QUOTA_BYTES:-2147483648}
@@ -341,6 +342,54 @@ services:
         condition: service_completed_successfully
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${PUSH_RELAY_PORT:-8090}:8090"
+
+  # Coma mail relay (docs/runbooks/mail-relay.md). Only the Coma project runs
+  # it; ordinary instances send through it or through their own SMTP.
+  mail-relay-init:
+    profiles: ["mail-relay"]
+    image: pgvector/pgvector:pg16
+    restart: "no"
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-comamessenger}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-comamessenger}
+      PGDATABASE: ${POSTGRES_DB:-comamessenger}
+      RELAY_DATABASE: ${MAIL_RELAY_DATABASE:-coma_mail_relay}
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        psql -tAc "SELECT 1 FROM pg_database WHERE datname = '$${RELAY_DATABASE}'" | grep -q 1 \
+          || createdb "$${RELAY_DATABASE}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  mail-relay:
+    profiles: ["mail-relay"]
+    build:
+      context: ..
+      dockerfile: core/Dockerfile
+      target: mail-relay
+    restart: unless-stopped
+    environment:
+      MAIL_RELAY_DATABASE_URL: ${MAIL_RELAY_DATABASE_URL:-postgres://comamessenger:comamessenger@postgres:5432/coma_mail_relay?sslmode=disable}
+      MAIL_RELAY_LISTEN: :8091
+      # nginx on the host reaches the container through the Docker bridge
+      # gateway and overwrites X-Forwarded-For (deploy/nginx/mail-relay.conf.example).
+      MAIL_RELAY_TRUSTED_PROXY_CIDRS: ${MAIL_RELAY_TRUSTED_PROXY_CIDRS:-172.16.0.0/12,192.168.0.0/16}
+      MAIL_RELAY_FROM_ADDRESS: ${MAIL_RELAY_FROM_ADDRESS:-no-reply@coma-chat.com}
+      RUSENDER_API_KEY_FILE: /secrets/rusender-api-key
+      RUSENDER_KEY_ID: ${RUSENDER_KEY_ID:-}
+      MAIL_RELAY_HASH_SECRET_FILE: /secrets/hash-secret
+      MAIL_RELAY_WEBHOOK_SECRET_FILE: /secrets/webhook-secret
+    volumes:
+      - ${MAIL_RELAY_SECRETS_DIR:-./mail-relay-secrets}:/secrets:ro
+    depends_on:
+      mail-relay-init:
+        condition: service_completed_successfully
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${MAIL_RELAY_PORT:-8091}:8091"
 
 volumes:
   postgres-data:

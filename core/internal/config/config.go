@@ -134,10 +134,12 @@ type ArchitectLimits struct {
 }
 
 type Config struct {
-	AppEnv                   string
-	HTTPAddr                 string
-	DatabaseURL              string
-	PublicAppURL             string
+	AppEnv       string
+	HTTPAddr     string
+	DatabaseURL  string
+	PublicAppURL string
+	// MailRelayURL is the Coma mail relay (ADR-0013); empty disables it.
+	MailRelayURL             string
 	BootstrapToken           string
 	IntegrationEncryptionKey string
 	TrustedProxyCIDRs        []netip.Prefix
@@ -258,6 +260,7 @@ func FromEnvironment() (Config, error) {
 		HTTPAddr:                 valueOrDefault("HTTP_ADDR", ":8080"),
 		DatabaseURL:              strings.TrimSpace(os.Getenv("DATABASE_URL")),
 		PublicAppURL:             valueOrDefault("PUBLIC_APP_URL", "http://localhost:5173"),
+		MailRelayURL:             mailRelayURL(),
 		BootstrapToken:           strings.TrimSpace(os.Getenv("BOOTSTRAP_TOKEN")),
 		IntegrationEncryptionKey: integrationEncryptionKey,
 		TrustedProxyCIDRs:        trustedProxyCIDRs,
@@ -340,6 +343,9 @@ func FromEnvironment() (Config, error) {
 	}
 	if cfg.Push.RelayURL != "" && !strings.HasPrefix(cfg.Push.RelayURL, "https://") && !(cfg.AppEnv == "development" && strings.HasPrefix(cfg.Push.RelayURL, "http://")) {
 		return Config{}, fmt.Errorf("PUSH_RELAY_URL must use https")
+	}
+	if cfg.MailRelayURL != "" && !strings.HasPrefix(cfg.MailRelayURL, "https://") && !(cfg.AppEnv == "development" && strings.HasPrefix(cfg.MailRelayURL, "http://")) {
+		return Config{}, fmt.Errorf("MAIL_RELAY_URL must use https")
 	}
 	if cfg.Push.PollInterval < 100*time.Millisecond || cfg.Push.PollInterval > time.Minute {
 		return Config{}, fmt.Errorf("PUSH_POLL_INTERVAL must be between 100ms and 1m")
@@ -670,6 +676,23 @@ func (c RealtimeConfig) validate(messageMaxBodyBytes uint64) error {
 // pushRelayURL reads PUSH_RELAY_URL; "off" and empty both disable mobile push.
 func pushRelayURL() string {
 	value := strings.TrimRight(strings.TrimSpace(os.Getenv("PUSH_RELAY_URL")), "/")
+	if strings.EqualFold(value, "off") {
+		return ""
+	}
+	return value
+}
+
+// DefaultMailRelayURL is the relay run by the Coma project (ADR-0013).
+const DefaultMailRelayURL = "https://mail.coma-chat.com"
+
+// mailRelayURL reads MAIL_RELAY_URL; unset means the project relay, "off"
+// disables Coma mail (workspaces then use their own SMTP or no email).
+func mailRelayURL() string {
+	raw, set := os.LookupEnv("MAIL_RELAY_URL")
+	value := strings.TrimRight(strings.TrimSpace(raw), "/")
+	if !set || value == "" {
+		return DefaultMailRelayURL
+	}
 	if strings.EqualFold(value, "off") {
 		return ""
 	}

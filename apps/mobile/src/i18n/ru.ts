@@ -1066,6 +1066,36 @@ export const ru = {
   shareLink: "Поделиться",
   slug: "Короткий адрес",
   slugHint: "Латиница, цифры и дефис, от 2 до 63 символов.",
+  mailDelivery: "Почта",
+  mailDeliveryHint:
+    "Приглашения, сброс пароля, подтверждение почты и дайджесты.",
+  mailDeliveryComa: "Почта Coma",
+  mailDeliverySMTP: "Свой SMTP",
+  mailDeliveryOff: "Не отправлять",
+  mailDeliveryComaHint:
+    "Письма уходят с адреса no-reply@coma-chat.com от имени пространства. Настраивать ничего не нужно.",
+  mailDeliverySMTPHint:
+    "Письма уходят с вашего сервера и домена, без лимитов Coma.",
+  mailDeliveryOffHint:
+    "Письма не уходят. Пароль сбрасывает администратор, ссылку-приглашение копируют вручную.",
+  comaMailStateActive: "Подключена",
+  comaMailStateRegistering:
+    "Подключается: сервис Coma проверяет адрес пространства",
+  comaMailStateError:
+    "Не подключена: сервис Coma не смог проверить адрес пространства. Повторим сами.",
+  comaMailStateRevoked:
+    "Отключена сервисом Coma из-за жалоб на письма. Подключите свой SMTP.",
+  comaMailStateNeedsHttps:
+    "Недоступна: пространству нужен публичный адрес https://",
+  comaMailStateDisabled: "Недоступна: почта Coma выключена на этом сервере",
+  comaMailStateUnavailable: "Недоступна",
+  comaMailUsage: "За сутки отправлено: {used} из {limit}",
+  comaMailPerRecipient: "Одному получателю: не больше {count} писем в сутки.",
+  comaMailExhausted:
+    "Суточный лимит исчерпан. Новые письма уйдут через несколько часов, без лимита работает свой SMTP.",
+  comaMailPrivacy:
+    "В дайджестах через почту Coma только счётчики и ссылки, без текста сообщений.",
+  smtpHostRequired: "Для своего SMTP укажите сервер.",
   smtpDelivery: "SMTP-почта",
   smtpDeliveryHint:
     "Отправка приглашений, системных уведомлений и восстановления доступа.",

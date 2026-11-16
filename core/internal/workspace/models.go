@@ -84,12 +84,41 @@ type SMTPConfig struct {
 type integrationSecrets struct {
 	S3   S3Config   `json:"s3"`
 	SMTP SMTPConfig `json:"smtp"`
+	// MailDelivery is "coma", "smtp" or "off"; empty means the default for
+	// the stored settings (see effectiveMailDelivery).
+	MailDelivery string `json:"mail_delivery,omitempty"`
+}
+
+// Mail delivery modes (ADR-0013).
+const (
+	MailDeliveryComa = "coma"
+	MailDeliverySMTP = "smtp"
+	MailDeliveryOff  = "off"
+)
+
+// MailView is how letters leave the workspace and, for Coma mail, the
+// relay's state and the daily spend.
+type MailView struct {
+	Delivery string          `json:"delivery"`
+	Coma     *ComaMailStatus `json:"coma,omitempty"`
+}
+
+// ComaMailStatus is the installation's standing with the Coma mail relay.
+type ComaMailStatus struct {
+	// State is unavailable (relay off or no public HTTPS address),
+	// registering, active, revoked or error.
+	State             string `json:"state"`
+	Reason            string `json:"reason,omitempty"`
+	Used              *int   `json:"used,omitempty"`
+	DailyLimit        *int   `json:"daily_limit,omitempty"`
+	PerRecipientLimit int    `json:"per_recipient_limit"`
 }
 
 type Infrastructure struct {
 	Version int64                 `json:"version"`
 	S3      S3ConfigurationView   `json:"s3"`
 	SMTP    SMTPConfigurationView `json:"smtp"`
+	Mail    MailView              `json:"mail"`
 }
 
 type S3ConfigurationView struct {
@@ -116,6 +145,9 @@ type UpdateInfrastructureInput struct {
 	ExpectedVersion int64           `json:"expected_version"`
 	S3              S3UpdateInput   `json:"s3"`
 	SMTP            SMTPUpdateInput `json:"smtp"`
+	// MailDelivery switches between Coma mail, own SMTP and no email; nil
+	// keeps the current choice.
+	MailDelivery *string `json:"mail_delivery"`
 }
 
 type S3UpdateInput struct {

@@ -577,6 +577,37 @@ export const en: Record<keyof typeof ru, string> = {
   forcePathStyle: "Path-style addressing",
   forcePathStyleHint: "Required by MinIO and some S3-compatible providers.",
   testConnection: "Test connection",
+  mailDelivery: "Email",
+  mailDeliveryHint:
+    "Invitations, password resets, email confirmation and digests.",
+  mailDeliveryComa: "Coma mail",
+  mailDeliverySMTP: "Own SMTP",
+  mailDeliveryOff: "Don't send",
+  mailDeliveryComaHint:
+    "Emails go from no-reply@coma-chat.com on behalf of the workspace. Nothing to set up.",
+  mailDeliverySMTPHint:
+    "Emails go from your own server and domain, without Coma limits.",
+  mailDeliveryOffHint:
+    "No emails are sent. An administrator resets passwords and invitation links are copied by hand.",
+  comaMailStateActive: "Connected",
+  comaMailStateRegistering:
+    "Connecting: the Coma service is checking the workspace address",
+  comaMailStateError:
+    "Not connected: the Coma service could not check the workspace address. We will retry.",
+  comaMailStateRevoked:
+    "Disabled by the Coma service after complaints about emails. Connect your own SMTP.",
+  comaMailStateNeedsHttps:
+    "Unavailable: the workspace needs a public https:// address",
+  comaMailStateDisabled:
+    "Unavailable: Coma mail is switched off on this server",
+  comaMailStateUnavailable: "Unavailable",
+  comaMailUsage: "Sent in the last 24 hours: {used} of {limit}",
+  comaMailPerRecipient: "Per recipient: at most {count} emails a day.",
+  comaMailExhausted:
+    "The daily limit is used up. New emails go out in a few hours; own SMTP has no limit.",
+  comaMailPrivacy:
+    "Digests through Coma mail hold counters and links only, never message text.",
+  smtpHostRequired: "Enter a server for own SMTP.",
   smtpDelivery: "SMTP email",
   smtpDeliveryHint: "Invitations, system notifications, and access recovery.",
   host: "Host",

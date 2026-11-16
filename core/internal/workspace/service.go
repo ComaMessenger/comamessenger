@@ -39,7 +39,19 @@ type Service struct {
 	aead       cipher.AEAD
 	tester     ConnectionTester
 	now        func() time.Time
+	// mail reports Coma mail state and availability; set by the mailer.
+	mail MailStatusSource
 }
+
+// MailStatusSource is the Coma mail relay client as the workspace sees it.
+type MailStatusSource interface {
+	ComaStatus(ctx context.Context) ComaMailStatus
+	EmailConfigured(ctx context.Context, orgID string) (bool, error)
+}
+
+// SetMailStatusSource connects the mailer, which decides whether any email
+// transport is usable.
+func (s *Service) SetMailStatusSource(source MailStatusSource) { s.mail = source }
 
 func NewService(repository *Repository, encryptionSecret string, tester ConnectionTester) (*Service, error) {
 	digest := sha256.Sum256([]byte("comamessenger/workspace-integrations/v1\x00" + encryptionSecret))
@@ -211,20 +223,78 @@ func (s *Service) Infrastructure(ctx context.Context, current identity.User) (In
 	return infrastructureView(version, secrets), nil
 }
 
+// EmailConfigured reports whether any transport can send for the workspace.
 func (s *Service) EmailConfigured(ctx context.Context, orgID string) (bool, error) {
-	config, err := s.emailConfiguration(ctx, orgID)
+	if s.mail != nil {
+		return s.mail.EmailConfigured(ctx, orgID)
+	}
+	settings, err := s.MailSettings(ctx, orgID)
 	if err != nil {
 		return false, err
 	}
-	return config.Host != "" && config.FromAddress != "", nil
+	return settings.Delivery == MailDeliverySMTP && settings.SMTPReady(), nil
 }
 
-func (s *Service) SendEmail(ctx context.Context, orgID, recipient, subject, body string) error {
-	config, err := s.emailConfiguration(ctx, orgID)
+// MailSettings is what the mailer needs to pick and drive a transport.
+type MailSettings struct {
+	Delivery      string
+	SMTP          SMTPConfig
+	WorkspaceName string
+}
+
+// SMTPReady reports whether the own SMTP server is filled in.
+func (m MailSettings) SMTPReady() bool { return m.SMTP.Host != "" && m.SMTP.FromAddress != "" }
+
+func (s *Service) MailSettings(ctx context.Context, orgID string) (MailSettings, error) {
+	_, encrypted, err := s.repository.Integration(ctx, orgID)
 	if err != nil {
-		return err
+		return MailSettings{}, err
 	}
-	return sendSMTP(ctx, config, recipient, subject, body)
+	secrets := integrationSecrets{}
+	if len(encrypted) > 0 {
+		if secrets, err = s.decrypt(orgID, encrypted); err != nil {
+			return MailSettings{}, err
+		}
+	}
+	name, err := s.repository.OrganizationName(ctx, orgID)
+	if err != nil {
+		return MailSettings{}, err
+	}
+	return MailSettings{Delivery: effectiveMailDelivery(secrets), SMTP: secrets.SMTP, WorkspaceName: name}, nil
+}
+
+// effectiveMailDelivery keeps workspaces that already configured SMTP on it;
+// everyone else starts on Coma mail.
+func effectiveMailDelivery(value integrationSecrets) string {
+	if value.MailDelivery != "" {
+		return value.MailDelivery
+	}
+	if value.SMTP.Host != "" {
+		return MailDeliverySMTP
+	}
+	return MailDeliveryComa
+}
+
+// SendSMTP sends a rendered letter through the workspace's own server.
+func (s *Service) SendSMTP(ctx context.Context, config SMTPConfig, recipient, subject, text, html string) error {
+	return sendSMTP(ctx, config, recipient, subject, text, html)
+}
+
+// Seal encrypts a mail secret (relay key, queued letter) with the
+// integration key; purpose binds the ciphertext to its use.
+func (s *Service) Seal(purpose string, plain []byte) ([]byte, error) {
+	nonce := make([]byte, s.aead.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return nil, err
+	}
+	return append(nonce, s.aead.Seal(nil, nonce, plain, []byte("mail:"+purpose))...), nil
+}
+
+func (s *Service) Open(purpose string, sealed []byte) ([]byte, error) {
+	if len(sealed) < s.aead.NonceSize() {
+		return nil, fmt.Errorf("sealed mail secret is invalid")
+	}
+	return s.aead.Open(nil, sealed[:s.aead.NonceSize()], sealed[s.aead.NonceSize():], []byte("mail:"+purpose))
 }
 
 func (s *Service) emailConfiguration(ctx context.Context, orgID string) (SMTPConfig, error) {
@@ -261,8 +331,17 @@ func (s *Service) UpdateInfrastructure(ctx context.Context, current identity.Use
 		}
 	}
 	next := integrationSecrets{
-		S3:   S3Config{Endpoint: strings.TrimSpace(input.S3.Endpoint), Region: strings.TrimSpace(input.S3.Region), Bucket: strings.TrimSpace(input.S3.Bucket), Prefix: strings.Trim(strings.TrimSpace(input.S3.Prefix), "/"), ForcePathStyle: input.S3.ForcePathStyle, AccessKey: currentSecrets.S3.AccessKey, SecretKey: currentSecrets.S3.SecretKey},
-		SMTP: SMTPConfig{Host: strings.TrimSpace(input.SMTP.Host), Port: input.SMTP.Port, Username: strings.TrimSpace(input.SMTP.Username), Password: currentSecrets.SMTP.Password, FromAddress: strings.TrimSpace(input.SMTP.FromAddress), FromName: strings.TrimSpace(input.SMTP.FromName), Security: strings.ToLower(strings.TrimSpace(input.SMTP.Security))},
+		S3:           S3Config{Endpoint: strings.TrimSpace(input.S3.Endpoint), Region: strings.TrimSpace(input.S3.Region), Bucket: strings.TrimSpace(input.S3.Bucket), Prefix: strings.Trim(strings.TrimSpace(input.S3.Prefix), "/"), ForcePathStyle: input.S3.ForcePathStyle, AccessKey: currentSecrets.S3.AccessKey, SecretKey: currentSecrets.S3.SecretKey},
+		SMTP:         SMTPConfig{Host: strings.TrimSpace(input.SMTP.Host), Port: input.SMTP.Port, Username: strings.TrimSpace(input.SMTP.Username), Password: currentSecrets.SMTP.Password, FromAddress: strings.TrimSpace(input.SMTP.FromAddress), FromName: strings.TrimSpace(input.SMTP.FromName), Security: strings.ToLower(strings.TrimSpace(input.SMTP.Security))},
+		MailDelivery: currentSecrets.MailDelivery,
+	}
+	if next.MailDelivery == "" {
+		// Pin the default the administrator saw, so filling in SMTP later
+		// does not silently move the workspace off Coma mail.
+		next.MailDelivery = effectiveMailDelivery(currentSecrets)
+	}
+	if input.MailDelivery != nil {
+		next.MailDelivery = strings.ToLower(strings.TrimSpace(*input.MailDelivery))
 	}
 	if input.S3.ClearCredentials {
 		next.S3.AccessKey, next.S3.SecretKey = "", ""
@@ -290,7 +369,7 @@ func (s *Service) UpdateInfrastructure(ctx context.Context, current identity.Use
 	if err != nil {
 		return Infrastructure{}, err
 	}
-	return infrastructureView(nextVersion, next), nil
+	return s.withMail(ctx, infrastructureView(nextVersion, next)), nil
 }
 
 func (s *Service) TestConnection(ctx context.Context, current identity.User, input ConnectionTestInput) (ConnectionTestResult, error) {
@@ -429,6 +508,17 @@ func (s *Service) decrypt(orgID string, sealed []byte) (integrationSecrets, erro
 	return result, nil
 }
 
+func (s *Service) withMail(ctx context.Context, view Infrastructure) Infrastructure {
+	if view.Mail.Delivery == MailDeliveryComa {
+		status := ComaMailStatus{State: "unavailable", Reason: "relay_disabled", PerRecipientLimit: 6}
+		if s.mail != nil {
+			status = s.mail.ComaStatus(ctx)
+		}
+		view.Mail.Coma = &status
+	}
+	return view
+}
+
 func infrastructureView(version int64, value integrationSecrets) Infrastructure {
 	if value.SMTP.Port == 0 {
 		value.SMTP.Port = 587
@@ -439,6 +529,7 @@ func infrastructureView(version int64, value integrationSecrets) Infrastructure 
 	return Infrastructure{Version: version,
 		S3:   S3ConfigurationView{Endpoint: value.S3.Endpoint, Region: value.S3.Region, Bucket: value.S3.Bucket, Prefix: value.S3.Prefix, ForcePathStyle: value.S3.ForcePathStyle, CredentialsConfigured: value.S3.AccessKey != "" && value.S3.SecretKey != "", AccessKeyHint: mask(value.S3.AccessKey)},
 		SMTP: SMTPConfigurationView{Host: value.SMTP.Host, Port: value.SMTP.Port, Username: value.SMTP.Username, FromAddress: value.SMTP.FromAddress, FromName: value.SMTP.FromName, Security: value.SMTP.Security, CredentialsConfigured: value.SMTP.Password != ""},
+		Mail: MailView{Delivery: effectiveMailDelivery(value)},
 	}
 }
 
@@ -468,6 +559,15 @@ func validateIntegrations(value integrationSecrets) error {
 		if err != nil || address.Address != value.SMTP.FromAddress {
 			return fmt.Errorf("%w: SMTP from address is invalid", ErrInvalid)
 		}
+	}
+	switch value.MailDelivery {
+	case "", MailDeliveryComa, MailDeliveryOff:
+	case MailDeliverySMTP:
+		if value.SMTP.Host == "" {
+			return fmt.Errorf("%w: own SMTP delivery needs an SMTP host", ErrInvalid)
+		}
+	default:
+		return fmt.Errorf("%w: mail delivery must be coma, smtp or off", ErrInvalid)
 	}
 	return nil
 }

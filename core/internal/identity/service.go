@@ -14,6 +14,7 @@ import (
 
 	"github.com/comamessenger/comamessenger/core/internal/access"
 	"github.com/comamessenger/comamessenger/core/internal/id"
+	"github.com/comamessenger/comamessenger/core/internal/mailtemplate"
 	"github.com/comamessenger/comamessenger/core/internal/password"
 	"github.com/comamessenger/comamessenger/core/internal/permission"
 	"github.com/google/uuid"
@@ -48,9 +49,10 @@ func (s *Service) SetBearerAuthenticator(authenticator func(context.Context, str
 	s.bearerAuthenticator = authenticator
 }
 
+// EmailSender delivers typed letters (ADR-0013); the transport renders them.
 type EmailSender interface {
 	EmailConfigured(context.Context, string) (bool, error)
-	SendEmail(context.Context, string, string, string, string) error
+	Send(context.Context, string, mailtemplate.Message) error
 }
 
 func NewService(repository *Repository, hasher *password.Hasher, tokens *access.Manager, refreshTTL, invitationTTL time.Duration, publicAppURL string, development bool, emailSenders ...EmailSender) (*Service, error) {
@@ -351,12 +353,12 @@ func (s *Service) ChangeEmail(ctx context.Context, current User, currentSessionI
 		return EmailChangeResult{}, nil, err
 	}
 	confirmationURL := s.publicAppURL + "/settings/security?email_token=" + url.QueryEscape(token)
-	body := "Confirm your Coma email change within one hour:\n" + confirmationURL
-	if err := s.emailSender.SendEmail(ctx, current.OrgID, newEmail, "Confirm your Coma email change", body); err != nil {
+	confirmation := mailtemplate.Message{Kind: mailtemplate.EmailConfirmation, To: newEmail, Data: mailtemplate.Data{Link: confirmationURL}}
+	if err := s.emailSender.Send(ctx, current.OrgID, confirmation); err != nil {
 		_ = s.repository.CancelEmailChange(ctx, record.ID, current.ActorID, now)
 		return EmailChangeResult{}, nil, fmt.Errorf("send email confirmation: %w", err)
 	}
-	_ = s.emailSender.SendEmail(ctx, current.OrgID, current.Email, "Coma email change requested", "A change of your Coma account email was requested. If this was not you, change your password and revoke other sessions.")
+	_ = s.emailSender.Send(ctx, current.OrgID, mailtemplate.Message{Kind: mailtemplate.EmailChangeNotice, To: current.Email})
 	return EmailChangeResult{PendingConfirmation: true}, nil, nil
 }
 
@@ -459,8 +461,8 @@ func (s *Service) issuePasswordReset(ctx context.Context, target PasswordResetTa
 	}
 	resetURL := s.publicAppURL + "/reset-password?token=" + url.QueryEscape(token)
 	if send {
-		body := "Reset your Coma password within one hour:\n" + resetURL
-		if err := s.emailSender.SendEmail(ctx, target.OrgID, target.Email, "Reset your Coma password", body); err != nil {
+		message := mailtemplate.Message{Kind: mailtemplate.PasswordReset, To: target.Email, Data: mailtemplate.Data{Link: resetURL}}
+		if err := s.emailSender.Send(ctx, target.OrgID, message); err != nil {
 			_ = s.repository.CancelPasswordReset(ctx, record.ID, target.ActorID, now)
 			return "", fmt.Errorf("send password reset: %w", err)
 		}
@@ -566,7 +568,7 @@ func (s *Service) CreateInvitation(ctx context.Context, current User, input Crea
 		return Invitation{}, err
 	}
 	invitation.AcceptURL = s.publicAppURL + "/invite/" + token
-	s.deliverInvitation(ctx, current.OrgID, &invitation)
+	s.deliverInvitation(ctx, current.OrgID, current.DisplayName, &invitation)
 	return invitation, nil
 }
 
@@ -621,11 +623,11 @@ func (s *Service) RotateInvitation(ctx context.Context, current User, invitation
 		return Invitation{}, err
 	}
 	invitation.AcceptURL = s.publicAppURL + "/invite/" + token
-	s.deliverInvitation(ctx, current.OrgID, &invitation)
+	s.deliverInvitation(ctx, current.OrgID, current.DisplayName, &invitation)
 	return invitation, nil
 }
 
-func (s *Service) deliverInvitation(ctx context.Context, orgID string, invitation *Invitation) {
+func (s *Service) deliverInvitation(ctx context.Context, orgID, inviterName string, invitation *Invitation) {
 	if s.emailSender == nil {
 		return
 	}
@@ -633,9 +635,11 @@ func (s *Service) deliverInvitation(ctx context.Context, orgID string, invitatio
 	if err != nil || !configured {
 		return
 	}
-	subject := "ComaMessenger invitation"
-	body := "You were invited to ComaMessenger as " + invitation.Role + ".\n\nOpen this one-time link:\n" + invitation.AcceptURL
-	if err := s.emailSender.SendEmail(ctx, orgID, invitation.Email, subject, body); err != nil {
+	expires := invitation.ExpiresAt
+	message := mailtemplate.Message{Kind: mailtemplate.Invitation, To: invitation.Email, Data: mailtemplate.Data{
+		Link: invitation.AcceptURL, Role: invitation.Role, ExpiresAt: &expires, InviterName: inviterName,
+	}}
+	if err := s.emailSender.Send(ctx, orgID, message); err != nil {
 		return
 	}
 	invitation.EmailSent = true

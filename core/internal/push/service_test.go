@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/comamessenger/comamessenger/core/internal/mailtemplate"
 	"io"
 	"log/slog"
 	"strings"
@@ -21,6 +22,9 @@ type recordingEmailSender struct {
 	recipient string
 	subject   string
 	body      string
+	counters  mailtemplate.Message
+	coma      bool
+	sends     int
 	err       error
 }
 
@@ -28,9 +32,14 @@ func (s *recordingEmailSender) EmailConfigured(context.Context, string) (bool, e
 	return true, nil
 }
 
-func (s *recordingEmailSender) SendEmail(_ context.Context, _, recipient, subject, body string) error {
-	s.recipient, s.subject, s.body = recipient, subject, body
+func (s *recordingEmailSender) SendDigest(_ context.Context, _ string, counters mailtemplate.Message, subject, body string) error {
+	s.recipient, s.subject, s.body, s.counters = counters.To, subject, body, counters
+	s.sends++
 	return s.err
+}
+
+func (s *recordingEmailSender) DigestThroughComa(context.Context, string) (bool, error) {
+	return s.coma, nil
 }
 
 func TestTruncateUsesRunes(t *testing.T) {
@@ -359,6 +368,31 @@ func TestMaterializeAppliesGlobalRulesSnoozeAndSchedule(t *testing.T) {
 		var sentAt *time.Time
 		if err := pool.QueryRow(ctx, `SELECT sent_at FROM email_digest_items WHERE org_id=$1 AND event_seq=$2 AND actor_id=$3`, orgID, lastSeq, recipientID).Scan(&sentAt); err != nil || sentAt == nil {
 			t.Fatalf("sent_at = %v, error = %v", sentAt, err)
+		}
+		if sender.counters.Kind != mailtemplate.Digest || sender.counters.Data.Total != 1 || sender.counters.Data.Chats != 1 || !strings.HasSuffix(sender.counters.Data.SettingsLink, "/settings/notifications") {
+			t.Fatalf("counters = %+v", sender.counters)
+		}
+		// Through Coma mail a second digest within 12 hours waits.
+		var otherSeq int64
+		if err := pool.QueryRow(ctx, `SELECT seq FROM events WHERE org_id=$1 AND seq<>$2 ORDER BY seq DESC LIMIT 1`, orgID, lastSeq).Scan(&otherSeq); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO email_digest_items(org_id,event_seq,actor_id,available_at) VALUES($1,$2,$3,now()) ON CONFLICT DO NOTHING`, orgID, otherSeq, recipientID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE email_digest_items SET sent_at=NULL,available_at=now(),last_error=NULL WHERE org_id=$1 AND event_seq=$2 AND actor_id=$3`, orgID, otherSeq, recipientID); err != nil {
+			t.Fatal(err)
+		}
+		sender.coma, sender.sends = true, 0
+		if err := worker.deliverDigests(ctx); err != nil {
+			t.Fatal(err)
+		}
+		var postponed time.Time
+		if err := pool.QueryRow(ctx, `SELECT available_at FROM email_digest_items WHERE org_id=$1 AND event_seq=$2 AND actor_id=$3`, orgID, otherSeq, recipientID).Scan(&postponed); err != nil {
+			t.Fatal(err)
+		}
+		if sender.sends != 0 || postponed.Before(sentAt.Add(11*time.Hour)) {
+			t.Fatalf("Coma digest not rationed: sends=%d available_at=%s", sender.sends, postponed)
 		}
 	})
 	t.Run("refresh rotation keeps the browser subscribed", func(t *testing.T) {
