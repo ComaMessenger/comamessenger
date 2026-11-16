@@ -1,0 +1,168 @@
+name: Release
+
+# A tag v* publishes the images a self-hosted installation runs and the
+# installation files that reference them (docs/install.md):
+#   ghcr.io/comamessenger/coma-{core,web,agent-runtime}:<version>
+#   for linux/amd64 and linux/arm64, with SBOM and provenance attestations,
+#   signed with cosign (keyless, GitHub OIDC);
+#   a GitHub release with coma-deploy-<version>.tar.gz and SHA256SUMS.
+# Version tags are never overwritten: a second run for the same version fails.
+# Tags with a suffix (v0.2.0-rc.1) become prereleases.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io/comamessenger
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - id: version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "Tag $GITHUB_REF_NAME is not v<major>.<minor>.<patch>[-suffix]" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          case "$version" in *-*) echo "prerelease=true" ;; *) echo "prerelease=false" ;; esac >> "$GITHUB_OUTPUT"
+
+  images:
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - image: coma-core
+            dockerfile: core/Dockerfile
+            title: Coma Core
+          - image: coma-web
+            dockerfile: apps/web/Dockerfile
+            title: Coma web client
+          - image: coma-agent-runtime
+            dockerfile: apps/agent-runtime/Dockerfile
+            title: Coma agent runtime
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: The version tag is new
+        run: |
+          if docker buildx imagetools inspect "$REGISTRY/${{ matrix.image }}:$VERSION" >/dev/null 2>&1; then
+            echo "$REGISTRY/${{ matrix.image }}:$VERSION already exists; versions are immutable" >&2
+            exit 1
+          fi
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: mode=max
+          sbom: true
+          build-args: |
+            COMA_VERSION=${{ env.VERSION }}
+            COMA_COMMIT=${{ github.sha }}
+          tags: ${{ env.REGISTRY }}/${{ matrix.image }}:${{ env.VERSION }}
+          labels: |
+            org.opencontainers.image.title=${{ matrix.title }}
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.licenses=AGPL-3.0-only AND Apache-2.0
+          annotations: |
+            index:org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            index:org.opencontainers.image.description=${{ matrix.title }} ${{ env.VERSION }}
+            index:org.opencontainers.image.licenses=AGPL-3.0-only AND Apache-2.0
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign
+        run: cosign sign --yes "$REGISTRY/${{ matrix.image }}@${{ steps.build.outputs.digest }}"
+      - name: Image runs as non-root on both architectures
+        run: |
+          image="$REGISTRY/${{ matrix.image }}@${{ steps.build.outputs.digest }}"
+          configs=$(docker buildx imagetools inspect "$image" --format '{{json .Image}}')
+          for platform in linux/amd64 linux/arm64; do
+            user=$(printf '%s' "$configs" | jq -r --arg p "$platform" '.[$p].config.User // ""')
+            arch=$(printf '%s' "$configs" | jq -r --arg p "$platform" '.[$p].architecture // ""')
+            echo "$platform: architecture=$arch user=$user"
+            [ "linux/$arch" = "$platform" ] || { echo "no $platform image" >&2; exit 1; }
+            case "$user" in "" | 0 | root | 0:0) echo "runs as root" >&2; exit 1 ;; esac
+          done
+
+  bundle:
+    needs: [version, images]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      packages: read
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Installation files pinned to this release
+        run: ./scripts/release-bundle.sh "$VERSION" dist
+      - name: Fresh installation from the published images
+        run: ./scripts/check-release-install.sh "dist/coma-deploy-$VERSION.tar.gz"
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          repo="https://github.com/${{ github.repository }}"
+          bundle="coma-deploy-$VERSION.tar.gz"
+          images=$(tar -xzOf "dist/$bundle" "coma-$VERSION/compose.yaml" | sed -n 's/^x-image-[a-z-]*: &image-[a-z-]* //p')
+          {
+            echo "Установка: [docs/install.md]($repo/blob/v$VERSION/docs/install.md). Обновление и откат: [docs/upgrade.md]($repo/blob/v$VERSION/docs/upgrade.md)."
+            echo
+            echo '```sh'
+            echo "mkdir -p /opt/coma && cd /opt/coma"
+            echo "curl -fsSL $repo/releases/download/v$VERSION/$bundle | tar xz --strip-components 1"
+            echo '```'
+            echo
+            echo "Образы для linux/amd64 и linux/arm64:"
+            echo
+            printf -- '- `%s`\n' $images
+            echo
+            echo "Проверка подписи:"
+            echo
+            echo '```sh'
+            echo "cosign verify $REGISTRY/coma-core:$VERSION --certificate-identity-regexp '^$repo/' --certificate-oidc-issuer https://token.actions.githubusercontent.com"
+            echo '```'
+          } > notes.md
+          cat notes.md
+          flags=()
+          if [ "${{ needs.version.outputs.prerelease }}" = true ]; then flags+=(--prerelease); fi
+          gh release create "v$VERSION" "${flags[@]}" --verify-tag --title "Coma $VERSION" --notes-file notes.md \
+            "dist/$bundle" dist/SHA256SUMS

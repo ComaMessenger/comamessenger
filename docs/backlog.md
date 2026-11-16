@@ -686,8 +686,42 @@
 
 ## Выпуск (фазы 7–8)
 
-- [ ] Упаковка, образы в GHCR, документация установки, `SECURITY.md` и остальное
-      из `docs/phases/07-production-readiness.md` и `08-public-release.md`.
+- [x] Упаковка, образы в GHCR, документация установки, `SECURITY.md`
+      (`feat/self-hosted-release`, 2026-11-17): `deploy/release`, `docs/install.md`,
+      `docs/upgrade.md`, `docs/backup.md`, workflow `release.yml`, пре-релиз
+      `v0.1.0-rc.2`. Убрать после слияния. Что осталось — ниже.
+- [ ] **Образы в GHCR закрыты.** Политика организации ComaMessenger запрещает
+      публичные пакеты («Setting is disabled by organization administrators»).
+      Владельцу: Organization settings → Packages → разрешить public, затем у
+      `coma-core`, `coma-web`, `coma-agent-runtime` Package settings → Change
+      visibility → Public. Пока не сделано, чужой сервер образы не скачает.
+- [ ] Тег `v0.1.0-rc.1` без выпуска: его образы опубликованы, а проверка
+      non-root упала на ошибке в самой проверке; версии неизменяемы, поэтому
+      выпуск — `rc.2`. Удалить тег и пакеты `0.1.0-rc.1` вручную или оставить.
+- [ ] Включить GitHub private vulnerability reporting в настройках репозитория
+      и добавить его в `SECURITY.md` вторым каналом (сейчас только Telegram).
+- [ ] Container scan (Trivy/Grype), `govulncheck`, JS audit и secret scan в CI
+      и в `release.yml` (фаза 7, «Security и supply chain»).
+- [ ] Перенос файлов установки из тома (`STORAGE_DRIVER=local`) в S3 —
+      скрипта нет, `docs/install.md` просит выбрать хранилище заранее.
+- [ ] Установка в закрытой сети без доступа из интернета: Let's Encrypt
+      HTTP-01 не сработает. Нужен пример Caddy с DNS-01 или со своим
+      сертификатом (`tls cert key`) и описание, что телефоны и почта Coma без
+      публичного адреса не работают.
+- [ ] Endpoint версии и схемы для администратора (фаза 7, «Обновления»); сейчас
+      версия видна только в `docker compose exec core /comamessenger version`.
+- [ ] Проверка доступной новой версии (отключаемая, без ID установки).
+- [ ] Шаблон заметок к выпуску: что менялось, нужны ли действия перед
+      обновлением, есть ли миграции (для решения об откате без восстановления).
+- [ ] Проверить установку на настоящей VM с доменом и Let's Encrypt (локально
+      проверен пробный режим по HTTP и Caddy с `localhost`; CI проверяет так же).
+      Заодно: вход из TestFlight-сборки на такой сервер и push через
+      `push.coma-chat.com`, письмо-приглашение через `mail.coma-chat.com`.
+- [ ] `release.yml` использует `docker/*-action@v3/v6` на Node.js 20 —
+      GitHub предупреждает об устаревании; обновить версии действий.
+- [ ] Экран первого запуска: Slug и Handle не заполняются из кириллического
+      названия и имени (нужна транслитерация); подпись Slug `coma.app/` вводит в
+      заблуждение на своём сервере — показывать домен установки.
 - [ ] Почта на домене `coma-chat.com`, DNS для `demo` и `docs`.
 - [ ] Отдельный сервер для push-relay (сейчас на стейджинге).
 - [ ] Android build 2 и выше в Play.

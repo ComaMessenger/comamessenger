@@ -51,6 +51,10 @@ import (
 )
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "version" {
+		_, _ = fmt.Fprintf(os.Stdout, "comamessenger %s (%s)\n", version, commit)
+		return
+	}
 	if len(os.Args) == 2 && os.Args[1] == "vapid" {
 		publicKey, privateKey, err := push.GenerateVAPIDKeys()
 		if err != nil {
@@ -79,17 +83,25 @@ func main() {
 	cfg, err := config.FromEnvironment()
 	if err != nil {
 		slog.Error("invalid configuration", "error", err)
+		explainStartupFailure(os.Stderr, "configuration check", err)
 		os.Exit(1)
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	startupCtx, startupCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer startupCancel()
-
-	if err := database.Migrate(startupCtx, cfg.DatabaseURL); err != nil {
+	logger.Info("starting Coma Core", "version", version, "commit", commit, "env", cfg.AppEnv, "storage", cfg.Storage.Driver)
+	if warning := cfg.PublicURLWarning(); warning != "" {
+		logger.Warn(warning)
+	}
+	migrationCtx, migrationCancel := context.WithTimeout(context.Background(), 90*time.Second)
+	err = migrateWhenReady(migrationCtx, logger, cfg.DatabaseURL)
+	migrationCancel()
+	if err != nil {
 		logger.Error("database migration failed", "error", err)
+		explainStartupFailure(os.Stderr, "database connection and migration", err)
 		os.Exit(1)
 	}
+	startupCtx, startupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer startupCancel()
 	if len(os.Args) == 2 && os.Args[1] == "migrate" {
 		logger.Info("database migrations applied")
 		return
@@ -133,6 +145,7 @@ func main() {
 	}
 	if err != nil {
 		logger.Error("blob storage initialization failed", "error", err)
+		explainStartupFailure(os.Stderr, "file storage initialization ("+cfg.Storage.Driver+")", err)
 		os.Exit(1)
 	}
 	fileService, err := files.NewService(pool, blobStore, cfg.S3.Bucket, cfg.Storage.QuotaBytes, cfg.Storage.MaxFileBytes, cfg.Storage.MultipartThreshold, cfg.Storage.UploadTTL, cfg.Storage.PresignTTL)
@@ -145,6 +158,7 @@ func main() {
 	storageCancel()
 	if err := storageErr; err != nil {
 		logger.Error("file storage check failed: the bucket must exist before Core starts", "driver", cfg.Storage.Driver, "endpoint", cfg.S3.Endpoint, "bucket", cfg.S3.Bucket, "error", err)
+		explainStartupFailure(os.Stderr, "file storage check ("+cfg.Storage.Driver+")", err)
 		os.Exit(1)
 	}
 	processingClient, err := files.NewProcessingClient(pool, fileService, logger)

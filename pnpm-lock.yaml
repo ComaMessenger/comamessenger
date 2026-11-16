@@ -30,6 +30,9 @@ importers:
         specifier: 7.16.0
         version: 7.16.0
     devDependencies:
+      esbuild:
+        specifier: 0.25.12
+        version: 0.25.12
       tsx:
         specifier: 4.20.5
         version: 4.20.5

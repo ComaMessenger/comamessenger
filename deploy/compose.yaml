@@ -265,21 +265,21 @@ services:
       timeout: 3s
       retries: 10
 
+  # Static build served by nginx; the API address is read at start, not baked
+  # into the image (apps/web/docker). Installations from the published images
+  # use deploy/release/compose.yaml instead of this file.
   web:
     build:
       context: ..
       dockerfile: apps/web/Dockerfile
-      args:
-        VITE_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
     restart: unless-stopped
     environment:
-      VITE_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
-      VITE_ALLOWED_HOSTS: ${WEB_ALLOWED_HOSTS:-localhost,127.0.0.1}
+      COMA_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
     depends_on:
       core:
         condition: service_started
     ports:
-      - "${BIND_ADDRESS:-127.0.0.1}:${WEB_PORT:-5173}:5173"
+      - "${BIND_ADDRESS:-127.0.0.1}:${WEB_PORT:-5173}:8080"
 
   agent-runtime:
     profiles: ["agents"]

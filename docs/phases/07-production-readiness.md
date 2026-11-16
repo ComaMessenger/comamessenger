@@ -43,29 +43,29 @@
 
 ### Packaging и deployment
 
-- [ ] Создать минимальные multi-stage images с non-root user и pinned base digests/versions.
-- [ ] Публиковать GHCR images с immutable semver/digest references; плавающий tag не использовать как единственную production-инструкцию.
-- [ ] Подготовить `compose.yaml`, `.env.example`, default local file volume и profiles для external/bundled S3-compatible storage, Postgres, Redis и agent runtime.
+- [x] Создать минимальные multi-stage images с non-root user и pinned base digests/versions.
+- [x] Публиковать GHCR images с immutable semver/digest references; плавающий tag не использовать как единственную production-инструкцию.
+- [x] Подготовить `compose.yaml`, `.env.example`, default local file volume и profiles для external/bundled S3-compatible storage, Postgres, Redis и agent runtime.
 - [x] Добавить неразрушающий генератор `.env`: независимые installation secrets, mode `0600`, автоматический скрытый runtime worker, идемпотентное создание и ротация его ключа без показа в UI.
-- [ ] Добавить Caddy reference config с HTTPS, WebSocket timeouts и upload limits.
-- [ ] Не публиковать admin services и Postgres/MinIO наружу по умолчанию.
-- [ ] Добавить startup validation обязательных секретов, public URLs и storage connectivity.
-- [ ] Зафиксировать persistent volumes и ownership/permissions.
+- [x] Добавить Caddy reference config с HTTPS, WebSocket timeouts и upload limits.
+- [x] Не публиковать admin services и Postgres/MinIO наружу по умолчанию.
+- [x] Добавить startup validation обязательных секретов, public URLs и storage connectivity.
+- [x] Зафиксировать persistent volumes и ownership/permissions.
 
 ### Обновления и миграции
 
-- [ ] Ввести version metadata build/commit/schema и endpoint диагностики для admin.
+- [ ] Ввести version metadata build/commit/schema и endpoint диагностики для admin. Версия и коммит уже в образе (`comamessenger version`, лог старта), схема в `manifest.txt` бэкапа; endpoint для админа не сделан.
 - [ ] Проверять совместимость app/schema до принятия трафика.
 - [ ] Разделять expand/migrate/contract для несовместимых больших изменений.
-- [ ] Документировать поддерживаемые пути обновления и emergency rollback.
-- [ ] Документировать ручной `docker compose pull && docker compose up -d` с обязательным backup gate и release notes; автоматическое обновление остаётся осознанным выбором администратора.
-- [ ] Запретить автоматическое разрушительное downgrade схемы.
+- [x] Документировать поддерживаемые пути обновления и emergency rollback.
+- [x] Документировать ручной `docker compose pull && docker compose up -d` с обязательным backup gate и release notes; автоматическое обновление остаётся осознанным выбором администратора.
+- [x] Запретить автоматическое разрушительное downgrade схемы.
 - [ ] Проверять upgrade на копии production-like dataset.
 - [ ] Добавить отключаемую проверку доступной версии без отправки стабильного instance ID; installation telemetry проектировать отдельно и только opt-in.
 
 ### Backup и retention
 
-- [ ] Создать документированные команды backup/restore Postgres.
+- [x] Создать документированные команды backup/restore Postgres.
 - [ ] Описать согласованность БД и object storage, orphan/missing object reconciliation.
 - [ ] Автоматизировать проверку backup integrity и периодический restore drill.
 - [ ] Реализовать retention для event log, audit, agent runs, revisions, uploads и deleted files.
@@ -83,10 +83,10 @@
 
 - [ ] Провести threat modeling и security review auth, WS, files, agents и deployment defaults.
 - [ ] Добавить `govulncheck`, JS dependency audit, secret scan и container scan в CI.
-- [ ] Генерировать SBOM и provenance/signatures для release artifacts.
+- [x] Генерировать SBOM и provenance/signatures для release artifacts.
 - [ ] Проверить CSP, CORS, CSRF, SSRF через link preview/S3 endpoints, rate limits и secure headers.
 - [ ] Ограничить network egress agent runtime/document processors где возможно.
-- [ ] Подготовить `SECURITY.md`, disclosure process и supported versions policy.
+- [x] Подготовить `SECURITY.md`, disclosure process и supported versions policy.
 
 ### Надёжность и масштабирование
 

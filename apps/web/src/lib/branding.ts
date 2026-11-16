@@ -1,6 +1,21 @@
 import type { PublicBranding } from "@comamessenger/core";
 
-export const apiURL = import.meta.env.VITE_API_URL ?? window.location.origin;
+declare global {
+  interface Window {
+    /** Written at container start by /config.js (apps/web/docker). */
+    __COMA_CONFIG__?: { apiURL?: string };
+  }
+}
+
+/**
+ * Core API origin. The production image sets it at start from COMA_API_URL,
+ * so one image serves every installation; empty means the page's own origin
+ * (Core behind the same reverse proxy). VITE_API_URL is for `vite dev`.
+ */
+export const apiURL =
+  window.__COMA_CONFIG__?.apiURL ||
+  import.meta.env.VITE_API_URL ||
+  window.location.origin;
 
 export function brandingLogoURL() {
   return `${apiURL}/api/v1/branding/logo?v=${Date.now()}`;
