@@ -10,6 +10,11 @@ appId: com.comamessenger.app
 ---
 - runScript: scripts/login.js
 - runFlow: open-app.yaml
+# The chat may sit below the first screen of the list.
+- scrollUntilVisible:
+    element: .*Опросы · планёрка.*
+    direction: DOWN
+    timeout: 20000
 - tapOn: .*Опросы · планёрка.*
 - extendedWaitUntil:
     visible:
