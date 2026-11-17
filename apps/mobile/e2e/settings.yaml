@@ -208,8 +208,10 @@ appId: com.comamessenger.app
     id: member-status
 # The alert's «Отключить» (right button): Maestro finds the row with the
 # same word under the alert, so the button is tapped by position.
-- tapOn:
-    point: 68%,58%
+- runFlow:
+    file: alert-confirm.yaml
+    env:
+      POINT: "68%,58%"
 - extendedWaitUntil:
     visible: Активировать
     timeout: 10000

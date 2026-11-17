@@ -34,7 +34,7 @@ The app registers its APNs/FCM token with the relay, gets an opaque handle and p
 - iOS decrypts in the Notification Service Extension (`targets/notification-service`, added by `@bacons/apple-targets`). The key is shared through the `group.<bundle id>` keychain access group.
 - Android receives data-only messages; `src/push/background.ts` decrypts them in a background task and shows the notification.
 - Registration runs only when the instance reports the same relay in `GET /api/v1/push/config`; otherwise the More tab says the server does not support push for this app.
-- Push needs a physical device; simulators and emulators skip registration.
+- Push needs a physical iPhone; the iOS Simulator skips registration. An Android emulator with a Google Play system image gets a real FCM token and registers like a phone.
 
 ## Store builds
 
@@ -72,13 +72,30 @@ The walkthrough keeps to its own chat «Обход интерфейса» and ap
 
 The org structure flows (phase 6.5 wave 2) rebuild their departments, positions and the chat «Планёрка ЛФК» through the API first; the seed is safe to repeat: `node e2e/seed-org.mjs && maestro test -e THEME=light e2e/org-people.yaml` (then `org-tree`, `org-admin`, `org-mention`, `org-request`, each after its own seed run). The server needs `org_structure` in hello.
 
-Tasks and the slot under the chat header (phase 6.6) seed their chat «Инструкторы · задачи» first: `node e2e/seed-tasks.mjs && maestro test -e THEME=light e2e/task-create.yaml` (also `task-assignee.yaml`, `task-from-message.yaml`); `task-queue.yaml` runs after `node e2e/seed-org.mjs` (a task for the department «Зал ЛФК», Олег takes it); `chat-slot.yaml` runs after `SLOT_ONLY=1 node e2e/seed-tasks.mjs` (pinned and scheduled only). Against another instance pass `COMA_API=http://localhost:<port>` to the seeds and `-e SERVER=localhost:<port>` to the flows; `sign-in.yaml` keeps its own `SERVER` default, so edit it in a copy.
+Tasks and the slot under the chat header (phase 6.6) seed their chat «Инструкторы · задачи» first: `node e2e/seed-tasks.mjs && maestro test -e THEME=light e2e/task-create.yaml` (also `task-assignee.yaml`, `task-from-message.yaml`); `task-queue.yaml` runs after `node e2e/seed-org.mjs` (a task for the department «Зал ЛФК», Олег takes it); `chat-slot.yaml` runs after `SLOT_ONLY=1 node e2e/seed-tasks.mjs` (pinned and scheduled only). Against another instance pass `COMA_API=http://localhost:<port>` to the seeds and `-e SERVER=localhost:<port>` to the flows (`sign-in.yaml` and `open-app.yaml` read `SERVER`, `EMAIL`, `PASSWORD`, `METRO` and `DEV_CLIENT` through `e2e/scripts/launch-env.js`: Maestro 2.x lets a flow's own `env:` block win over `-e`).
 
 Chat info (`chat-info.yaml`) keeps to its own group «Сведения о чате» and fills its archive (media, voice, links, a document) before each run, so it passes on a clean instance and after other flows: `node e2e/seed-chat-info.mjs && maestro test e2e/chat-info.yaml`.
 
 Polls and «Отсутствую» (phase 6.7) seed their data before every run: `node e2e/seed-polls.mjs && maestro test -e THEME=light e2e/poll.yaml` (the author in «Опросы · планёрка»; again `seed-polls.mjs` before `poll-voter.yaml`, Анна's polls in «Опросы · зал» and «Ждут вас → Опросы»); `node e2e/seed-away.mjs && maestro test -e THEME=light e2e/away.yaml` (the sheet «Статус» and «Ещё»), again `seed-away.mjs` before `away-peer.yaml` (Анна away: the header, the slot, the auto-reply, the @ hint, «Люди → Отсутствуют»). The flows run in the light theme; for dark screenshots set the account theme to «Как в системе» and `xcrun simctl ui booted appearance dark`.
 
 Maestro needs a JDK; the one bundled with Android Studio works: `export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"`.
+
+### Android
+
+The same flows run on an Android emulator with a Google Play image (`Pixel_8`, API 36+). Differences are handled inside the flows: `hide-keyboard.yaml` instead of `hideKeyboard` (on Android Maestro presses Back, which leaves the screen when the keyboard is closed), `alert-confirm.yaml` for alert buttons, `allow-permission.yaml` for the system permission prompts, `addMedia` for the empty gallery.
+
+```sh
+~/Library/Android/sdk/emulator/emulator -avd Pixel_8 -no-window -no-audio &
+adb -s emulator-5554 reverse tcp:8080 tcp:8080     # Core at localhost:8080, as on iOS
+adb -s emulator-5554 reverse tcp:8081 tcp:8081     # Metro for a development build
+maestro --device emulator-5554 test -e DEV_CLIENT=true -e THEME=light e2e/sign-in.yaml
+```
+
+- Set the emulator's system language to Russian (Settings → System → Languages): the flows match Russian text, and `launchApp: clearState` resets a per-app language.
+- `adb reverse` keeps `localhost` for the app, the seeds and the flows' scripts; without it the app reaches the host at `http://10.0.2.2:<port>`. Release builds allow plain HTTP only to these hosts (`plugins/withAndroidLocalCleartext.js`).
+- In a development build the Expo tools button sits over the top right corner; add `<meta-data android:name="EXDevMenuShowFloatingActionButton" android:value="false"/>` to the generated `AndroidManifest.xml` before a test build.
+- `header-status.yaml` needs `node e2e/peer-presence.mjs &` started right before it.
+- Dark screenshots: `adb shell cmd uimode night yes` with the account theme «Как в системе».
 
 ## Checks
 

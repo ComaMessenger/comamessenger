@@ -8,13 +8,28 @@ appId: com.comamessenger.app
       visible: Continue
     commands:
       - tapOn: Continue
-- hideKeyboard:
-    optional: true
-# The feed closes the keyboard interactively: a drag that runs into it.
-- swipe:
-    start: 50%, 35%
-    end: 50%, 92%
-    duration: 700
+- runFlow: hide-keyboard.yaml
+# iOS: a drag that runs into the keyboard closes it interactively. On
+# Android the same drag only scrolls the feed back in time, so there the
+# feed is brought down to the message if it went past it.
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - swipe:
+          start: 50%, 35%
+          end: 50%, 92%
+          duration: 700
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - scrollUntilVisible:
+          element: ${TEXT}
+          direction: DOWN
+          timeout: 8000
+          speed: 60
+          optional: true
 - waitForAnimationToEnd:
     timeout: 2000
 # A bubble that grew (a reaction, a thread caption) can sit under the

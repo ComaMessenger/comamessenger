@@ -25,9 +25,15 @@ appId: com.comamessenger.app
 - takeScreenshot: voice-playing
 - tapOn:
     id: voice-speed
+    # The playing waveform never settles; on Android Maestro would wait
+    # out the whole message before the next step.
+    waitToSettleTimeoutMs: 500
 - assertVisible: .*1[,.]5×.*
 - tapOn:
     id: voice-speed
+    # The playing waveform never settles; on Android Maestro would wait
+    # out the whole message before the next step.
+    waitToSettleTimeoutMs: 500
 - assertVisible: .*2×.*
 # At 2× the first (13.8 s) ends in a few seconds and the next one starts on
 # its own: the play button of the last voice message turns into «Pause».
@@ -41,7 +47,9 @@ appId: com.comamessenger.app
     timeout: 20000
 - takeScreenshot: voice-autoplay
 # Pause what plays (the speed chip stays while paused).
-- tapOn: (Пауза|Pause)
+- tapOn:
+    text: (Пауза|Pause)
+    waitToSettleTimeoutMs: 500
 - assertVisible:
     id: voice-speed
 # A drag to the left along the waveform rewinds to the start; the row's
@@ -73,14 +81,14 @@ appId: com.comamessenger.app
     id: composer-mic
     retryTapIfNoChange: false
 - extendedWaitUntil:
-    visible: (Удерживайте для записи|Hold to record|Allow|Разрешить|OK)
+    visible: (Удерживайте для записи|Hold to record|Allow|Разрешить|OK|.*записывать аудио.*|.*record audio.*)
     timeout: 5000
 - takeScreenshot: voice-hold-hint
 - runFlow:
     when:
-      visible: (Allow|Разрешить|OK)
+      visible: (Allow|Разрешить|OK|.*записывать аудио.*|.*record audio.*)
     commands:
-      - tapOn: (Allow|Разрешить|OK)
+      - runFlow: allow-permission.yaml
       - extendedWaitUntil:
           visible: (Удерживайте для записи|Hold to record)
           timeout: 5000

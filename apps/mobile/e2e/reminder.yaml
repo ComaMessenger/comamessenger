@@ -46,9 +46,10 @@ appId: com.comamessenger.app
 - extendedWaitUntil:
     visible: .*Напомню .*
     timeout: 10000
-# The bell by the time: part of the bubble's accessible label.
+# The bell by the time: part of the bubble's accessible label on iOS; on
+# Android the time line is an element of its own («напоминание, 04:17, …»).
 - extendedWaitUntil:
-    visible: .*Напомнить ${output.tag}.*напоминание.*
+    visible: (.*Напомнить ${output.tag}.*напоминание.*|напоминание, .*)
     timeout: 10000
 - takeScreenshot: ${THEME}-reminder-bell
 

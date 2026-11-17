@@ -1,13 +1,9 @@
 # Server address → sign in → chat list → send a message → threads → more.
 # Needs a seeded instance; see README. Run: maestro test e2e/sign-in.yaml
+# Override SERVER, EMAIL, PASSWORD, METRO, DEV_CLIENT with -e (scripts/launch-env.js).
 appId: com.comamessenger.app
-env:
-  SERVER: localhost:8080
-  EMAIL: lev@example.test
-  PASSWORD: coma-mobile-dev-1
-  METRO: http%3A%2F%2Flocalhost%3A8081
-  DEV_CLIENT: "false"
 ---
+- runScript: scripts/launch-env.js
 - launchApp:
     clearState: true
     clearKeychain: true
@@ -15,9 +11,19 @@ env:
 # (maestro test -e DEV_CLIENT=true e2e/sign-in.yaml). Release starts by itself.
 - runFlow:
     when:
-      true: ${DEV_CLIENT == 'true'}
+      true: ${output.launch.dev}
     commands:
-      - openLink: exp+coma://expo-development-client/?url=${METRO}
+      # A link sent while the launcher is still starting (Android, after a
+      # state reset) is dropped; wait for the launcher first.
+      - extendedWaitUntil:
+          visible: .*(Development Build|DEVELOPMENT SERVERS).*
+          timeout: 20000
+          optional: true
+      - openLink: exp+coma://expo-development-client/?url=${output.launch.metro}
+      - extendedWaitUntil:
+          notVisible: .*DEVELOPMENT SERVERS.*
+          timeout: 20000
+          optional: true
 # First launch after a state reset shows the dev menu onboarding sheet.
 - runFlow:
     when:
@@ -41,7 +47,7 @@ env:
     commands:
       - tapOn:
           id: server-address
-      - inputText: http://${SERVER}
+      - inputText: http://${output.launch.server}
       - tapOn:
           id: server-continue
 - extendedWaitUntil:
@@ -50,13 +56,13 @@ env:
     timeout: 15000
 - tapOn:
     id: login-email
-- inputText: ${EMAIL}
+- inputText: ${output.launch.email}
 # Typing into a secure field on the simulator drops characters; reveal first.
 - tapOn:
     id: login-password-reveal
 - tapOn:
     id: login-password
-- inputText: ${PASSWORD}
+- inputText: ${output.launch.password}
 - tapOn:
     id: login-submit
 # iOS offers to save the password in the Passwords app.

@@ -41,7 +41,7 @@ appId: com.comamessenger.app
       visible: Continue
     commands:
       - tapOn: Continue
-- hideKeyboard
+- runFlow: hide-keyboard.yaml
 - tapOn:
     id: folder-chat-0
 - takeScreenshot: folder-sheet

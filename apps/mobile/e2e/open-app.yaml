@@ -2,17 +2,25 @@
 # Release builds start by themselves; a development build is pointed at
 # Metro first: maestro test -e DEV_CLIENT=true e2e/<flow>.yaml
 appId: com.comamessenger.app
-env:
-  METRO: http%3A%2F%2Flocalhost%3A8081
-  DEV_CLIENT: "false"
 ---
+- runScript: scripts/launch-env.js
 - launchApp:
     stopApp: true
 - runFlow:
     when:
-      true: ${DEV_CLIENT == 'true'}
+      true: ${output.launch.dev}
     commands:
-      - openLink: exp+coma://expo-development-client/?url=${METRO}
+      # A link sent while the launcher is still starting (Android, after a
+      # state reset) is dropped; wait for the launcher first.
+      - extendedWaitUntil:
+          visible: .*(Development Build|DEVELOPMENT SERVERS).*
+          timeout: 20000
+          optional: true
+      - openLink: exp+coma://expo-development-client/?url=${output.launch.metro}
+      - extendedWaitUntil:
+          notVisible: .*DEVELOPMENT SERVERS.*
+          timeout: 20000
+          optional: true
 - runFlow:
     when:
       visible: Continue

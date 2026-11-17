@@ -22,8 +22,7 @@ appId: com.comamessenger.app
 - extendedWaitUntil:
     visible: .*Свайп ${output.tag}.*
     timeout: 15000
-- hideKeyboard:
-    optional: true
+- runFlow: hide-keyboard.yaml
 - waitForAnimationToEnd:
     timeout: 2000
 
@@ -38,8 +37,7 @@ appId: com.comamessenger.app
 - takeScreenshot: swipe-reply-${THEME}
 - tapOn: Отменить ответ
 - assertNotVisible: Отменить ответ
-- hideKeyboard:
-    optional: true
+- runFlow: hide-keyboard.yaml
 
 # 2a. From a thread back to its chat. The edge swipe starts over the feed.
 - runFlow:
@@ -59,8 +57,7 @@ appId: com.comamessenger.app
 - extendedWaitUntil:
     visible: .*Ответ ${output.tag}.*
     timeout: 10000
-- hideKeyboard:
-    optional: true
+- runFlow: hide-keyboard.yaml
 - waitForAnimationToEnd:
     timeout: 2000
 - swipe:
@@ -124,8 +121,7 @@ appId: com.comamessenger.app
 - extendedWaitUntil:
     visible: .*Агенту ${output.tag}.*
     timeout: 10000
-- hideKeyboard:
-    optional: true
+- runFlow: hide-keyboard.yaml
 - waitForAnimationToEnd:
     timeout: 2000
 - swipe:

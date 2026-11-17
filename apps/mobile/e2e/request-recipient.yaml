@@ -74,8 +74,7 @@ appId: com.comamessenger.app
 - extendedWaitUntil:
     visible: .*на выезде до 13.*
     timeout: 10000
-- hideKeyboard:
-    optional: true
+- runFlow: hide-keyboard.yaml
 - takeScreenshot: ${THEME}-request-recipient-answered
 - tapOn:
     id: conversation-back

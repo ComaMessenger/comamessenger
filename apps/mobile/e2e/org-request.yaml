@@ -26,8 +26,7 @@ appId: com.comamessenger.app
     id: request-body
 - eraseText: 200
 - inputText: Все ли ознакомились с новым графиком? ${output.tag}
-- hideKeyboard
-
+- runFlow: hide-keyboard.yaml
 # «Должность»: positions with how many of them are in the chat.
 - tapOn:
     id: request-audience-position

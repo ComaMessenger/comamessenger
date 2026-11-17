@@ -27,5 +27,12 @@ var oleg = json(
 );
 output.takeStatus = http.post(
   output.api + "/api/v1/tasks/" + tasks[0].id + "/take",
-  { headers: { Authorization: "Bearer " + oleg.access_token } },
+  // Maestro 2.x refuses a POST without a body.
+  {
+    headers: {
+      Authorization: "Bearer " + oleg.access_token,
+      "Content-Type": "application/json",
+    },
+    body: "{}",
+  },
 ).status;

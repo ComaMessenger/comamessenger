@@ -1,0 +1,21 @@
+# Puts the keyboard away when it is open. On Android Maestro's hideKeyboard
+# presses Back, which leaves the screen when the keyboard is already closed,
+# so there it runs only while the keyboard (Gboard on the emulator) is shown.
+# Use instead of hideKeyboard: - runFlow: hide-keyboard.yaml
+appId: com.comamessenger.app
+---
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - hideKeyboard:
+          optional: true
+- runFlow:
+    when:
+      platform: Android
+      visible:
+        id: .*inputmethod.*:id/keyboard_holder
+    commands:
+      - hideKeyboard
+      - waitForAnimationToEnd:
+          timeout: 1000

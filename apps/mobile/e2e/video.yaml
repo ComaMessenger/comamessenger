@@ -10,8 +10,7 @@ appId: com.comamessenger.app
 - extendedWaitUntil:
     visible: (Видео|Video), 0:0\d
     timeout: 20000
-- hideKeyboard:
-    optional: true
+- runFlow: hide-keyboard.yaml
 - runFlow:
     when:
       visible: К последнему сообщению
@@ -24,7 +23,11 @@ appId: com.comamessenger.app
     centerElement: true
     timeout: 20000
 - takeScreenshot: video-feed
-- tapOn: (Видео|Video), 0:08
+# A playing video never settles: without a short settle timeout Maestro on
+# Android waits out the whole 8 s clip before the next step.
+- tapOn:
+    text: (Видео|Video), 0:08
+    waitToSettleTimeoutMs: 500
 - extendedWaitUntil:
     visible:
       id: media-video-controls
@@ -37,19 +40,24 @@ appId: com.comamessenger.app
 - takeScreenshot: video-player
 - tapOn:
     id: media-video-pause
+    waitToSettleTimeoutMs: 500
 - assertVisible:
     id: media-video-play
 - tapOn:
     id: media-video-mute
+    waitToSettleTimeoutMs: 500
 - assertVisible: (Включить звук|Unmute)
 - tapOn:
     id: media-video-mute
+    waitToSettleTimeoutMs: 500
 - assertVisible: (Выключить звук|Mute)
 # A tap on the scrubber seeks; play goes on from there.
 - tapOn:
     id: media-video-scrubber
+    waitToSettleTimeoutMs: 500
 - tapOn:
     id: media-video-play
+    waitToSettleTimeoutMs: 500
 - assertVisible:
     id: media-video-pause
 - tapOn:

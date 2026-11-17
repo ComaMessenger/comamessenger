@@ -29,7 +29,7 @@ appId: com.comamessenger.app
 # A form left by an earlier run comes back as it was: start it clean.
 - eraseText: 200
 - inputText: Субботник в субботу, 10:00. Кто придёт? ${output.tag}
-- hideKeyboard
+- runFlow: hide-keyboard.yaml
 - assertVisible: .*Ждём от 2 человек.*
 - tapOn:
     id: request-preset-attend
