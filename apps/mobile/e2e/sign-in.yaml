@@ -4,41 +4,7 @@
 appId: com.comamessenger.app
 ---
 - runScript: scripts/launch-env.js
-- launchApp:
-    clearState: true
-    clearKeychain: true
-# Development builds start in the dev-client launcher; point it at Metro
-# (maestro test -e DEV_CLIENT=true e2e/sign-in.yaml). Release starts by itself.
-- runFlow:
-    when:
-      true: ${output.launch.dev}
-    commands:
-      # A link sent while the launcher is still starting (Android, after a
-      # state reset) is dropped; wait for the launcher first.
-      - extendedWaitUntil:
-          visible: .*(Development Build|DEVELOPMENT SERVERS).*
-          timeout: 20000
-          optional: true
-      - openLink: exp+coma://expo-development-client/?url=${output.launch.metro}
-      - extendedWaitUntil:
-          notVisible: .*DEVELOPMENT SERVERS.*
-          timeout: 20000
-          optional: true
-# First launch after a state reset shows the dev menu onboarding sheet.
-- runFlow:
-    when:
-      visible: Continue
-    commands:
-      - tapOn: Continue
-- runFlow:
-    when:
-      visible: Reload
-    commands:
-      - tapOn:
-          point: 91%,47%
-- extendedWaitUntil:
-    visible: .*(Подключение|Вход).*
-    timeout: 60000
+- runFlow: fresh-launch.yaml
 # The server step is skipped when the app still remembers the address.
 - runFlow:
     when:

@@ -259,10 +259,20 @@ appId: com.comamessenger.app
     visible: (Скопировать|Copy)
     timeout: 10000
 - takeScreenshot: settings-invitations-share-${THEME}
-# The share sheet has no close button on iOS 26: pull it down.
-- swipe:
-    start: 50%,60%
-    end: 50%,98%
+# The share sheet has no close button on iOS 26: pull it down. Android's
+# share sheet closes with Back.
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - swipe:
+          start: 50%,60%
+          end: 50%,98%
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - pressKey: Back
 - extendedWaitUntil:
     notVisible: (Скопировать|Copy)
     timeout: 5000
