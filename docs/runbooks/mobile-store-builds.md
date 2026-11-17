@@ -44,3 +44,54 @@ apps/mobile/scripts/store-release.sh android main   # из указанной в
 
 По-прежнему работает (`bundle exec fastlane ios beta` / `android beta`), но
 грузит Mac и ломает звук — только если GitHub недоступен.
+
+## Android: APK для прямой раздачи
+
+Подписанный Release APK собирается локально тем же upload-keystore
+(`~/.coma/coma-upload.jks`, пароли — `COMA_UPLOAD_*` в
+`~/.gradle/gradle.properties`, подписывает плагин `withAndroidReleaseSigning`):
+
+```sh
+cd apps/mobile
+GOOGLE_SERVICES_FILE=… COMA_PUSH_RELAY_URL=https://push.coma-chat.com \
+  COMA_BUILD_NUMBER=<versionCode> CI=1 npx expo prebuild --platform android --clean
+cd android && ./gradlew assembleRelease \
+  -PreactNativeArchitectures=armeabi-v7a,arm64-v8a --max-workers=2
+# app/build/outputs/apk/release/app-release.apk
+~/Library/Android/sdk/build-tools/<версия>/apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk
+```
+
+- `versionCode` берите больше последнего в Google Play (`bundle exec fastlane android next_build`),
+  иначе APK не обновит установленное из Play и наоборот.
+- Google Play переподписывает приложение своим ключом (Play App Signing). Приложение из
+  Play и APK, подписанный upload-ключом, друг друга **не обновляют**: чтобы перейти,
+  нужно удалить приложение (вместе с данными входа). Если APK раздаётся рядом с Play,
+  берите подписанный Google universal APK: Play Console → «Обзор App Bundle» →
+  нужная версия → «Скачать» → «Подписанный универсальный APK».
+- Без `GOOGLE_SERVICES_FILE` сборка проходит, но push на Android не работает.
+- Устанавливают APK «из неизвестных источников»; Android 15+ спросит разрешение для
+  браузера или файлового менеджера, из которого открыт файл.
+
+## Google Play: закрытое тестирование и выход в продакшен
+
+Аккаунт разработчика — личный, созданный после ноября 2023 года. Для таких аккаунтов
+Google открывает продакшен только после закрытого теста: **не меньше 12 тестировщиков,
+подписанных на тест 14 дней подряд**, затем заявка на доступ к продакшену с ответами
+о тесте. Внутреннее тестирование (`internal`, куда грузит `fastlane android beta`)
+в эти 14 дней не засчитывается.
+
+1. Play Console → «Тестирование» → «Закрытое тестирование» → трек `alpha` → списки
+   тестировщиков (адреса Google-аккаунтов или Google Group). Набирайте 15–20 человек:
+   кто отпишется, тот выпадет из счёта.
+2. Загрузка в закрытый трек: `GOOGLE_PLAY_TRACK=alpha apps/mobile/scripts/store-release.sh android`
+   (или `GOOGLE_PLAY_TRACK=alpha bundle exec fastlane android beta`). Первую сборку на
+   новый трек проверяет Google — от нескольких часов до нескольких дней.
+3. Тестировщики принимают приглашение по ссылке «Присоединиться в Google Play» и
+   ставят приложение из Play. Счёт 14 дней идёт, пока 12+ человек остаются в тесте;
+   выпускайте обновления в этот период — Google смотрит на активность теста.
+4. До отправки на проверку заполните: политика конфиденциальности (URL), «Безопасность
+   данных», возрастной рейтинг, целевая аудитория, категория, контакты, «Доступ к
+   приложению»: вход требует адрес сервера и учётную запись — дайте проверяющим
+   демо-сервер (например `coma-chat.com`) и логин/пароль тестового пользователя.
+5. Через 14 дней: «Панель управления» → «Подать заявку на доступ к продакшену».
+   Ответ — до 7 дней. После одобрения — продакшен-трек и обычная проверка релиза.
