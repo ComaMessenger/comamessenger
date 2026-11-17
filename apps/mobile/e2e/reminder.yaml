@@ -43,9 +43,12 @@ appId: com.comamessenger.app
 - takeScreenshot: ${THEME}-reminder-sheet
 - tapOn:
     id: reminder-confirm
+# The notice lasts 2.2 s; Maestro on Android can miss it, the bell below
+# is what proves the reminder.
 - extendedWaitUntil:
     visible: .*Напомню .*
     timeout: 10000
+    optional: true
 # The bell by the time: part of the bubble's accessible label on iOS; on
 # Android the time line is an element of its own («напоминание, 04:17, …»).
 - extendedWaitUntil:
