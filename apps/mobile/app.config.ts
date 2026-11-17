@@ -44,6 +44,9 @@ const config: ExpoConfig = {
       monochromeImage: "./assets/android-icon-monochrome.png",
     },
     predictiveBackGestureEnabled: false,
+    // The Expo template asks for «display over other apps» for React Native
+    // debugging overlays; the app never draws over other apps.
+    blockedPermissions: ["android.permission.SYSTEM_ALERT_WINDOW"],
     // Firebase config of the published app; supplied by EAS, never committed.
     googleServicesFile: process.env.GOOGLE_SERVICES_FILE,
   },
