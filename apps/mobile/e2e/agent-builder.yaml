@@ -48,6 +48,12 @@ env:
     id: agent-task
 - inputText: Отвечай на вопросы о расписании зала и коротко подводи итог дня.
 - tapOn: Кто он
+# A tap on the title puts the keyboard away on iOS only.
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - runFlow: hide-keyboard.yaml
 - tapOn:
     id: agent-tone-friendly
 - extendedWaitUntil:
