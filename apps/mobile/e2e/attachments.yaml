@@ -3,6 +3,15 @@
 appId: com.comamessenger.app
 ---
 - runFlow: open-app.yaml
+# An Android emulator starts with an empty gallery; the iOS Simulator has its
+# sample photos.
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - addMedia:
+          - fixtures/photo-wide.jpg
+          - fixtures/photo-tall.jpg
 - tapOn:
     id: chat-row-0
 # "+" opens the sheet of attachments and actions.
@@ -14,15 +23,16 @@ appId: com.comamessenger.app
     timeout: 5000
 - takeScreenshot: composer-sheet
 - tapOn:
-    id: composer-action-photos
+    id: composer-action-photo
 - extendedWaitUntil:
     visible: .*(Photos|Фото|Recents|Недавние).*
     timeout: 15000
-# The second photo of the simulator's sample library, by its label: iOS 26
+# The second photo of the library, by its label («Фотография, …» on iOS,
+# «Фото, дата и время съемки: …» in the Android photo picker): iOS 26
 # picks several (a tap only marks it), and a tap by point could land before
 # the grid is drawn.
 - tapOn:
-    text: (Photo|Фотография), .*
+    text: (Photo|Фотография|Фото), .*
     index: 1
 - waitForAnimationToEnd:
     timeout: 2000

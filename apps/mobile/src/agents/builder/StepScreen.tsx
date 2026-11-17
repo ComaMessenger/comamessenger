@@ -1,11 +1,6 @@
 import type { ReactNode } from "react";
-import {
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  View,
-} from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -20,6 +15,7 @@ import { ScreenHeader } from "@/ui/ScreenHeader";
 import { Text } from "@/ui/Text";
 import { ProgressBar } from "./controls";
 import { useAgentBuilder } from "./AgentBuilderProvider";
+import { dismissKeyboardOnDrag } from "@/lib/keyboard";
 
 /** Messages of the builder above a form: restored edits, errors, results. */
 export function BuilderMessages() {
@@ -117,15 +113,12 @@ export function StepScreen({
           })}
         />
       </View>
-      <KeyboardAvoidingView
-        style={styles.screen}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
+      <KeyboardAvoidingView style={styles.screen} behavior="padding">
         <ScrollView
           key={step}
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="interactive"
+          keyboardDismissMode={dismissKeyboardOnDrag}
         >
           <BuilderMessages />
           <Text tone="muted" size={14.5} style={styles.lead}>

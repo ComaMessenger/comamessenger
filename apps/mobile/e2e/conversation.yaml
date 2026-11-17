@@ -110,13 +110,11 @@ appId: com.comamessenger.app
       text: .*${output.tag}.*
     timeout: 10000
 - takeScreenshot: search
-# Opening a search result jumps to the message and highlights it.
-- eraseText: 30
-- inputText: миграция
-- extendedWaitUntil:
-    visible: .*миграция готова.*
-    timeout: 10000
-- tapOn: .*миграция готова.*
+# Opening a search result jumps to the message and highlights it. The
+# message is this run's own, so the flow needs no other seeded text. The
+# keyboard goes first: Gboard offers the copied text as a chip above it.
+- runFlow: hide-keyboard.yaml
+- tapOn: .*Тред ${output.tag}.*
 - extendedWaitUntil:
     visible:
       id: conversation

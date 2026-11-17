@@ -70,8 +70,7 @@ appId: com.comamessenger.app
 - tapOn:
     id: people-search
 - eraseText: 10
-- hideKeyboard
-
+- runFlow: hide-keyboard.yaml
 # The department card from a group header.
 # A group header is one accessible element: «Зал ЛФК, Реабилитация · 4 чел.».
 - scrollUntilVisible:
@@ -116,8 +115,10 @@ appId: com.comamessenger.app
     visible: ".*Добавлен 1 сотрудник.*"
     timeout: 10000
 # The alert's only button: Maestro does not find it by text on iOS 26.
-- tapOn:
-    point: 50%,54%
+- runFlow:
+    file: alert-confirm.yaml
+    env:
+      POINT: "50%,54%"
 - assertNotVisible:
     id: department-missing
 - tapOn:

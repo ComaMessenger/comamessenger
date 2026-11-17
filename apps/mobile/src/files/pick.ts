@@ -5,8 +5,20 @@ import type { LocalFile } from "./upload";
 
 export type PickSource = "photos" | "camera" | "file";
 
+/**
+ * Size of the file that will be uploaded. The picker's own figure can be the
+ * size of the original: Android re-encodes a picked photo (quality below 1)
+ * into a new file but reports the gallery file's size, and the server then
+ * rejects the upload as not matching. The local copy is authoritative.
+ */
 function sizeOf(uri: string, reported?: number | null) {
-  return reported && reported > 0 ? reported : new File(uri).size;
+  try {
+    const actual = new File(uri).size;
+    if (actual > 0) return actual;
+  } catch {
+    // Not a readable local file: fall back to what the picker reported.
+  }
+  return reported && reported > 0 ? reported : 0;
 }
 
 /**

@@ -12,8 +12,7 @@ appId: com.comamessenger.app
     visible:
       id: media-mosaic
     timeout: 15000
-- hideKeyboard:
-    optional: true
+- runFlow: hide-keyboard.yaml
 - waitForAnimationToEnd:
     timeout: 3000
 - takeScreenshot: media-feed

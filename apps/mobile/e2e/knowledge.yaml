@@ -69,7 +69,8 @@ appId: com.comamessenger.app
 - tapOn:
     id: kb-back
 
-# A PDF in the built-in viewer.
+# A PDF in the built-in viewer on iOS; Android has no inline PDF view and
+# offers another app instead.
 - tapOn:
     id: kb-document-Политика отпусков \(EN\)
 - extendedWaitUntil:
@@ -78,13 +79,25 @@ appId: com.comamessenger.app
     timeout: 10000
 - tapOn:
     id: kb-open-source
-- extendedWaitUntil:
-    visible:
-      id: kb-source-viewer
-    timeout: 15000
-- extendedWaitUntil:
-    visible: .*Vacation policy.*
-    timeout: 20000
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - extendedWaitUntil:
+          visible:
+            id: kb-source-viewer
+          timeout: 15000
+      - extendedWaitUntil:
+          visible: .*Vacation policy.*
+          timeout: 20000
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - extendedWaitUntil:
+          visible:
+            id: kb-source-open-in
+          timeout: 15000
 - takeScreenshot: knowledge-source-pdf-${THEME}
 - tapOn:
     id: kb-back

@@ -141,8 +141,10 @@ appId: com.comamessenger.app
     visible: ".*Назначено.*.*"
     timeout: 10000
 # The alert's only button: Maestro does not find it by text on iOS 26.
-- tapOn:
-    point: 50%,54%
+- runFlow:
+    file: alert-confirm.yaml
+    env:
+      POINT: "50%,54%"
 - assertNotVisible: ".*${output.memberName}.*"
 - tapOn: Назад
 
@@ -150,7 +152,9 @@ appId: com.comamessenger.app
 - scrollUntilVisible:
     element: ".*E2E Массаж ${output.memberTag}.*"
     direction: DOWN
-- tapOn: ".*E2E Массаж ${output.memberTag}.*"
+# From the start of the label: the row's «…» button is labelled
+# «Действия с отделом: E2E Массаж …», and Android exposes it on its own.
+- tapOn: "E2E Массаж ${output.memberTag}.*"
 - extendedWaitUntil:
     visible:
       id: department-editor

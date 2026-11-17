@@ -10,6 +10,11 @@ appId: com.comamessenger.app
 ---
 - runScript: scripts/login.js
 - runFlow: open-app.yaml
+# The chat may sit below the first screen of the list.
+- scrollUntilVisible:
+    element: .*Опросы · планёрка.*
+    direction: DOWN
+    timeout: 20000
 - tapOn: .*Опросы · планёрка.*
 - extendedWaitUntil:
     visible:
@@ -149,6 +154,15 @@ appId: com.comamessenger.app
     timeout: 5000
 - tapOn:
     id: poll-edit-question
+# Android puts the cursor where the field was tapped and eraseText deletes
+# backwards from there; put it at the end of the text first.
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - tapOn:
+          id: poll-edit-question
+          point: 97%,85%
 - eraseText: 300
 - inputText: Во сколько удобнее планёрка по понедельникам? ${output.tag}
 - takeScreenshot: ${THEME}-poll-edit
@@ -166,8 +180,10 @@ appId: com.comamessenger.app
     visible: Закрыть опрос?
     timeout: 5000
 # The alert's «Закрыть» (the cards have links with the same word).
-- tapOn:
-    point: 68%,57%
+- runFlow:
+    file: alert-confirm.yaml
+    env:
+      POINT: "68%,57%"
 - extendedWaitUntil:
     visible:
       id: poll-result

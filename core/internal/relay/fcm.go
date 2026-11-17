@@ -111,8 +111,12 @@ func (f *FCM) Send(ctx context.Context, deviceToken string, notification Notific
 	if notification.CollapseID != "" {
 		android["collapse_key"] = notification.CollapseID
 	}
+	// The fallback text goes under keys of its own: expo-notifications shows
+	// a data message with "title" or "message" by itself while the app is in
+	// the background, next to the notification the app decrypts, and parses
+	// "body" as JSON.
 	data := map[string]string{
-		"c": notification.Ciphertext, "title": notification.FallbackTitle, "body": notification.FallbackBody,
+		"c": notification.Ciphertext, "fallback_title": notification.FallbackTitle, "fallback_body": notification.FallbackBody,
 	}
 	// The app builds the notification from data; "silent" tells it to skip
 	// sound and vibration even when the ciphertext cannot be read.

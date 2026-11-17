@@ -110,8 +110,13 @@ func TestFCMExchangesTokenAndSendsDataMessages(t *testing.T) {
 		}
 	}
 	data := message["message"].(map[string]any)["data"].(map[string]any)
-	if tokenRequests != 1 || data["c"] != "sealed" {
+	if tokenRequests != 1 || data["c"] != "sealed" || data["fallback_title"] != "Coma" || data["fallback_body"] != "New message" {
 		t.Fatalf("token requests = %d, data = %v", tokenRequests, data)
+	}
+	for _, shown := range []string{"title", "message", "body"} {
+		if _, ok := data[shown]; ok {
+			t.Fatalf("data has %q, which expo-notifications would show by itself: %v", shown, data)
+		}
 	}
 	if _, hasNotification := message["message"].(map[string]any)["notification"]; hasNotification {
 		t.Fatal("FCM message must be data-only so the app can decrypt it")

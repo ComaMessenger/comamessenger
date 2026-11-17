@@ -1,0 +1,18 @@
+# Taps the confirming button of a system alert (Alert.alert): the right or
+# only one. iOS 26 alerts are not found by text, so there it is a POINT on
+# screen; Android's AlertDialog has the button by id.
+#   - runFlow: { file: alert-confirm.yaml, env: { POINT: "68%,57%" } }
+appId: com.comamessenger.app
+---
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          point: ${POINT}
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - tapOn:
+          id: android:id/button1

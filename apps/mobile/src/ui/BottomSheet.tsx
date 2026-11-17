@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import {
   Animated,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   View,
 } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import {
   Gesture,
   GestureDetector,
@@ -94,10 +93,7 @@ export function BottomSheet({
     >
       {/* A modal is a new native root: gestures need a root of their own. */}
       <GestureHandlerRootView style={styles.grow}>
-        <KeyboardAvoidingView
-          style={styles.root}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-        >
+        <KeyboardAvoidingView style={styles.root} behavior="padding">
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t("close")}

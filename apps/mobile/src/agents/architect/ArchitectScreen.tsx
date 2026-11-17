@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   TextInput,
   View,
 } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
@@ -43,6 +42,7 @@ import {
 import { LoosenedSheet, usePublishState } from "../builder/publish";
 import { PassportBar, PassportSheet } from "./Passport";
 import { useArchitect } from "./useArchitect";
+import { dismissKeyboardOnDrag } from "@/lib/keyboard";
 
 /**
  * The Architect: an agent that builds an agent by talking. The conversation
@@ -191,15 +191,12 @@ export function ArchitectScreen({ agentID }: { agentID: string | null }) {
       {draftID ? (
         <PassportBar agent={agent} onOpen={() => setPassport(true)} />
       ) : null}
-      <KeyboardAvoidingView
-        style={styles.grow}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
+      <KeyboardAvoidingView style={styles.grow} behavior="padding">
         <ScrollView
           ref={scroll}
           contentContainerStyle={styles.talk}
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="interactive"
+          keyboardDismissMode={dismissKeyboardOnDrag}
         >
           {session.messages.map((message, index) => (
             <Bubble

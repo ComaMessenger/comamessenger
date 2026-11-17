@@ -59,8 +59,18 @@ if (Platform.OS === "android")
     if (quiet) await ensureMessageChannels().catch(() => undefined);
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: content?.title ?? field(data.data, "title") ?? "Coma",
-        body: content?.body ?? field(data.data, "body") ?? "",
+        // fallback_* from the relay; title/body from relays before it
+        // stopped expo-notifications from showing a duplicate.
+        title:
+          content?.title ??
+          field(data.data, "fallback_title") ??
+          field(data.data, "title") ??
+          "Coma",
+        body:
+          content?.body ??
+          field(data.data, "fallback_body") ??
+          field(data.data, "body") ??
+          "",
         data: {
           ...(content?.url ? { url: content.url } : {}),
           ...(content?.messageID ? { message_id: content.messageID } : {}),

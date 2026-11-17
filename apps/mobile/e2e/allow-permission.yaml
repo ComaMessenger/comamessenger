@@ -1,0 +1,25 @@
+# Allows a system permission prompt if one is shown: iOS «Разрешить» / «OK»,
+# Android's permission controller («При использовании приложения» for the
+# microphone and camera, «Разрешить» for notifications and others).
+appId: com.comamessenger.app
+---
+- runFlow:
+    when:
+      visible:
+        id: com.android.permissioncontroller:id/permission_allow_foreground_only_button
+    commands:
+      - tapOn:
+          id: com.android.permissioncontroller:id/permission_allow_foreground_only_button
+- runFlow:
+    when:
+      visible:
+        id: com.android.permissioncontroller:id/permission_allow_button
+    commands:
+      - tapOn:
+          id: com.android.permissioncontroller:id/permission_allow_button
+- runFlow:
+    when:
+      platform: iOS
+      visible: (Allow|Разрешить|OK)
+    commands:
+      - tapOn: (Allow|Разрешить|OK)

@@ -45,8 +45,7 @@ appId: com.comamessenger.app
       id: auto-reply-tag
       below: .*подменить в бассейне\? ${output.tag}.*
     timeout: 20000
-- hideKeyboard:
-    optional: true
+- runFlow: hide-keyboard.yaml
 - takeScreenshot: ${THEME}-away-direct
 - tapOn:
     id: conversation-back
@@ -82,8 +81,7 @@ appId: com.comamessenger.app
       id: away-mention-note
     timeout: 10000
 - assertVisible: .*видно только вам.*
-- hideKeyboard:
-    optional: true
+- runFlow: hide-keyboard.yaml
 - takeScreenshot: ${THEME}-away-mention-sent
 - tapOn:
     id: conversation-back

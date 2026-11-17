@@ -1,38 +1,10 @@
 # Server address → sign in → chat list → send a message → threads → more.
 # Needs a seeded instance; see README. Run: maestro test e2e/sign-in.yaml
+# Override SERVER, EMAIL, PASSWORD, METRO, DEV_CLIENT with -e (scripts/launch-env.js).
 appId: com.comamessenger.app
-env:
-  SERVER: localhost:8080
-  EMAIL: lev@example.test
-  PASSWORD: coma-mobile-dev-1
-  METRO: http%3A%2F%2Flocalhost%3A8081
-  DEV_CLIENT: "false"
 ---
-- launchApp:
-    clearState: true
-    clearKeychain: true
-# Development builds start in the dev-client launcher; point it at Metro
-# (maestro test -e DEV_CLIENT=true e2e/sign-in.yaml). Release starts by itself.
-- runFlow:
-    when:
-      true: ${DEV_CLIENT == 'true'}
-    commands:
-      - openLink: exp+coma://expo-development-client/?url=${METRO}
-# First launch after a state reset shows the dev menu onboarding sheet.
-- runFlow:
-    when:
-      visible: Continue
-    commands:
-      - tapOn: Continue
-- runFlow:
-    when:
-      visible: Reload
-    commands:
-      - tapOn:
-          point: 91%,47%
-- extendedWaitUntil:
-    visible: .*(Подключение|Вход).*
-    timeout: 60000
+- runScript: scripts/launch-env.js
+- runFlow: fresh-launch.yaml
 # The server step is skipped when the app still remembers the address.
 - runFlow:
     when:
@@ -41,7 +13,7 @@ env:
     commands:
       - tapOn:
           id: server-address
-      - inputText: http://${SERVER}
+      - inputText: http://${output.launch.server}
       - tapOn:
           id: server-continue
 - extendedWaitUntil:
@@ -50,13 +22,13 @@ env:
     timeout: 15000
 - tapOn:
     id: login-email
-- inputText: ${EMAIL}
+- inputText: ${output.launch.email}
 # Typing into a secure field on the simulator drops characters; reveal first.
 - tapOn:
     id: login-password-reveal
 - tapOn:
     id: login-password
-- inputText: ${PASSWORD}
+- inputText: ${output.launch.password}
 - tapOn:
     id: login-submit
 # iOS offers to save the password in the Passwords app.

@@ -182,6 +182,10 @@ if (!process.env.SLOT_ONLY) {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   tomorrow.setHours(9, 0, 0, 0);
+  // task-assignee.yaml needs it inside the 24-hour «hot» window
+  // (taskHotWindowMs); before 9:00 tomorrow at 9:00 is further than that.
+  const latest = Date.now() + 20 * 60 * 60_000;
+  if (tomorrow.getTime() > latest) tomorrow.setTime(latest);
   await call(
     `/api/v1/chats/${chat.id}/tasks`,
     {

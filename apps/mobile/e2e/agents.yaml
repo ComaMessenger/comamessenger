@@ -106,7 +106,7 @@ appId: com.comamessenger.app
     timeout: 10000
 - tapOn:
     id: check-example-0
-- hideKeyboard
+- runFlow: hide-keyboard.yaml
 - takeScreenshot: agent-check-${THEME}
 - tapOn:
     id: check-back

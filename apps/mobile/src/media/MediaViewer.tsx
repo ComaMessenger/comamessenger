@@ -682,6 +682,8 @@ function MediaPage({
       {active && loaded ? (
         <View
           testID="media-viewer-loaded"
+          // An empty view is flattened away on Android, testID and all.
+          collapsable={false}
           pointerEvents="none"
           style={styles.marker}
         />
@@ -835,7 +837,14 @@ function ViewerFallback({ onClose }: { onClose(): void }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  marker: { position: "absolute", left: 0, top: 0, width: 1, height: 1 },
+  // Mid-screen: Maestro on Android drops elements covered by the bars above.
+  marker: {
+    position: "absolute",
+    left: "50%",
+    top: "50%",
+    width: 1,
+    height: 1,
+  },
   black: { backgroundColor: "#000000" },
   page: { flex: 1, alignItems: "center", justifyContent: "center" },
   center: {

@@ -67,7 +67,11 @@ async function register(
   api: MessengerAPI,
   options: { prompt: boolean },
 ): Promise<PushAvailability> {
-  if (!Device.isDevice || !pushRelayURL) return "unsupported";
+  // The iOS Simulator has no APNs token; an Android emulator with Google Play
+  // services gets a real FCM token, so it registers like a phone (and one
+  // without Play services fails below, which callers treat as «off»).
+  if ((Platform.OS === "ios" && !Device.isDevice) || !pushRelayURL)
+    return "unsupported";
   const config = await api.pushConfig();
   if ((config.mobile_relay_url ?? "").replace(/\/+$/, "") !== pushRelayURL)
     return "unsupported";
